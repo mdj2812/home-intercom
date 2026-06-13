@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换+SCP → 回调 n8n webhook → HA 播放
 """
-import os, json, subprocess
+import os, json, subprocess, ssl
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -97,7 +97,8 @@ def convert():
             }).encode()
             req = urllib.request.Request(N8N_HOOK, data=body, method="POST")
             req.add_header("Content-Type", "application/json")
-            urllib.request.urlopen(req, timeout=10)
+            ctx = ssl._create_unverified_context()
+            urllib.request.urlopen(req, timeout=10, context=ctx)
             ok_count += 1
             print(f"[intercom] → n8n play {tgt_room['name']}")
         except Exception as e:
