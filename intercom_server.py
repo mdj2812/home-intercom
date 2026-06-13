@@ -39,6 +39,13 @@ def convert():
     if not room:
         return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
 
+    # === 全部广播 ===
+    if target == "all":
+        # 收集所有有 entity 的房间（排除 all 自身）
+        targets = [(k, v) for k, v in ROOM_MAP.items() if k != "all" and v.get("entity")]
+    else:
+        targets = [(target, room)]
+
     # 每个房间固定一个文件，新录音直接覆盖旧文件
     tmp_webm = f"/tmp/msg_{target}.webm"
     tmp_wav = f"/tmp/msg_{target}.wav"
@@ -57,7 +64,6 @@ def convert():
         ], check=True, timeout=15, capture_output=True)
         os.unlink(tmp_webm)
         size_out = os.path.getsize(tmp_wav)
-        # WAV PCM 16kHz mono 16bit → 32000 bytes/sec
         duration = size_out / 32000
     except subprocess.CalledProcessError as e:
         print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
@@ -78,21 +84,24 @@ def convert():
     audio_url = f"http://{HA_HOST}:8123/local/intercom/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
-    # 回调 n8n 触发播放
-    try:
-        body = json.dumps({
-            "entity": room["entity"],
-            "url": audio_url,
-            "duration": duration
-        }).encode()
-        req = urllib.request.Request(N8N_HOOK, data=body, method="POST")
-        req.add_header("Content-Type", "application/json")
-        urllib.request.urlopen(req, timeout=10)
-        print(f"[intercom] → n8n play {room['name']}")
-    except Exception as e:
-        print(f"[intercom] n8n hook failed: {e}")
+    # 回调 n8n 触发播放 — 全部广播时逐个触发每个房间
+    ok_count = 0
+    for tgt_key, tgt_room in targets:
+        try:
+            body = json.dumps({
+                "entity": tgt_room["entity"],
+                "url": audio_url,
+                "duration": duration
+            }).encode()
+            req = urllib.request.Request(N8N_HOOK, data=body, method="POST")
+            req.add_header("Content-Type", "application/json")
+            urllib.request.urlopen(req, timeout=10)
+            ok_count += 1
+            print(f"[intercom] → n8n play {tgt_room['name']}")
+        except Exception as e:
+            print(f"[intercom] n8n hook failed ({tgt_room['name']}): {e}")
 
-    return jsonify({"ok": True, "name": room["name"], "url": audio_url})
+    return jsonify({"ok": True, "name": room["name"], "rooms_sent": ok_count, "url": audio_url})
 
 
 if __name__ == "__main__":

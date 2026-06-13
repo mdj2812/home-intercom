@@ -27,7 +27,7 @@ body {
 h1 { font-size: 1rem; color: #888; font-weight: 400; margin: 4px 0; }
 .btn {
   width: min(90vw, 320px);
-  height: min(18vh, 130px);
+  height: min(14vh, 100px);
   border-radius: 16px;
   border: 2px solid #333;
   background: #1a1a1a;
@@ -65,6 +65,15 @@ h1 { font-size: 1rem; color: #888; font-weight: 400; margin: 4px 0; }
 .study:active, .study.recording { border-color: #8e44ad; background: #1a1028; }
 .bedroom { border-color: #e67e22; }
 .bedroom:active, .bedroom.recording { border-color: #d35400; background: #2a1a10; }
+.broadcast {
+  border-color: #f39c12;
+  background: linear-gradient(135deg, #2a2000, #1a1a1a);
+  font-size: 1.7rem;
+}
+.broadcast:active, .broadcast.recording {
+  border-color: #f1c40f;
+  background: linear-gradient(135deg, #3a2a00, #2a1010);
+}
 #buttons { display: flex; flex-direction: column; gap: 16px; }
 .status {
   font-size: 0.9rem;
@@ -97,9 +106,11 @@ async function loadRooms() {
   try {
     const resp = await fetch('/rooms.json');
     const rooms = await resp.json();
+    // 全部按钮优先，房间按钮按原顺序
     for (const [key, room] of Object.entries(rooms)) {
       ROOM_NAMES[key] = room.name;
-      const cls = COLOR_CLASS[key] || '';
+      let cls = COLOR_CLASS[key] || '';
+      if (key === 'all') cls = 'broadcast';
       const btn = document.createElement('button');
       btn.className = 'btn ' + cls;
       btn.id = 'btn-' + key;
