@@ -93,9 +93,7 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
 
 <script>
 const STATUS = document.getElementById('status');
-const UPLOAD_URL = '/upload';
 const N8N_URL = 'https://n8n.home.mdj2812.top/webhook/intercom';
-const USE_N8N = true;  // 设为 false 则回退到直连 Flask
 const ROOM_NAMES = { living: '客厅', media: '影音室', study: '书房', bedroom: '主卧' };
 let mediaRecorder = null;
 let audioChunks = [];
@@ -143,21 +141,11 @@ async function sendAudio() {
   const blob = new Blob(audioChunks, { type: 'audio/webm' });
 
   try {
-    let resp;
-    if (USE_N8N) {
-      // n8n 模式：POST raw binary + query param
-      resp = await fetch(N8N_URL + '?target=' + currentTarget, {
-        method: 'POST',
-        body: blob,
-        headers: { 'Content-Type': 'audio/webm' }
-      });
-    } else {
-      // 直连 Flask 模式：multipart form
-      const formData = new FormData();
-      formData.append('audio', blob, 'msg.webm');
-      formData.append('target', currentTarget);
-      resp = await fetch(UPLOAD_URL, { method: 'POST', body: formData });
-    }
+    const resp = await fetch(N8N_URL + '?target=' + currentTarget, {
+      method: 'POST',
+      body: blob,
+      headers: { 'Content-Type': 'audio/webm' }
+    });
 
     if (resp.ok) {
       setStatus('✅ 已发送 → ' + (ROOM_NAMES[currentTarget] || currentTarget), 'success');
