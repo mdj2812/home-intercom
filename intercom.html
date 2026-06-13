@@ -64,7 +64,6 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
 .study:active, .study.recording { border-color: #8e44ad; background: #1a1028; }
 .bedroom { border-color: #e67e22; }
 .bedroom:active, .bedroom.recording { border-color: #d35400; background: #2a1a10; }
-.btn .subtitle { font-size: 0.8rem; font-weight: 400; color: #666; display: block; }
 .status {
   font-size: 0.9rem;
   color: #555;
@@ -77,18 +76,11 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
 </head>
 <body>
 <h1>📢 家庭广播</h1>
-<button class="btn livingroom" id="btn-living">
-  客厅<span class="subtitle">按住录音，松开发送</span>
-</button>
-<button class="btn" id="btn-media">
-  影音室<span class="subtitle">按住录音，松开发送</span>
-</button>
-<button class="btn study" id="btn-study">
-  书房<span class="subtitle">按住录音，松开发送</span>
-</button>
-<button class="btn bedroom" id="btn-bedroom">
-  主卧<span class="subtitle">按住录音，松开发送</span>
-</button>
+<p style="color:#555; font-size:0.85rem; margin-top:-8px">按住录音，松开发送</p>
+<button class="btn livingroom" id="btn-living">客厅</button>
+<button class="btn" id="btn-media">影音室</button>
+<button class="btn study" id="btn-study">书房</button>
+<button class="btn bedroom" id="btn-bedroom">主卧</button>
 <div class="status" id="status">准备好</div>
 
 <script>
