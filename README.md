@@ -5,28 +5,26 @@
 ## 架构
 
 ```
-手机 PWA → Flask (8765) → ffmpeg 转 WAV → SCP 到 HA → play_media → 小爱音箱
+手机 PWA → n8n webhook → Flask /convert (8765) → ffmpeg 转 WAV → SCP 到 HA → play_media → 小爱音箱
 ```
 
-纯 Flask 直连，无 n8n 依赖。
+n8n 负责编排调度，Flask 负责音频转换和 HA API 调用。
 
 ## 文件
 
 | 文件 | 说明 |
 |------|------|
-| `intercom_server.py` | Flask 后端 — 提供 PWA 页面 + 接收音频 → ffmpeg 转 WAV → SCP 到 HA → 调用 play_media |
-| `intercom.html` | 手机 PWA 对讲页面 — 4 个按住录音按钮 |
-| `n8n_workflow.json` | n8n 工作流导出（历史参考，v1.0 已废弃 n8n 链路） |
+| `intercom_server.py` | Flask 后端 — 提供 PWA 页面 + `/convert` 端点（接收音频 → ffmpeg → SCP → HA play_media） |
+| `intercom.html` | 手机 PWA 对讲页面 — 4 个按住录音按钮，POST 到 n8n webhook |
+| `n8n_workflow.json` | n8n 工作流（Webhook → HTTP Request → Flask /convert） |
 
 ## 部署
 
-```bash
-python3 intercom_server.py   # HTTP :8765，同时提供 PWA 页面和 API
-```
+1. **Flask**: `python3 intercom_server.py`（HTTP :8765，同时提供 PWA 和 API）
+2. **n8n**: 导入 `n8n_workflow.json`，配置 HA 凭据
+3. **PWA**: 访问 `http://<host>:8765/`
 
-访问 `http://<host>:8765/` 打开对讲页面。
-
-依赖：`flask`、`ffmpeg`、`sshpass`、HA API token。
+依赖：`flask`、`ffmpeg`、`sshpass`、HA API token、n8n。
 
 ## 房间映射
 
