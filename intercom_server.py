@@ -102,7 +102,7 @@ def convert():
         except Exception as e:
             print(f"[intercom] n8n hook failed ({tgt_room['name']}): {e}")
 
-    return jsonify({"ok": True, "name": room["name"], "rooms_sent": ok_count, "url": audio_url})
+    return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
 
 
 if __name__ == "__main__":
