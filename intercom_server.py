@@ -19,7 +19,8 @@ with open(ROOMS_FILE) as f:
 
 @app.route("/")
 def index():
-    return send_from_directory("/tmp", "intercom.html")
+    here = os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(here, "intercom.html")
 
 @app.route("/rooms.json")
 def rooms():
