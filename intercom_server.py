@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 接收音频 → SCP 到 HA → 返回 url/entity 给 n8n 调度播放
 """
-import os, json, subprocess, time
+import os, subprocess, time
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
@@ -146,33 +146,6 @@ def upload():
 
     audio_url = f"http://{HA_HOST}:8123/local/intercom/{filename}"
     print(f"[intercom] Converted → {audio_url}")
-
-    # /upload 直连模式：自己调 HA play_media（n8n 不可用时的降级路径）
-    import urllib.request
-    try:
-        token = None
-        env_file = os.path.expanduser("~/.hermes/.env")
-        with open(env_file) as f:
-            for line in f:
-                if line.startswith("HA_TOKEN="):
-                    token = line.strip().split("=", 1)[1]
-                    break
-        if token:
-            body = json.dumps({
-                "entity_id": room["entity"],
-                "media_content_id": audio_url,
-                "media_content_type": "music",
-            }).encode()
-            req = urllib.request.Request(
-                f"http://{HA_HOST}:8123/api/services/media_player/play_media",
-                data=body, method="POST"
-            )
-            req.add_header("Authorization", f"Bearer {token}")
-            req.add_header("Content-Type", "application/json")
-            urllib.request.urlopen(req, timeout=10)
-            print(f"[intercom] play_media OK → {room['name']}")
-    except Exception as e:
-        print(f"[intercom] play_media FAIL: {e}")
     return jsonify({"ok": True, "url": audio_url, "entity": room["entity"], "name": room["name"], "size": size_out})
 
 
