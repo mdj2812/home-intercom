@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换+SCP → 回调 n8n webhook → HA 播放
 """
-import os, json, subprocess, time
+import os, json, subprocess
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -39,10 +39,10 @@ def convert():
     if not room:
         return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
 
-    ts = int(time.time())
-    tmp_webm = f"/tmp/msg_{target}_{ts}.webm"
-    tmp_wav = f"/tmp/msg_{target}_{ts}.wav"
-    filename = f"msg_{target}_{ts}.wav"
+    # 每个房间固定一个文件，新录音直接覆盖旧文件
+    tmp_webm = f"/tmp/msg_{target}.webm"
+    tmp_wav = f"/tmp/msg_{target}.wav"
+    filename = f"intercom_{target}.wav"
 
     with open(tmp_webm, "wb") as f:
         f.write(raw_audio)
