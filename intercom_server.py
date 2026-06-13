@@ -29,6 +29,10 @@ ROOM_MAP = {
         "name": "书房",
         "entity": "media_player.xiaomi_l17a_db94_play_control",
     },
+    "bedroom": {
+        "name": "主卧",
+        "entity": "media_player.xiaomi_lx06_627c_play_control",
+    },
 }
 HA_TOKEN_FILE = os.path.expanduser("~/.hermes/.env")
 
