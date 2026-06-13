@@ -28,32 +28,33 @@ def rooms():
 @app.route("/convert", methods=["POST"])
 def convert():
     """PWA 直连：接收音频 → 转换 → SCP → 回调 n8n"""
-    target = request.args.get("target", "media")
+    target = request.args.get("target", "")
 
     # 接收原始音频
     raw_audio = request.get_data()
     if not raw_audio:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
-    room = ROOM_MAP.get(target)
-    if not room:
-        return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
-
-    # === 全部广播 ===
+    # 全部广播：遍历所有有 entity 的房间
     if target == "all":
-        # 收集所有有 entity 的房间（排除 all 自身）
-        targets = [(k, v) for k, v in ROOM_MAP.items() if k != "all" and v.get("entity")]
+        targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
+        if not targets:
+            return jsonify({"ok": False, "error": "no rooms configured"}), 500
     else:
+        room = ROOM_MAP.get(target)
+        if not room or not room.get("entity"):
+            return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
         targets = [(target, room)]
 
-    # 每个房间固定一个文件，新录音直接覆盖旧文件
+    name = ROOM_MAP[target]["name"] if target != "all" else "全部"
+    print(f"[intercom] Received {len(raw_audio)} bytes for {name}")
+
     tmp_webm = f"/tmp/msg_{target}.webm"
     tmp_wav = f"/tmp/msg_{target}.wav"
     filename = f"intercom_{target}.wav"
 
     with open(tmp_webm, "wb") as f:
         f.write(raw_audio)
-    print(f"[intercom] Received {len(raw_audio)} bytes for {room['name']}")
 
     # ffmpeg webm → wav
     try:
