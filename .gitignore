@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+/tmp/
+*.webm
+*.wav
+*.mp3

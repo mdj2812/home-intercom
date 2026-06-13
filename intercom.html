@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>家庭广播</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f0f0f;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
+.btn {
+  width: min(80vw, 300px);
+  height: min(40vh, 250px);
+  border-radius: 24px;
+  border: 2px solid #333;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.btn:active, .btn.recording {
+  border-color: #e74c3c;
+  background: #2a1010;
+  transform: scale(0.97);
+}
+.btn.recording::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  border: 3px solid #e74c3c;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.livingroom { border-color: #2ecc71; }
+.livingroom:active, .livingroom.recording { border-color: #27ae60; background: #102a18; }
+.study { border-color: #9b59b6; }
+.study:active, .study.recording { border-color: #8e44ad; background: #1a1028; }
+.btn .subtitle { font-size: 0.8rem; font-weight: 400; color: #666; display: block; }
+.status {
+  font-size: 0.9rem;
+  color: #555;
+  min-height: 1.5em;
+  text-align: center;
+}
+.status.success { color: #2ecc71; }
+.status.error { color: #e74c3c; }
+</style>
+</head>
+<body>
+<h1>📢 家庭广播</h1>
+<button class="btn livingroom" id="btn-living">
+  客厅<span class="subtitle">按住录音，松开发送</span>
+</button>
+<button class="btn" id="btn-media">
+  影音室<span class="subtitle">按住录音，松开发送</span>
+</button>
+<button class="btn study" id="btn-study">
+  书房<span class="subtitle">按住录音，松开发送</span>
+</button>
+<div class="status" id="status">准备好</div>
+
+<script>
+const STATUS = document.getElementById('status');
+const UPLOAD_URL = '/upload';
+const N8N_URL = 'https://n8n.home.mdj2812.top/webhook/intercom';
+const USE_N8N = true;  // 设为 false 则回退到直连 Flask
+const ROOM_NAMES = { living: '客厅', media: '影音室', study: '书房' };
+let mediaRecorder = null;
+let audioChunks = [];
+let currentTarget = '';
+let currentBtn = null;
+
+function setStatus(msg, cls) {
+  STATUS.textContent = msg;
+  STATUS.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+async function startRecording(target, btn) {
+  currentTarget = target;
+  currentBtn = btn;
+  audioChunks = [];
+
+  if (!mediaRecorder) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = () => sendAudio();
+    } catch (e) {
+      setStatus('❌ 无法访问麦克风: ' + e.message, 'error');
+      return;
+    }
+  }
+
+  mediaRecorder.start();
+  btn.classList.add('recording');
+  setStatus('🎙️ 录音中…', '');
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  }
+  if (currentBtn) {
+    currentBtn.classList.remove('recording');
+  }
+  setStatus('📤 发送中…', '');
+}
+
+async function sendAudio() {
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+
+  try {
+    let resp;
+    if (USE_N8N) {
+      // n8n 模式：POST raw binary + query param
+      resp = await fetch(N8N_URL + '?target=' + currentTarget, {
+        method: 'POST',
+        body: blob,
+        headers: { 'Content-Type': 'audio/webm' }
+      });
+    } else {
+      // 直连 Flask 模式：multipart form
+      const formData = new FormData();
+      formData.append('audio', blob, 'msg.webm');
+      formData.append('target', currentTarget);
+      resp = await fetch(UPLOAD_URL, { method: 'POST', body: formData });
+    }
+
+    if (resp.ok) {
+      setStatus('✅ 已发送 → ' + (ROOM_NAMES[currentTarget] || currentTarget), 'success');
+      setTimeout(() => setStatus('准备好', ''), 3000);
+    } else {
+      setStatus('❌ 发送失败: ' + resp.status, 'error');
+    }
+  } catch (e) {
+    setStatus('❌ 网络错误: ' + e.message, 'error');
+  }
+}
+
+function setupButton(id, target) {
+  const btn = document.getElementById(id);
+
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startRecording(target, btn);
+  });
+
+  btn.addEventListener('pointerup', (e) => {
+    e.preventDefault();
+    stopRecording();
+  });
+
+  btn.addEventListener('pointerleave', (e) => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      stopRecording();
+    }
+  });
+
+  // 防止双击缩放和长按菜单
+  btn.addEventListener('touchstart', e => e.preventDefault());
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+setupButton('btn-living', 'living');
+setupButton('btn-media', 'media');
+setupButton('btn-study', 'study');
+</script>
+</body>
+</html>
