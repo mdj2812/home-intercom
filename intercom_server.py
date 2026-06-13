@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """家庭广播系统 — 手机对讲站后端
-接收音频 → SCP 到 HA → 调用 play_media → 返回结果
+接收音频 → SCP 到 HA → 返回 url/entity 给 n8n 调度播放
 """
-import os, json, subprocess, tempfile, time
+import os, subprocess, time
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
 HA_HOST = "192.168.99.4"
 HA_WWW = "/config/www/intercom/"
-HA_API = "http://192.168.99.4:8123/api"
-HA_TOKEN_FILE = "/tmp/ha_jwt.txt"
 
 ROOM_MAP = {
     "living": {
@@ -34,27 +32,6 @@ ROOM_MAP = {
         "entity": "media_player.xiaomi_lx06_627c_play_control",
     },
 }
-HA_TOKEN_FILE = os.path.expanduser("~/.hermes/.env")
-
-def get_ha_token():
-    """从 .env 文件读取 HA_TOKEN"""
-    with open(HA_TOKEN_FILE) as f:
-        for line in f:
-            if line.startswith("HA_TOKEN="):
-                return line.strip().split("=", 1)[1]
-    raise RuntimeError("HA_TOKEN not found in .env")
-
-def call_ha_api(method, path, data=None):
-    """调用 HA REST API"""
-    import urllib.request
-    token = get_ha_token()
-    url = f"{HA_API}/{path}"
-    body = json.dumps(data).encode() if data else None
-    req = urllib.request.Request(url, data=body, method=method)
-    req.add_header("Authorization", f"Bearer {token}")
-    req.add_header("Content-Type", "application/json")
-    resp = urllib.request.urlopen(req, timeout=10)
-    return json.loads(resp.read())
 
 @app.route("/")
 def index():
@@ -167,19 +144,9 @@ def upload():
         print(f"[intercom] SCP failed: {e.stderr.decode()}")
         return jsonify({"ok": False, "error": "upload failed"}), 500
 
-    # 调用 HA play_media
     audio_url = f"http://{HA_HOST}:8123/local/intercom/{filename}"
-    try:
-        result = call_ha_api("POST", "services/media_player/play_media", {
-            "entity_id": room["entity"],
-            "media_content_id": audio_url,
-            "media_content_type": "music",
-        })
-        print(f"[intercom] play_media OK → {room['name']}")
-        return jsonify({"ok": True, "room": room["name"], "url": audio_url, "size": size_out})
-    except Exception as e:
-        print(f"[intercom] play_media FAIL: {e}")
-        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+    print(f"[intercom] Converted → {audio_url}")
+    return jsonify({"ok": True, "url": audio_url, "entity": room["entity"], "name": room["name"], "size": size_out})
 
 
 if __name__ == "__main__":
