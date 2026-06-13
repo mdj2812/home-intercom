@@ -104,13 +104,20 @@ let currentBtn = null;
 
 async function loadRooms() {
   try {
+    // 全部广播按钮（UI 概念，不属于 rooms.json）
+    ROOM_NAMES['all'] = '全部';
+    const allBtn = document.createElement('button');
+    allBtn.className = 'btn broadcast';
+    allBtn.id = 'btn-all';
+    allBtn.textContent = '全部';
+    BUTTONS.appendChild(allBtn);
+    setupButton(allBtn, 'all');
+
     const resp = await fetch('/rooms.json');
     const rooms = await resp.json();
-    // 全部按钮优先，房间按钮按原顺序
     for (const [key, room] of Object.entries(rooms)) {
       ROOM_NAMES[key] = room.name;
-      let cls = COLOR_CLASS[key] || '';
-      if (key === 'all') cls = 'broadcast';
+      const cls = COLOR_CLASS[key] || '';
       const btn = document.createElement('button');
       btn.className = 'btn ' + cls;
       btn.id = 'btn-' + key;
