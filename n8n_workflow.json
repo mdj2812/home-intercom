@@ -1,1 +1,69 @@
-{"updatedAt":"2026-06-13T15:35:10.923Z","createdAt":"2026-06-13T14:08:52.913Z","id":"FldpqiWXsSGHIDbU","name":"家庭广播 Intercom","description":null,"active":true,"isArchived":false,"nodes":[{"parameters":{"httpMethod":"POST","path":"intercom","responseMode":"lastNode","options":{}},"id":"827ca44b-8026-4565-a103-fd582b9d7469","name":"Webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[0,0],"webhookId":"9f255f49-dc76-4b53-ba74-5e34f0d3c5bd"},{"parameters":{"method":"POST","url":"=http://192.168.99.16:8765/convert?target={{ $json.query.target }}","sendBody":true,"contentType":"multipart-form-data","bodyParameters":{"parameters":[{"parameterType":"formBinaryData","name":"input","inputDataFieldName":"data"}]},"options":{}},"id":"3d3a4582-051f-4547-9a32-f622652eaf1a","name":"Flask 转换","type":"n8n-nodes-base.httpRequest","typeVersion":4.3,"position":[224,0]},{"parameters":{"resource":"service","operation":"call","domain":"media_player","service":"play_media","serviceAttributes":{"attributes":[{"name":"entity_id","value":"={{ $json.entity }}"},{"name":"media_content_id","value":"={{ $json.url }}"},{"name":"media_content_type","value":"music"}]}},"id":"1e23a1cc-1201-4c2d-8cca-e6e441a37cfd","name":"HA 播放","type":"n8n-nodes-base.homeAssistant","typeVersion":1,"position":[448,0],"credentials":{"homeAssistantApi":{"id":"lsCdQSQ6NjpEUGgm","name":"Home Assistant API"}}},{"parameters":{"resource":"service","operation":"call"},"type":"n8n-nodes-base.homeAssistant","typeVersion":1,"position":[144,144],"id":"19ab2079-d4da-435a-a162-8906fb61c196","name":"Call a service","credentials":{"homeAssistantApi":{"id":"lsCdQSQ6NjpEUGgm","name":"Home Assistant API"}}}],"connections":{"Webhook":{"main":[[{"node":"Flask 转换","type":"main","index":0}]]},"Flask 转换":{"main":[[{"node":"HA 播放","type":"main","index":0}]]}},"settings":{"executionOrder":"v1","availableInMCP":true,"binaryMode":"separate"},"staticData":null,"meta":{"aiBuilderAssisted":true,"builderVariant":"mcp","templateCredsSetupCompleted":true},"pinData":{},"versionId":"0a0a2994-9fb2-455c-b74d-a8c29d805833","activeVersionId":"27fa1292-0904-44b3-bd31-08f5fcb2b2f0","versionCounter":67,"triggerCount":1,"shared":[{"updatedAt":"2026-06-13T14:08:52.917Z","createdAt":"2026-06-13T14:08:52.917Z","role":"workflow:owner","workflowId":"FldpqiWXsSGHIDbU","projectId":"rQLHnRaSijApDjUL","project":{"updatedAt":"2026-05-03T12:15:48.333Z","createdAt":"2026-05-03T09:56:05.959Z","id":"rQLHnRaSijApDjUL","name":"Martin Ma <mdj2812@hotmail.com>","type":"personal","icon":null,"description":null,"creatorId":"ee1c5b0d-79f0-4720-94f9-f18ad841c0b8"}}],"tags":[],"activeVersion":{"updatedAt":"2026-06-13T15:30:17.000Z","createdAt":"2026-06-13T15:30:11.570Z","versionId":"27fa1292-0904-44b3-bd31-08f5fcb2b2f0","workflowId":"FldpqiWXsSGHIDbU","nodes":[{"parameters":{"httpMethod":"POST","path":"intercom","responseMode":"lastNode","options":{}},"id":"827ca44b-8026-4565-a103-fd582b9d7469","name":"Webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[0,0],"webhookId":"9f255f49-dc76-4b53-ba74-5e34f0d3c5bd"},{"parameters":{"method":"POST","url":"=http://192.168.99.16:8765/convert?target={{ $json.query.target }}","sendBody":true,"contentType":"multipart-form-data","bodyParameters":{"parameters":[{"parameterType":"formBinaryData","name":"input","inputDataFieldName":"data"}]},"options":{}},"id":"3d3a4582-051f-4547-9a32-f622652eaf1a","name":"Flask 转换","type":"n8n-nodes-base.httpRequest","typeVersion":4.3,"position":[224,0]},{"parameters":{"resource":"service","operation":"call","domain":"media_player","service":"play_media","serviceAttributes":{"attributes":[{"name":"entity_id","value":"={{ $json.entity }}"},{"name":"media_content_id","value":"={{ $json.url }}"},{"name":"media_content_type","value":"music"}]}},"id":"1e23a1cc-1201-4c2d-8cca-e6e441a37cfd","name":"HA 播放","type":"n8n-nodes-base.homeAssistant","typeVersion":1,"position":[448,0],"credentials":{"homeAssistantApi":{"id":"lsCdQSQ6NjpEUGgm","name":"Home Assistant API"}}}],"connections":{"Webhook":{"main":[[{"node":"Flask 转换","type":"main","index":0}]]},"Flask 转换":{"main":[[{"node":"HA 播放","type":"main","index":0}]]}},"authors":"Martin Ma","name":"Version 27fa1292","description":"","autosaved":false,"workflowPublishHistory":[{"createdAt":"2026-06-13T15:30:17.612Z","id":218,"workflowId":"FldpqiWXsSGHIDbU","versionId":"27fa1292-0904-44b3-bd31-08f5fcb2b2f0","event":"activated","userId":"ee1c5b0d-79f0-4720-94f9-f18ad841c0b8"}]}}
+{
+  "id": "4CCLNbj0pxRYJK0c",
+  "name": "Intercom 播放",
+  "description": "Flask回调触发：接收{entity, url} → 调用HA play_media播放音频",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "intercom/play",
+        "responseMode": "onReceived",
+        "options": {
+          "noResponseBody": false
+        }
+      },
+      "name": "Intercom Play",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "service",
+        "operation": "call",
+        "domain": "media_player",
+        "service": "play_media",
+        "serviceAttributes": {
+          "attributes": [
+            {
+              "name": "entity_id",
+              "value": "={{ $json.body.entity }}"
+            },
+            {
+              "name": "media_content_id",
+              "value": "={{ $json.body.url }}"
+            },
+            {
+              "name": "media_content_type",
+              "value": "music"
+            }
+          ]
+        }
+      },
+      "name": "播放到音箱",
+      "type": "n8n-nodes-base.homeAssistant",
+      "typeVersion": 1,
+      "position": [
+        224,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Intercom Play": {
+      "main": [
+        [
+          {
+            "node": "播放到音箱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
