@@ -1,7 +1,7 @@
 {
   "id": "4CCLNbj0pxRYJK0c",
   "name": "Intercom 播放",
-  "description": "Flask回调触发：接收{entity, url} → 调用HA play_media播放音频",
+  "description": "Flask回调：接收{entity,url,duration} → HA播放 → Wait播完",
   "active": true,
   "nodes": [
     {
@@ -17,8 +17,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        0,
-        0
+        240,
+        300
       ]
     },
     {
@@ -48,8 +48,22 @@
       "type": "n8n-nodes-base.homeAssistant",
       "typeVersion": 1,
       "position": [
-        224,
-        0
+        540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": "={{ Math.ceil($('Intercom Play').item.json.body.duration) + 1 }}",
+        "unit": "seconds"
+      },
+      "name": "等待播完",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        840,
+        300
       ]
     }
   ],
@@ -59,6 +73,17 @@
         [
           {
             "node": "播放到音箱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "播放到音箱": {
+      "main": [
+        [
+          {
+            "node": "等待播完",
             "type": "main",
             "index": 0
           }

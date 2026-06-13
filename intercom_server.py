@@ -52,6 +52,9 @@ def convert():
             tmp_wav
         ], check=True, timeout=15, capture_output=True)
         os.unlink(tmp_webm)
+        size_out = os.path.getsize(tmp_wav)
+        # WAV PCM 16kHz mono 16bit → 32000 bytes/sec
+        duration = size_out / 32000
     except subprocess.CalledProcessError as e:
         print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
         return jsonify({"ok": False, "error": "conversion failed"}), 500
@@ -73,7 +76,11 @@ def convert():
 
     # 回调 n8n 触发播放
     try:
-        body = json.dumps({"entity": room["entity"], "url": audio_url}).encode()
+        body = json.dumps({
+            "entity": room["entity"],
+            "url": audio_url,
+            "duration": duration
+        }).encode()
         req = urllib.request.Request(N8N_HOOK, data=body, method="POST")
         req.add_header("Content-Type", "application/json")
         urllib.request.urlopen(req, timeout=10)
