@@ -32,11 +32,28 @@ PWA → Flask :8765 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 
 ## 部署
 
-1. **Flask**: `python3 intercom_server.py`（HTTP :8765）
-2. **n8n**: 导入 `n8n_workflow.json`，激活
-3. **PWA**: `http://<host>:8765/`
+### Docker（推荐）
 
-依赖：`flask`、`ffmpeg`、`openssh-client`（SCP）、n8n。
+```bash
+cd /path/to/home-intercom
+docker compose up -d
+```
+
+首次会在 `http://<host>:8765/` 启动，`rooms.json` volume 挂载，改完 `docker compose restart` 即可。
+
+镜像已在私有 registry：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
+
+**前置条件**：容器内 SCP 到 HA 需要 SSH key。确认 `~/.ssh/id_ed25519` 存在且已授权访问 HA（`192.168.99.4`）。
+
+### 裸机
+
+```bash
+python3 intercom_server.py  # HTTP :8765
+```
+
+依赖：`flask`、`ffmpeg`、`openssh-client`（SCP）。
+
+不管用哪种方式部署 Flask，都需要在 n8n 导入 `n8n_workflow.json` 并激活。
 
 ## 全部广播 vs 单房间
 
