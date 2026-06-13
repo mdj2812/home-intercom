@@ -30,7 +30,7 @@ n8n 负责编排调度，Flask 负责音频转换和 HA API 调用。
 
 | target | 房间 | 音箱 | entity_id |
 |--------|------|------|-----------|
-| `living` | 客厅 | Smart Display 10 | `media_player.xiaoai_wifispeaker_x10a` |
-| `cinema` | 影音室 | Mi Smart Clock 4inch | `media_player.xiaoai_wifispeaker_lx04` |
-| `study` | 书房 | Sound Pro | `media_player.xiaoai_wifispeaker_l17a` |
-| `bedroom` | 主卧 | AI Speaker Pro | `media_player.xiaoai_wifispeaker_lx06` |
+| `living` | 客厅 | Smart Display 10 | `media_player.xiaomi_x10a_ce5a_play_control` |
+| `cinema` | 影音室 | Mi Smart Clock 4inch | `media_player.xiaomi_lx04_e135_play_control` |
+| `study` | 书房 | Sound Pro | `media_player.xiaomi_l17a_db94_play_control` |
+| `bedroom` | 主卧 | AI Speaker Pro | `media_player.xiaomi_lx06_627c_play_control` |
