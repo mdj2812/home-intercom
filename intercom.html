@@ -141,27 +141,38 @@ async function sendAudio() {
   const blob = new Blob(audioChunks, { type: 'audio/webm' });
 
   try {
-    let resp;
-    if (USE_N8N) {
-      // n8n 模式：POST raw binary + query param
-      resp = await fetch(N8N_URL + '?target=' + currentTarget, {
-        method: 'POST',
-        body: blob,
-        headers: { 'Content-Type': 'audio/webm' }
-      });
-    } else {
-      // 直连 Flask 模式：multipart form
-      const formData = new FormData();
-      formData.append('audio', blob, 'msg.webm');
-      formData.append('target', currentTarget);
-      resp = await fetch(UPLOAD_URL, { method: 'POST', body: formData });
+    // 1) 直连 Flask 转换（绕过 n8n binary 转发问题）
+    setStatus('🔄 转换中...', 'info');
+    const flaskResp = await fetch('/convert?target=' + currentTarget, {
+      method: 'POST',
+      body: blob,
+      headers: { 'Content-Type': 'audio/webm' }
+    });
+
+    if (!flaskResp.ok) {
+      setStatus('❌ 转换失败: ' + flaskResp.status, 'error');
+      return;
     }
 
-    if (resp.ok) {
+    const data = await flaskResp.json();
+    if (!data.ok) {
+      setStatus('❌ ' + (data.error || 'unknown'), 'error');
+      return;
+    }
+
+    // 2) 把 URL 和 entity 发给 n8n 触发播放
+    setStatus('📢 播放中...', 'info');
+    const n8nResp = await fetch(N8N_URL, {
+      method: 'POST',
+      body: JSON.stringify({ entity: data.entity, url: data.url }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (n8nResp.ok) {
       setStatus('✅ 已发送 → ' + (ROOM_NAMES[currentTarget] || currentTarget), 'success');
       setTimeout(() => setStatus('准备好', ''), 3000);
     } else {
-      setStatus('❌ 发送失败: ' + resp.status, 'error');
+      setStatus('❌ 播放失败: ' + n8nResp.status, 'error');
     }
   } catch (e) {
     setStatus('❌ 网络错误: ' + e.message, 'error');
