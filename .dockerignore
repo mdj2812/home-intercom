@@ -1,0 +1,8 @@
+.git
+README.md
+.gitignore
+Dockerfile
+docker-compose.yml
+__pycache__
+*.pyc
+n8n_workflow.json

@@ -1,0 +1,19 @@
+services:
+  intercom:
+    build: .
+    container_name: home-intercom
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      # SSH key for SCP to HA
+      - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
+      # rooms.json editable without rebuild
+      - ./rooms.json:/app/rooms.json:ro
+    environment:
+      - HA_HOST=192.168.99.4
+      - HA_WWW=/config/www/intercom/
+      - N8N_HOOK=https://n8n.home.mdj2812.top/webhook/intercom/play
+    # Use host network DNS for n8n.home.mdj2812.top resolution
+    dns:
+      - 192.168.99.10

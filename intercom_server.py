@@ -8,9 +8,9 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
-HA_HOST = "192.168.99.4"
-HA_WWW = "/config/www/intercom/"
-N8N_HOOK = "https://n8n.home.mdj2812.top/webhook/intercom/play"
+HA_HOST = os.environ.get("HA_HOST", "192.168.99.4")
+HA_WWW = os.environ.get("HA_WWW", "/config/www/intercom/")
+N8N_HOOK = os.environ.get("N8N_HOOK", "https://n8n.home.mdj2812.top/webhook/intercom/play")
 
 # 从 rooms.json 加载房间配置
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
