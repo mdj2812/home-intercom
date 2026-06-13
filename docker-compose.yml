@@ -14,6 +14,5 @@ services:
       - HA_HOST=192.168.99.4
       - HA_WWW=/config/www/intercom/
       - N8N_HOOK=https://n8n.home.mdj2812.top/webhook/intercom/play
-    # Use host network DNS for n8n.home.mdj2812.top resolution
-    dns:
-      - 192.168.99.10
+    # Use host networking for direct access to 192.168.99.x (HA, n8n, DNS)
+    network_mode: host
