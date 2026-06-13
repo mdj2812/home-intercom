@@ -1,36 +1,23 @@
 #!/usr/bin/env python3
 """家庭广播系统 — 手机对讲站后端
-接收音频 → SCP 到 HA → 返回 url/entity 给 n8n 调度播放
+PWA POST 音频 → Flask 转换+SCP → 回调 n8n webhook → HA 播放
 """
-import os, subprocess, time
+import os, json, subprocess, time
+import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
 HA_HOST = "192.168.99.4"
 HA_WWW = "/config/www/intercom/"
+N8N_HOOK = "https://n8n.home.mdj2812.top/webhook/intercom/play"
 
 ROOM_MAP = {
-    "living": {
-        "name": "客厅",
-        "entity": "media_player.xiaomi_x10a_ce5a_play_control",
-    },
-    "cinema": {
-        "name": "影音室",
-        "entity": "media_player.xiaomi_lx04_e135_play_control",
-    },
-    "media": {
-        "name": "影音室",
-        "entity": "media_player.xiaomi_lx04_e135_play_control",
-    },
-    "study": {
-        "name": "书房",
-        "entity": "media_player.xiaomi_l17a_db94_play_control",
-    },
-    "bedroom": {
-        "name": "主卧",
-        "entity": "media_player.xiaomi_lx06_627c_play_control",
-    },
+    "living":  {"name": "客厅", "entity": "media_player.xiaomi_x10a_ce5a_play_control"},
+    "cinema":  {"name": "影音室", "entity": "media_player.xiaomi_lx04_e135_play_control"},
+    "media":   {"name": "影音室", "entity": "media_player.xiaomi_lx04_e135_play_control"},
+    "study":   {"name": "书房", "entity": "media_player.xiaomi_l17a_db94_play_control"},
+    "bedroom": {"name": "主卧", "entity": "media_player.xiaomi_lx06_627c_play_control"},
 }
 
 @app.route("/")
@@ -39,16 +26,11 @@ def index():
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    """n8n 调用的转换端点 — 接收 form-data (file field: input) 或 raw binary"""
+    """PWA 直连：接收音频 → 转换 → SCP → 回调 n8n"""
     target = request.args.get("target", "media")
-    
-    # Try form-data file first, fall back to raw body
-    file = request.files.get("input")
-    if file and file.filename:
-        raw_audio = file.read()
-    else:
-        raw_audio = request.get_data()
 
+    # 接收原始音频
+    raw_audio = request.get_data()
     if not raw_audio:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
@@ -56,7 +38,6 @@ def convert():
     if not room:
         return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
 
-    # 保存原始 webm
     ts = int(time.time())
     tmp_webm = f"/tmp/msg_{target}_{ts}.webm"
     tmp_wav = f"/tmp/msg_{target}_{ts}.wav"
@@ -64,9 +45,9 @@ def convert():
 
     with open(tmp_webm, "wb") as f:
         f.write(raw_audio)
-    print(f"[intercom/n8n] Received {len(raw_audio)} bytes raw for {room['name']}")
+    print(f"[intercom] Received {len(raw_audio)} bytes for {room['name']}")
 
-    # 转换 webm → wav
+    # ffmpeg webm → wav
     try:
         subprocess.run([
             "ffmpeg", "-y", "-i", tmp_webm,
@@ -74,9 +55,8 @@ def convert():
             tmp_wav
         ], check=True, timeout=15, capture_output=True)
         os.unlink(tmp_webm)
-        size_out = os.path.getsize(tmp_wav)
     except subprocess.CalledProcessError as e:
-        print(f"[intercom/n8n] ffmpeg failed: {e.stderr.decode()}")
+        print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
         return jsonify({"ok": False, "error": "conversion failed"}), 500
 
     # SCP 到 HA
@@ -88,16 +68,26 @@ def convert():
         )
         os.unlink(tmp_wav)
     except subprocess.CalledProcessError as e:
-        print(f"[intercom/n8n] SCP failed: {e.stderr.decode()}")
+        print(f"[intercom] SCP failed: {e.stderr.decode()}")
         return jsonify({"ok": False, "error": "upload failed"}), 500
 
     audio_url = f"http://{HA_HOST}:8123/local/intercom/{filename}"
-    print(f"[intercom/n8n] Converted → {audio_url}")
-    return jsonify({"ok": True, "url": audio_url, "entity": room["entity"], "name": room["name"], "size": size_out})
+    print(f"[intercom] Converted → {audio_url}")
+
+    # 回调 n8n 触发播放
+    try:
+        body = json.dumps({"entity": room["entity"], "url": audio_url}).encode()
+        req = urllib.request.Request(N8N_HOOK, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        urllib.request.urlopen(req, timeout=10)
+        print(f"[intercom] → n8n play {room['name']}")
+    except Exception as e:
+        print(f"[intercom] n8n hook failed: {e}")
+
+    return jsonify({"ok": True, "name": room["name"], "url": audio_url})
 
 
 if __name__ == "__main__":
-    # 确保 HA www intercom 目录存在
     subprocess.run(
         ["ssh", "-o", "StrictHostKeyChecking=no", HA_HOST, f"mkdir -p {HA_WWW}"],
         check=False, timeout=5

@@ -93,7 +93,7 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
 
 <script>
 const STATUS = document.getElementById('status');
-const N8N_URL = 'https://n8n.home.mdj2812.top/webhook/intercom';
+const CONVERT_URL = '/convert';
 const ROOM_NAMES = { living: '客厅', media: '影音室', study: '书房', bedroom: '主卧' };
 let mediaRecorder = null;
 let audioChunks = [];
@@ -141,7 +141,7 @@ async function sendAudio() {
   const blob = new Blob(audioChunks, { type: 'audio/webm' });
 
   try {
-    const resp = await fetch(N8N_URL + '?target=' + currentTarget, {
+    const resp = await fetch(CONVERT_URL + '?target=' + currentTarget, {
       method: 'POST',
       body: blob,
       headers: { 'Content-Type': 'audio/webm' }
