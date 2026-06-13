@@ -1,14 +1,9 @@
 {
-  "id": "4CCLNbj0pxRYJK0c",
-  "name": "Intercom 播放",
-  "description": "Flask回调：接收{entity,url,duration} → HA播放 → Wait播完",
-  "active": true,
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "intercom/play",
-        "responseMode": "onReceived",
         "options": {
           "noResponseBody": false
         }
@@ -17,8 +12,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        240,
-        300
+        0,
+        72
       ]
     },
     {
@@ -48,22 +43,88 @@
       "type": "n8n-nodes-base.homeAssistant",
       "typeVersion": 1,
       "position": [
-        540,
-        300
+        224,
+        72
       ]
     },
     {
       "parameters": {
-        "resume": "timeInterval",
-        "amount": "={{ Math.ceil($('Intercom Play').item.json.body.duration) + 1 }}",
-        "unit": "seconds"
+        "amount": "={{ $('Intercom Play').item.json.body.duration }}"
       },
       "name": "等待播完",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        840,
-        300
+        448,
+        72
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "service",
+        "operation": "call",
+        "domain": "media_player",
+        "service": "media_pause",
+        "serviceAttributes": {
+          "attributes": [
+            {
+              "name": "entity_id",
+              "value": "={{ $('Intercom Play').item.json.body.entity }}"
+            }
+          ]
+        }
+      },
+      "name": "Pause",
+      "type": "n8n-nodes-base.homeAssistant",
+      "typeVersion": 1,
+      "position": [
+        672,
+        72
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "state",
+        "entityId": "={{ $('Intercom Play').item.json.body.entity }}"
+      },
+      "name": "Get a state",
+      "type": "n8n-nodes-base.homeAssistant",
+      "typeVersion": 1,
+      "position": [
+        896,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b9d3234e-e99f-452d-a980-54c303c78126",
+              "leftValue": "={{ $json.state }}",
+              "rightValue": "playing",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "If",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        72
       ]
     }
   ],
@@ -84,6 +145,50 @@
         [
           {
             "node": "等待播完",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "等待播完": {
+      "main": [
+        [
+          {
+            "node": "Pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause": {
+      "main": [
+        [
+          {
+            "node": "Get a state",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a state": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Pause",
             "type": "main",
             "index": 0
           }
