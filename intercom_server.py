@@ -29,10 +29,6 @@ ROOM_MAP = {
         "name": "书房",
         "entity": "media_player.xiaomi_l17a_db94_play_control",
     },
-    "bedroom": {
-        "name": "主卧",
-        "entity": "media_player.xiaomi_lx06_627c_play_control",
-    },
 }
 HA_TOKEN_FILE = os.path.expanduser("~/.hermes/.env")
 
@@ -62,9 +58,15 @@ def index():
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    """n8n 调用的转换端点 — 接收 raw binary，返回 URL"""
+    """n8n 调用的转换端点 — 接收 form-data (file field: input) 或 raw binary"""
     target = request.args.get("target", "media")
-    raw_audio = request.get_data()
+    
+    # Try form-data file first, fall back to raw body
+    file = request.files.get("input")
+    if file and file.filename:
+        raw_audio = file.read()
+    else:
+        raw_audio = request.get_data()
 
     if not raw_audio:
         return jsonify({"ok": False, "error": "no audio data"}), 400
