@@ -62,15 +62,9 @@ def index():
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    """n8n 调用的转换端点 — 接收 form-data (file field: input) 或 raw binary"""
+    """n8n 调用的转换端点 — 接收 raw binary，返回 URL"""
     target = request.args.get("target", "media")
-    
-    # Try form-data file first, fall back to raw body
-    file = request.files.get("input")
-    if file and file.filename:
-        raw_audio = file.read()
-    else:
-        raw_audio = request.get_data()
+    raw_audio = request.get_data()
 
     if not raw_audio:
         return jsonify({"ok": False, "error": "no audio data"}), 400
