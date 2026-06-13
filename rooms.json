@@ -1,7 +1,6 @@
 {
   "living":  {"name": "客厅", "entity": "media_player.xiaomi_x10a_ce5a_play_control"},
   "cinema":  {"name": "影音室", "entity": "media_player.xiaomi_lx04_e135_play_control"},
-  "media":   {"name": "影音室", "entity": "media_player.xiaomi_lx04_e135_play_control"},
   "study":   {"name": "书房", "entity": "media_player.xiaomi_l17a_db94_play_control"},
   "bedroom": {"name": "主卧", "entity": "media_player.xiaomi_lx06_627c_play_control"}
 }
