@@ -82,8 +82,11 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
   影音室<span class="subtitle">按住录音，松开发送</span>
 </button>
 <button class="btn study" id="btn-study">
-  书房<span class="subtitle">按住录音，松开发送</span>
-</button>
+   书房<span class="subtitle">按住录音，松开发送</span>
+ </button>
+ <button class="btn bedroom" id="btn-bedroom">
+   主卧<span class="subtitle">按住录音，松开发送</span>
+ </button>
 <div class="status" id="status">准备好</div>
 
 <script>
@@ -192,6 +195,7 @@ function setupButton(id, target) {
 setupButton('btn-living', 'living');
 setupButton('btn-media', 'media');
 setupButton('btn-study', 'study');
+        setupButton('btn-bedroom', 'bedroom');
 </script>
 </body>
 </html>
