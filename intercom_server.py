@@ -12,13 +12,10 @@ HA_HOST = "192.168.99.4"
 HA_WWW = "/config/www/intercom/"
 N8N_HOOK = "https://n8n.home.mdj2812.top/webhook/intercom/play"
 
-ROOM_MAP = {
-    "living":  {"name": "客厅", "entity": "media_player.xiaomi_x10a_ce5a_play_control"},
-    "cinema":  {"name": "影音室", "entity": "media_player.xiaomi_lx04_e135_play_control"},
-    "media":   {"name": "影音室", "entity": "media_player.xiaomi_lx04_e135_play_control"},
-    "study":   {"name": "书房", "entity": "media_player.xiaomi_l17a_db94_play_control"},
-    "bedroom": {"name": "主卧", "entity": "media_player.xiaomi_lx06_627c_play_control"},
-}
+# 从 rooms.json 加载房间配置
+ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
+with open(ROOMS_FILE) as f:
+    ROOM_MAP = json.load(f)
 
 @app.route("/")
 def index():
