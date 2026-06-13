@@ -96,59 +96,6 @@ def convert():
     return jsonify({"ok": True, "url": audio_url, "entity": room["entity"], "name": room["name"], "size": size_out})
 
 
-@app.route("/upload", methods=["POST"])
-def upload():
-    """接收音频上传"""
-    audio = request.files.get("audio")
-    target = request.form.get("target", "media")
-
-    if not audio:
-        return jsonify({"ok": False, "error": "no audio file"}), 400
-
-    room = ROOM_MAP.get(target)
-    if not room:
-        return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
-
-    # 保存原始文件
-    ts = int(time.time())
-    tmp_webm = f"/tmp/msg_{target}_{ts}.webm"
-    tmp_wav = f"/tmp/msg_{target}_{ts}.wav"
-    filename = f"msg_{target}_{ts}.wav"
-    audio.save(tmp_webm)
-    size_in = os.path.getsize(tmp_webm)
-    print(f"[intercom] Received {size_in} bytes webm for {room['name']}")
-
-    # 转换 webm/opus → WAV (PCM 16kHz mono, 小爱兼容)
-    try:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", tmp_webm,
-            "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
-            tmp_wav
-        ], check=True, timeout=15, capture_output=True)
-        os.unlink(tmp_webm)
-        size_out = os.path.getsize(tmp_wav)
-        print(f"[intercom] Converted webm→wav: {size_in}B → {size_out}B")
-    except subprocess.CalledProcessError as e:
-        print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
-        return jsonify({"ok": False, "error": "audio conversion failed"}), 500
-
-    # SCP 到 HA www
-    remote_path = f"{HA_HOST}:{HA_WWW}{filename}"
-    try:
-        subprocess.run(
-            ["scp", "-o", "StrictHostKeyChecking=no", tmp_wav, remote_path],
-            check=True, timeout=10, capture_output=True
-        )
-        os.unlink(tmp_wav)
-    except subprocess.CalledProcessError as e:
-        print(f"[intercom] SCP failed: {e.stderr.decode()}")
-        return jsonify({"ok": False, "error": "upload failed"}), 500
-
-    audio_url = f"http://{HA_HOST}:8123/local/intercom/{filename}"
-    print(f"[intercom] Converted → {audio_url}")
-    return jsonify({"ok": True, "url": audio_url, "entity": room["entity"], "name": room["name"], "size": size_out})
-
-
 if __name__ == "__main__":
     # 确保 HA www intercom 目录存在
     subprocess.run(
