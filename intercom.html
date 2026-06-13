@@ -77,20 +77,39 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
 <body>
 <h1>📢 家庭广播</h1>
 <p style="color:#555; font-size:0.85rem; margin-top:-8px">按住录音，松开发送</p>
-<button class="btn livingroom" id="btn-living">客厅</button>
-<button class="btn" id="btn-media">影音室</button>
-<button class="btn study" id="btn-study">书房</button>
-<button class="btn bedroom" id="btn-bedroom">主卧</button>
+<div id="buttons"></div>
 <div class="status" id="status">准备好</div>
 
 <script>
 const STATUS = document.getElementById('status');
+const BUTTONS = document.getElementById('buttons');
 const CONVERT_URL = '/convert';
-const ROOM_NAMES = { living: '客厅', media: '影音室', study: '书房', bedroom: '主卧' };
+const COLOR_CLASS = { living: 'livingroom', study: 'study', bedroom: 'bedroom' };
+let ROOM_NAMES = {};
 let mediaRecorder = null;
 let audioChunks = [];
 let currentTarget = '';
 let currentBtn = null;
+
+async function loadRooms() {
+  try {
+    const resp = await fetch('/rooms.json');
+    const rooms = await resp.json();
+    for (const [key, room] of Object.entries(rooms)) {
+      ROOM_NAMES[key] = room.name;
+      const cls = COLOR_CLASS[key] || '';
+      const btn = document.createElement('button');
+      btn.className = 'btn ' + cls;
+      btn.id = 'btn-' + key;
+      btn.textContent = room.name;
+      BUTTONS.appendChild(btn);
+      setupButton(btn, key);
+    }
+    setStatus('准备好', '');
+  } catch (e) {
+    setStatus('❌ 加载房间配置失败', 'error');
+  }
+}
 
 function setStatus(msg, cls) {
   STATUS.textContent = msg;
@@ -150,8 +169,7 @@ async function sendAudio() {
   }
 }
 
-function setupButton(id, target) {
-  const btn = document.getElementById(id);
+function setupButton(btn, target) {
 
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -174,10 +192,7 @@ function setupButton(id, target) {
   btn.addEventListener('contextmenu', e => e.preventDefault());
 }
 
-setupButton('btn-living', 'living');
-setupButton('btn-media', 'media');
-setupButton('btn-study', 'study');
-setupButton('btn-bedroom', 'bedroom');
+loadRooms();
 </script>
 </body>
 </html>

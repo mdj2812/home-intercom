@@ -21,6 +21,10 @@ with open(ROOMS_FILE) as f:
 def index():
     return send_from_directory("/tmp", "intercom.html")
 
+@app.route("/rooms.json")
+def rooms():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
+
 @app.route("/convert", methods=["POST"])
 def convert():
     """PWA 直连：接收音频 → 转换 → SCP → 回调 n8n"""
