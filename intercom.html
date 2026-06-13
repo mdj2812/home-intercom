@@ -62,6 +62,8 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
 .livingroom:active, .livingroom.recording { border-color: #27ae60; background: #102a18; }
 .study { border-color: #9b59b6; }
 .study:active, .study.recording { border-color: #8e44ad; background: #1a1028; }
+.bedroom { border-color: #e67e22; }
+.bedroom:active, .bedroom.recording { border-color: #d35400; background: #2a1a10; }
 .btn .subtitle { font-size: 0.8rem; font-weight: 400; color: #666; display: block; }
 .status {
   font-size: 0.9rem;
@@ -84,6 +86,9 @@ h1 { font-size: 1.2rem; color: #888; font-weight: 400; margin-bottom: 10px; }
 <button class="btn study" id="btn-study">
   书房<span class="subtitle">按住录音，松开发送</span>
 </button>
+<button class="btn bedroom" id="btn-bedroom">
+  主卧<span class="subtitle">按住录音，松开发送</span>
+</button>
 <div class="status" id="status">准备好</div>
 
 <script>
@@ -91,7 +96,7 @@ const STATUS = document.getElementById('status');
 const UPLOAD_URL = '/upload';
 const N8N_URL = 'https://n8n.home.mdj2812.top/webhook/intercom';
 const USE_N8N = true;  // 设为 false 则回退到直连 Flask
-const ROOM_NAMES = { living: '客厅', media: '影音室', study: '书房' };
+const ROOM_NAMES = { living: '客厅', media: '影音室', study: '书房', bedroom: '主卧' };
 let mediaRecorder = null;
 let audioChunks = [];
 let currentTarget = '';
@@ -192,6 +197,7 @@ function setupButton(id, target) {
 setupButton('btn-living', 'living');
 setupButton('btn-media', 'media');
 setupButton('btn-study', 'study');
+setupButton('btn-bedroom', 'bedroom');
 </script>
 </body>
 </html>
