@@ -10,7 +10,6 @@ app = Flask(__name__)
 
 HA_HOST = os.environ.get("HA_HOST", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
-SELF_URL = os.environ.get("SELF_URL", "http://192.168.99.10:8764")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 

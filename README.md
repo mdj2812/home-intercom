@@ -31,7 +31,6 @@ PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
 |------|------|--------|
 | `HA_HOST` | Home Assistant 地址 | `192.168.99.4` |
 | `HA_TOKEN` | HA 长期访问令牌 | — |
-| `SELF_URL` | Flask 自身可访问 URL（HA 拉音频用） | `http://192.168.99.10:8764` |
 | `AUDIO_DIR` | 音频文件存储目录 | `/data/audio` |
 
 ## 目录结构
@@ -80,10 +79,7 @@ docker compose -f docker/docker-compose.yml up -d
 ```
 
 <<<<<<< HEAD
-**前置条件**：无需 SSH key。Flask 直接 serve 音频，HA 通过 HTTP 拉取。
-=======
-**前置条件**：Flask 直接调 HA API，确保 `HA_TOKEN` 配置正确。HA 通过 HTTP 拉音频，确保 `SELF_URL` 为 HA 能访问到的地址。**无需 SSH key、无需 n8n**。
->>>>>>> 95aed69 (refactor: remove n8n, Flask calls HA API directly)
+**前置条件**：Flask 直接调 HA API，确保 `HA_TOKEN` 配置正确。HA 通过 HTTP 拉音频，URL 由 Flask 自动检测。**无需 SSH key、无需 n8n**。
 
 ### 性能验证
 
