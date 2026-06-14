@@ -3,8 +3,6 @@ services:
     image: ${IMAGE}
     container_name: home-intercom
     restart: unless-stopped
-    ports:
-      - "8764:8764"
     volumes:
       # Audio files served by Flask (no SCP)
       - ./audio:/data/audio
