@@ -4,3 +4,4 @@ __pycache__/
 *.webm
 *.wav
 *.mp3
+docker/.env
