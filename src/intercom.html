@@ -475,7 +475,7 @@ setInterval(pollSpeakerStatus, 30000);
 
 // 显示版本号
 fetch('/version').then(r => r.json()).then(d => {
-  document.getElementById('ver').textContent = 'v' + d.version;
+  document.getElementById('ver').textContent = d.version;
 }).catch(() => {
   document.getElementById('ver').textContent = '';
 });
