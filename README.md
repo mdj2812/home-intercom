@@ -102,12 +102,3 @@ python3 intercom_server.py  # HTTP :8764
 | 触发 | `target=<room>` | `target=all` |
 | Flask | 转码一次，POST n8n 一次 | 转码一次，POST n8n 四次（并发） |
 | n8n | 1 个 workflow run | 4 个独立 workflow run，各自轮询+等待+暂停 |
-
-## 房间映射
-
-| target | 房间 | entity_id |
-|--------|------|-----------|
-| `living` | 客厅 | `media_player.xiaomi_x10a_ce5a_play_control` |
-| `cinema` | 影音室 | `media_player.xiaomi_lx04_e135_play_control` |
-| `study` | 书房 | `media_player.xiaomi_l17a_db94_play_control` |
-| `bedroom` | 主卧 | `media_player.xiaomi_lx06_627c_play_control` |
