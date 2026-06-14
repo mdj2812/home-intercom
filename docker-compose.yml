@@ -1,6 +1,6 @@
 services:
   intercom:
-    image: registry.home.mdj2812.top/home-lab/home-intercom:v1.2.0
+    image: registry.home.mdj2812.top/home-lab/home-intercom:latest
     container_name: home-intercom
     restart: unless-stopped
     ports:
