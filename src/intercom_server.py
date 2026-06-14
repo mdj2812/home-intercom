@@ -10,7 +10,8 @@ app = Flask(__name__)
 
 HA_HOST = os.environ.get("HA_HOST", "192.168.99.4")
 HA_WWW = os.environ.get("HA_WWW", "/config/www/intercom/")
-N8N_HOOK = os.environ.get("N8N_HOOK", "https://n8n.home.mdj2812.top/webhook/intercom/play")
+HA_TOKEN = os.environ.get("HA_TOKEN", "")
+N8N_HOOK = os.environ.get("N8N_HOOK", "")
 
 # 从 rooms.json 加载房间配置
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
@@ -29,6 +30,34 @@ def rooms():
 @app.route("/static/<path:filename>")
 def static_files(filename):
     return send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"), filename)
+
+@app.route("/rooms/status")
+def rooms_status():
+    """查询 HA 中小爱音箱的在线状态"""
+    if not HA_TOKEN:
+        return jsonify({"error": "no HA_TOKEN"}), 500
+
+    status = {}
+    ctx = ssl._create_unverified_context()
+
+    for key, room in ROOM_MAP.items():
+        entity = room.get("entity", "")
+        if not entity:
+            status[key] = True
+            continue
+        try:
+            url = f"http://{HA_HOST}:8123/api/states/{entity}"
+            req = urllib.request.Request(url)
+            req.add_header("Authorization", f"Bearer {HA_TOKEN}")
+            resp = urllib.request.urlopen(req, timeout=3, context=ctx)
+            data = json.loads(resp.read())
+            status[key] = data.get("state") != "unavailable"
+        except Exception as e:
+            print(f"[intercom] HA query failed for {key}: {e}")
+            status[key] = False
+
+    return jsonify(status)
+
 
 @app.route("/convert", methods=["POST"])
 def convert():

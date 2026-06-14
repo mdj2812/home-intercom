@@ -264,6 +264,7 @@ body {
 
 /* broadcast card accent */
 .broadcast-card .room-header { color: #f0a030; font-weight: 600; }
+.broadcast-card .dot { display: none; }
 .broadcast-card.recording .status { color: #f0a030; }
 .broadcast-card.recording .ptt-btn { background: #503a20; }
 .broadcast-card.sent .ptt-btn { background: #503a20; }
@@ -417,7 +418,22 @@ async function sendAudio() {
   }, 1500);
 }
 
+async function pollSpeakerStatus() {
+  try {
+    const resp = await fetch('/rooms/status');
+    const status = await resp.json();
+    for (const [key, online] of Object.entries(status)) {
+      const dot = document.querySelector(`#card-${key} .dot`);
+      if (!dot) continue;
+      dot.style.background = online ? '#33d17a' : '#444';
+      dot.style.boxShadow = online ? '0 0 4px #33d17a' : 'none';
+    }
+  } catch (e) { /* ignore */ }
+}
+
 loadRooms();
+setTimeout(pollSpeakerStatus, 1000);
+setInterval(pollSpeakerStatus, 30000);
 </script>
 </body>
 </html>
