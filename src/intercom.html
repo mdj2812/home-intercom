@@ -418,6 +418,8 @@ async function startRecording(target, card) {
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
+    // Release mic immediately — data already captured in audioChunks
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
     setCardState(currentCard, 'sending', '发送中…');
   }
 }
@@ -442,12 +444,6 @@ async function sendAudio() {
   setTimeout(() => {
     if (currentCard) setCardState(currentCard, '', '准备好');
   }, 1500);
-
-  // Release microphone after sending
-  if (mediaRecorder && mediaRecorder.stream) {
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    mediaRecorder = null;
-  }
 }
 
 async function pollSpeakerStatus() {

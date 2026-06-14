@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换 → 本地 serve → 回调 n8n webhook → HA 播放
 """
-import os, json, subprocess, ssl, shutil, sys
+import os, json, subprocess, ssl, shutil, sys, wave
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -13,6 +13,13 @@ HA_TOKEN = os.environ.get("HA_TOKEN", "")
 N8N_HOOK = os.environ.get("N8N_HOOK", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
+
+# ——— 音频处理常量 ———
+WAV_MAGIC = b'RIFF'           # WAV 文件魔数
+TMP_PREFIX = "/tmp/intercom_"  # 临时文件前缀
+FFMPEG_SR = 16000              # ffmpeg 输出采样率 (Hz)
+FFMPEG_BPS = 2                 # s16le = 2 bytes/sample
+FFMPEG_BYTERATE = FFMPEG_SR * FFMPEG_BPS  # 16000 Hz × 2 = 32000 B/s
 
 # 从 rooms.json 加载房间配置
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
@@ -64,12 +71,40 @@ def rooms_status():
     return jsonify(status)
 
 
+def _handle_wav_passthrough(raw_audio, tmp_wav):
+    """ESP32 硬件按键发来的 PCM WAV → 直通，解析头返回 duration"""
+    with open(tmp_wav, "wb") as f:
+        f.write(raw_audio)
+    with wave.open(tmp_wav, 'rb') as wf:
+        sr = wf.getframerate()
+        nframes = wf.getnframes()
+        sampwidth = wf.getsampwidth()
+        duration = nframes / sr
+    print(f"[intercom] WAV passthrough {len(raw_audio)} bytes, "
+          f"{sr}Hz, {sampwidth*8}-bit, {duration:.1f}s")
+    return duration
+
+
+def _handle_webm_convert(raw_audio, tmp_webm, tmp_wav):
+    """PWA 发来的 webm/opus → ffmpeg 转 16kHz mono WAV，返回 duration"""
+    with open(tmp_webm, "wb") as f:
+        f.write(raw_audio)
+    subprocess.run([
+        "ffmpeg", "-y", "-i", tmp_webm,
+        "-acodec", "pcm_s16le", "-ac", "1", "-ar", str(FFMPEG_SR),
+        tmp_wav
+    ], check=True, timeout=60, capture_output=True)
+    os.unlink(tmp_webm)
+    size_out = os.path.getsize(tmp_wav)
+    duration = size_out / FFMPEG_BYTERATE
+    return duration
+
+
 @app.route("/convert", methods=["POST"])
 def convert():
     """PWA 直连：接收音频 → 转换 → 本地 serve → 回调 n8n"""
     target = request.args.get("target", "")
 
-    # 接收原始音频
     raw_audio = request.get_data()
     if not raw_audio:
         return jsonify({"ok": False, "error": "no audio data"}), 400
@@ -88,26 +123,20 @@ def convert():
     name = ROOM_MAP[target]["name"] if target != "all" else "全部"
     print(f"[intercom] Received {len(raw_audio)} bytes for {name}")
 
-    tmp_webm = f"/tmp/msg_{target}.webm"
-    tmp_wav = f"/tmp/msg_{target}.wav"
+    tmp_wav = f"{TMP_PREFIX}{target}.wav"
     filename = f"intercom_{target}.wav"
 
-    with open(tmp_webm, "wb") as f:
-        f.write(raw_audio)
-
-    # ffmpeg webm → wav
-    try:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", tmp_webm,
-            "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
-            tmp_wav
-        ], check=True, timeout=60, capture_output=True)
-        os.unlink(tmp_webm)
-        size_out = os.path.getsize(tmp_wav)
-        duration = size_out / 32000
-    except subprocess.CalledProcessError as e:
-        print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
-        return jsonify({"ok": False, "error": "conversion failed"}), 500
+    # 分支：WAV 直通 vs webm 转码（魔数检测，比扩展名更可靠）
+    if raw_audio[:len(WAV_MAGIC)] == WAV_MAGIC:
+        duration = _handle_wav_passthrough(raw_audio, tmp_wav)
+    else:
+        tmp_webm = f"{TMP_PREFIX}{target}.webm"
+        try:
+            duration = _handle_webm_convert(raw_audio, tmp_webm, tmp_wav)
+        except subprocess.CalledProcessError as e:
+            print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
+            os.unlink(tmp_wav)  # 清理 ffmpeg 残留的部分输出文件
+            return jsonify({"ok": False, "error": "conversion failed"}), 500
 
     # 移动到本地音频目录，Flask 直接 serve
     dest = os.path.join(AUDIO_DIR, filename)
@@ -116,7 +145,7 @@ def convert():
     audio_url = f"{scheme}://{request.host}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
-    # 回调 n8n 触发播放 — 全部广播时逐个触发每个房间
+    # 回调 n8n 触发播放
     ok_count = 0
     for tgt_key, tgt_room in targets:
         try:
