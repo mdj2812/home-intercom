@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.1 (2026-06-14)
+
+- **去掉 SELF_URL** — 改用 `request.host_url` + `X-Forwarded-Proto` 自动获取，Caddy 反代时正确拼 `https://`
+- **去掉 compose ports** — host 网络模式无需端口映射
+- **README 清理** — 去掉环境变量默认值
+
 ## v1.4.0 (2026-06-14)
 
 - **去掉 SCP/SSH** — Flask 本地 serve 音频，HA 通过 HTTP 直接拉取，不再依赖 SSH key
