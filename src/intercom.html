@@ -112,7 +112,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 .ptt-btn:active {
   transform: scale(0.96);
@@ -232,8 +231,8 @@ body {
 .room-card.sending .ptt-btn {
   background: #3a3a3a;
 }
-.room-card.sending .ptt-btn .icon { opacity: 0; }
-.room-card.sending .ptt-btn .dot { opacity: 0; }
+.room-card.sending .bars { opacity: 0; }
+.room-card.sending .checkmark { display: none; }
 .room-card.sending .ptt-btn::after {
   content: "";
   position: absolute;
