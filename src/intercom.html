@@ -58,28 +58,30 @@ body {
 .broadcast-card {
   grid-column: 1 / -1;
   margin-bottom: 6px;
-  flex-direction: row;
-  flex-wrap: wrap;
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
+  gap: 4px 16px;
   padding: 12px 16px;
 }
 .broadcast-card .room-header {
-  flex: 0 0 auto;
+  grid-column: 1;
+  grid-row: 1;
   font-size: 1rem;
 }
 .broadcast-card .ptt-wrap {
+  grid-column: 2;
+  grid-row: 1;
   width: 70px; height: 70px;
-  flex: 0 0 auto;
 }
 .broadcast-card .ptt-btn {
   width: 100%; height: 100%;
 }
 .broadcast-card .status {
-  flex: 1 0 100%;
-  text-align: left;
-  margin-top: 2px;
+  grid-column: 2;
+  grid-row: 2;
+  text-align: center;
 }
 
 /* ──── Room card ──── */
