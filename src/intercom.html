@@ -9,142 +9,365 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="manifest" href="/static/manifest.json">
-<meta name="theme-color" content="#f39c12">
+<meta name="theme-color" content="#0f0f0f">
 
 <title>家庭广播</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body { height:100%; overflow:hidden; }
+html, body { height:100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #0f0f0f;
   color: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 10px;
   touch-action: manipulation;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
-h1 { font-size: 1rem; color: #888; font-weight: 400; margin: 4px 0; }
-.btn {
-  width: min(90vw, 320px);
-  height: min(14vh, 100px);
-  border-radius: 16px;
-  border: 2px solid #333;
-  background: #1a1a1a;
-  color: #fff;
-  font-size: 1.5rem;
+
+/* ──── Layout ──── */
+.container {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.header {
+  text-align: center;
+  padding: 20px 0 12px;
+}
+.header h1 {
+  font-size: 1.3rem;
   font-weight: 600;
+  color: #ccc;
+  letter-spacing: 0.02em;
+}
+.header .hint {
+  font-size: 0.8rem;
+  color: #555;
+  margin-top: 4px;
+}
+
+/* ──── Grid ──── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+/* ──── Broadcast card (全部) ──── */
+.broadcast-card {
+  grid-column: 1 / -1;
+  margin-bottom: 6px;
+}
+
+/* ──── Room card ──── */
+.room-card {
+  background: #1a1a1a;
+  border-radius: 20px;
+  padding: 16px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+  transition: background .3s, box-shadow .3s;
+  border: 1px solid #2a2a2a;
+}
+
+/* ──── Room header ──── */
+.room-header {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.room-icon {
+  font-size: 1.1rem;
+}
+.room-header .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #444;
+  transition: background .3s;
+}
+
+/* ──── PTT Button ──── */
+.ptt-wrap {
+  position: relative;
+  width: 120px; height: 120px;
+}
+.ptt-btn {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: none;
+  background: #252525;
+  box-shadow: 0 6px 16px rgba(0,0,0,.3), inset 0 1px 2px rgba(255,255,255,.06);
   cursor: pointer;
-  transition: all 0.15s ease;
+  position: relative;
+  z-index: 2;
+  transition: transform .15s ease, background .3s, box-shadow .3s;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
   overflow: hidden;
 }
-.btn:active, .btn.recording {
-  border-color: #e74c3c;
-  background: #2a1010;
-  transform: scale(0.97);
+.ptt-btn:active {
+  transform: scale(0.96);
 }
-.btn.recording::after {
+
+/* ──── Ripple waves ──── */
+.waves {
+  position: absolute;
+  inset: -16px;
+  z-index: 1;
+}
+.waves::before,
+.waves::after {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 14px;
-  border: 3px solid #e74c3c;
-  animation: pulse 1s infinite;
+  border-radius: 50%;
+  border: 2px solid #33d17a;
+  opacity: 0;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+
+/* ──── Sound bars icon ──── */
+.bars {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  justify-content: center;
+  height: 36px;
+  transition: opacity .25s, transform .25s;
 }
-.livingroom { border-color: #2ecc71; }
-.livingroom:active, .livingroom.recording { border-color: #27ae60; background: #102a18; }
-.study { border-color: #9b59b6; }
-.study:active, .study.recording { border-color: #8e44ad; background: #1a1028; }
-.bedroom { border-color: #e67e22; }
-.bedroom:active, .bedroom.recording { border-color: #d35400; background: #2a1a10; }
-.broadcast {
-  border-color: #f39c12;
-  background: linear-gradient(135deg, #2a2000, #1a1a1a);
-  font-size: 1.7rem;
+.bars span {
+  width: 5px;
+  background: #666;
+  border-radius: 10px;
+  transition: background .3s, height .2s;
 }
-.broadcast:active, .broadcast.recording {
-  border-color: #f1c40f;
-  background: linear-gradient(135deg, #3a2a00, #2a1010);
+.bars span:nth-child(1) { height: 14px; }
+.bars span:nth-child(2) { height: 28px; }
+.bars span:nth-child(3) { height: 20px; }
+.bars span:nth-child(4) { height: 10px; }
+
+/* ──── Big checkmark (sent state) ──── */
+.checkmark {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.4rem;
+  font-weight: 700;
+  color: #fff;
+  animation: popIn .4s cubic-bezier(0.34,1.56,0.64,1);
 }
-#buttons { display: flex; flex-direction: column; gap: 16px; }
+.sent .checkmark {
+  display: flex;
+}
+.sent .bars {
+  opacity: 0;
+}
+@keyframes popIn {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ──── Status text ──── */
 .status {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   color: #555;
-  min-height: 1.5em;
+  min-height: 1.2em;
   text-align: center;
+  transition: color .3s;
 }
-.status.success { color: #2ecc71; }
-.status.error { color: #e74c3c; }
+
+/* ══════════════════════════════════════
+   STATES
+   ══════════════════════════════════════ */
+
+/* recording */
+.room-card.recording {
+  border-color: rgba(51,209,122,.4);
+  box-shadow: 0 0 24px rgba(51,209,122,.08);
+}
+.room-card.recording .ptt-btn {
+  background: #2a5038;
+  transform: scale(0.95);
+  box-shadow: inset 0 4px 14px rgba(0,0,0,.35);
+}
+.room-card.recording .status { color: #33d17a; }
+.room-card.recording .bars span { background: #33d17a; }
+
+/* wave animation */
+.room-card.recording .waves::before {
+  animation: ripple 2s ease-out infinite;
+}
+.room-card.recording .waves::after {
+  animation: ripple 2s ease-out infinite 1s;
+}
+@keyframes ripple {
+  0%   { transform: scale(1); opacity: .5; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+/* bar bounce */
+.room-card.recording .bars span {
+  animation: bounce .6s ease-in-out infinite alternate;
+}
+.room-card.recording .bars span:nth-child(2) { animation-delay: .1s; }
+.room-card.recording .bars span:nth-child(3) { animation-delay: .2s; }
+.room-card.recording .bars span:nth-child(4) { animation-delay: .3s; }
+@keyframes bounce {
+  from { transform: scaleY(.6); }
+  to   { transform: scaleY(1.3); }
+}
+
+/* sending */
+.room-card.sending .ptt-btn {
+  background: #3a3a3a;
+}
+.room-card.sending .ptt-btn .icon { opacity: 0; }
+.room-card.sending .ptt-btn .dot { opacity: 0; }
+.room-card.sending .ptt-btn::after {
+  content: "";
+  position: absolute;
+  width: 40px; height: 40px;
+  border: 3px solid rgba(240,160,48,.15);
+  border-top-color: #f0a030;
+  top: 50%; left: 50%;
+  margin-top: -20px; margin-left: -20px;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+.room-card.sending .status { color: #f0a030; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* sent */
+.room-card.sent {
+  border-color: rgba(51,209,122,.35);
+}
+.room-card.sent .ptt-btn {
+  background: #2a5038;
+}
+.room-card.sent .status { color: #33d17a; }
+
+/* broadcast card accent */
+.broadcast-card .room-header { color: #f0a030; font-weight: 600; }
+.broadcast-card.recording .status { color: #f0a030; }
+.broadcast-card.recording .ptt-btn { background: #503a20; }
+.broadcast-card.sent .ptt-btn { background: #503a20; }
+.broadcast-card .waves::before,
+.broadcast-card .waves::after { border-color: #f0a030; }
 </style>
 </head>
 <body>
-<h1>📢 家庭广播</h1>
-<p style="color:#555; font-size:0.85rem; margin-top:-8px">按住录音，松开发送</p>
-<div id="buttons"></div>
-<div class="status" id="status">准备好</div>
+
+<div class="container">
+  <div class="header">
+    <h1>📢 家庭广播</h1>
+    <p class="hint">按住录音 · 松开发送</p>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
 
 <script>
-const STATUS = document.getElementById('status');
-const BUTTONS = document.getElementById('buttons');
+const GRID = document.getElementById('grid');
 const CONVERT_URL = '/convert';
-const COLOR_CLASS = { living: 'livingroom', study: 'study', bedroom: 'bedroom' };
-let ROOM_NAMES = {};
 let mediaRecorder = null;
 let audioChunks = [];
 let currentTarget = '';
-let currentBtn = null;
+let currentCard = null;
+let ROOM_NAMES = {};
+
+// Room icon mapping (extensible, falls back to 📢)
+const ROOM_ICONS = {
+  all:     '📢',
+  living:  '🛋️',
+  bedroom: '🛏️',
+  study:   '📚',
+  cinema:  '🎬',
+};
+function roomIcon(target) {
+  return ROOM_ICONS[target] || '🔊';
+}
+
+function makeCard(target, name, isBroadcast) {
+  const card = document.createElement('div');
+  card.className = 'room-card' + (isBroadcast ? ' broadcast-card' : '');
+  card.id = 'card-' + target;
+
+  card.innerHTML = `
+    <div class="room-header">
+      <span class="room-icon">${roomIcon(target)}</span>
+      <span>${name}</span>
+      <span class="dot"></span>
+    </div>
+    <div class="ptt-wrap">
+      <div class="waves"></div>
+      <button class="ptt-btn">
+        <div class="bars">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <div class="checkmark">✓</div>
+      </button>
+    </div>
+    <div class="status">准备好</div>
+  `;
+
+  const btn = card.querySelector('.ptt-btn');
+
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startRecording(target, card);
+  });
+  btn.addEventListener('pointerup', (e) => {
+    e.preventDefault();
+    stopRecording();
+  });
+  btn.addEventListener('pointerleave', (e) => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+  });
+  btn.addEventListener('touchstart', e => e.preventDefault());
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+
+  return card;
+}
 
 async function loadRooms() {
-  try {
-    // 全部广播按钮（UI 概念，不属于 rooms.json）
-    ROOM_NAMES['all'] = '全部';
-    const allBtn = document.createElement('button');
-    allBtn.className = 'btn broadcast';
-    allBtn.id = 'btn-all';
-    allBtn.textContent = '全部';
-    BUTTONS.appendChild(allBtn);
-    setupButton(allBtn, 'all');
+  ROOM_NAMES['all'] = '全部广播';
+  GRID.appendChild(makeCard('all', '全部广播', true));
 
+  try {
     const resp = await fetch('/rooms.json');
     const rooms = await resp.json();
     for (const [key, room] of Object.entries(rooms)) {
       ROOM_NAMES[key] = room.name;
-      const cls = COLOR_CLASS[key] || '';
-      const btn = document.createElement('button');
-      btn.className = 'btn ' + cls;
-      btn.id = 'btn-' + key;
-      btn.textContent = room.name;
-      BUTTONS.appendChild(btn);
-      setupButton(btn, key);
+      GRID.appendChild(makeCard(key, room.name, false));
     }
-    setStatus('准备好', '');
   } catch (e) {
-    setStatus('❌ 加载房间配置失败', 'error');
+    GRID.querySelector('.status').textContent = '加载失败';
   }
 }
 
-function setStatus(msg, cls) {
-  STATUS.textContent = msg;
-  STATUS.className = 'status' + (cls ? ' ' + cls : '');
+function setCardState(card, state, msg) {
+  ['recording','sending','sent'].forEach(c => card.classList.remove(c));
+  if (state) card.classList.add(state);
+  card.querySelector('.status').textContent = msg;
 }
 
-async function startRecording(target, btn) {
+async function startRecording(target, card) {
   currentTarget = target;
-  currentBtn = btn;
+  currentCard = card;
   audioChunks = [];
 
   if (!mediaRecorder) {
@@ -154,24 +377,20 @@ async function startRecording(target, btn) {
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
       mediaRecorder.onstop = () => sendAudio();
     } catch (e) {
-      setStatus('❌ 无法访问麦克风: ' + e.message, 'error');
+      setCardState(card, '', '❌ 麦克风: ' + e.message);
       return;
     }
   }
 
   mediaRecorder.start();
-  btn.classList.add('recording');
-  setStatus('🎙️ 录音中…', '');
+  setCardState(card, 'recording', '录音中…');
 }
 
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
+    setCardState(currentCard, 'sending', '发送中…');
   }
-  if (currentBtn) {
-    currentBtn.classList.remove('recording');
-  }
-  setStatus('📤 发送中…', '');
 }
 
 async function sendAudio() {
@@ -179,43 +398,21 @@ async function sendAudio() {
 
   try {
     const resp = await fetch(CONVERT_URL + '?target=' + currentTarget, {
-      method: 'POST',
-      body: blob,
-      headers: { 'Content-Type': 'audio/webm' }
+      method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' }
     });
 
     if (resp.ok) {
-      setStatus('✅ 已发送 → ' + (ROOM_NAMES[currentTarget] || currentTarget), 'success');
-      setTimeout(() => setStatus('准备好', ''), 3000);
+      setCardState(currentCard, 'sent', '已发送');
     } else {
-      setStatus('❌ 发送失败: ' + resp.status, 'error');
+      setCardState(currentCard, '', '失败 ' + resp.status);
     }
   } catch (e) {
-    setStatus('❌ 网络错误: ' + e.message, 'error');
+    setCardState(currentCard, '', '网络错误');
   }
-}
 
-function setupButton(btn, target) {
-
-  btn.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    startRecording(target, btn);
-  });
-
-  btn.addEventListener('pointerup', (e) => {
-    e.preventDefault();
-    stopRecording();
-  });
-
-  btn.addEventListener('pointerleave', (e) => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      stopRecording();
-    }
-  });
-
-  // 防止双击缩放和长按菜单
-  btn.addEventListener('touchstart', e => e.preventDefault());
-  btn.addEventListener('contextmenu', e => e.preventDefault());
+  setTimeout(() => {
+    if (currentCard) setCardState(currentCard, '', '准备好');
+  }, 1500);
 }
 
 loadRooms();
