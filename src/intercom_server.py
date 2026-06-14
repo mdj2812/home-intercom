@@ -138,6 +138,8 @@ def convert():
 
 
 if __name__ == "__main__":
+    from waitress import serve
+
     print(f"[intercom] Audio dir: {AUDIO_DIR}")
     print("[intercom] Starting on http://0.0.0.0:8764")
-    app.run(host="0.0.0.0", port=8764)
+    serve(app, host="0.0.0.0", port=8764)
