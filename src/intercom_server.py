@@ -8,7 +8,7 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
-HA_HOST = os.environ.get("HA_HOST", "192.168.99.4")
+HA_HOST = os.environ.get("HA_HOST", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 N8N_HOOK = os.environ.get("N8N_HOOK", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
