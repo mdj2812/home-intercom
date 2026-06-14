@@ -194,7 +194,7 @@ def convert():
 
             threading.Thread(
                 target=_auto_pause,
-                args=(entity, duration + 1),
+                args=(entity, duration),
                 daemon=True,
             ).start()
 
