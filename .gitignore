@@ -5,3 +5,4 @@ __pycache__/
 *.wav
 *.mp3
 docker/.env
+docker/docker-compose.yml
