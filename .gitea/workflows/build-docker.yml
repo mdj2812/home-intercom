@@ -34,15 +34,7 @@ jobs:
           echo "Pushing $IMAGE"
           docker push "$IMAGE"
 
-      - name: Tag and push :latest
-        run: |
-          LATEST="${IMAGE%:*}:latest"
-          echo "Tagging $LATEST"
-          docker tag "$IMAGE" "$LATEST"
-          docker push "$LATEST"
-
       - name: Cleanup
         if: always()
         run: |
           docker rmi "$IMAGE" 2>/dev/null || true
-          docker rmi "${IMAGE%:*}:latest" 2>/dev/null || true
