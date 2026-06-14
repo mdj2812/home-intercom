@@ -143,8 +143,12 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO, format="[intercom] %(message)s", stream=sys.stdout)
 
+    # trusted_proxy: set via TRUSTED_PROXY env (default '*' for homelab, restrict for production)
+    trusted_proxy = os.environ.get("TRUSTED_PROXY", "*")
+
     print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
+    print(f"[intercom] Trusted proxy: {trusted_proxy}", flush=True)
     print("[intercom] Starting on http://0.0.0.0:8764", flush=True)
     serve(app, host="0.0.0.0", port=8764,
-          trusted_proxy="*",
+          trusted_proxy=trusted_proxy,
           trusted_proxy_headers={"x-forwarded-proto"})

@@ -12,4 +12,5 @@ services:
       - HA_HOST=<YOUR_HA_IP>
       - N8N_HOOK=https://<YOUR_N8N_HOST>/webhook/intercom/play
       - HA_TOKEN=<YOUR_HA_LONG_LIVED_TOKEN>
+      # - TRUSTED_PROXY=<your caddy/nginx ip>  # restrict forwarded headers for security
     network_mode: host
