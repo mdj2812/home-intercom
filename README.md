@@ -80,7 +80,7 @@ docker compose -f docker/docker-compose.yml pull
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-**前置条件**：无需 SSH key。Flask 直接 serve 音频，HA 通过 HTTP 拉取。确保 `SELF_URL` 配置为 HA 能访问到的地址。
+**前置条件**：无需 SSH key。Flask 直接 serve 音频，HA 通过 HTTP 拉取。
 
 ### 性能验证
 

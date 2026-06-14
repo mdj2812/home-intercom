@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.4.3 (2026-06-15)
+
+- **WAV 直通** — ESP32 硬件按键发来的 PCM WAV 跳过 ffmpeg，直接 serve；用 `wave` 模块解析头，不硬编码 offset
+- **音频处理重构** — 抽出 `_handle_wav_passthrough()` / `_handle_webm_convert()`，`convert()` 路由瘦身
+- **常量声明** — `WAV_MAGIC`、`TMP_PREFIX`、`FFMPEG_SR`/`BPS`/`BYTERATE` 模块级常量，消除魔数
+- **麦克风释放时机** — 从 `sendAudio()` 移到 `stopRecording()`，录音结束立即释放，不等网络请求
+- **ffmpeg 异常处理** — try/except 仅包裹 ffmpeg 分支，失败时 `os.unlink()` 清理残留文件
+
 ## v1.4.2 (2026-06-14)
 
 - **Flask → waitress** — 生产级 WSGI 服务器，支持多线程并发，去掉开发服务器警告
