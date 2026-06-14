@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换 → 本地 serve → 回调 n8n webhook → HA 播放
 """
-import os, json, subprocess, ssl, shutil
+import os, json, subprocess, ssl, shutil, sys
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -139,9 +139,12 @@ def convert():
 
 if __name__ == "__main__":
     from waitress import serve
+    import logging
 
-    print(f"[intercom] Audio dir: {AUDIO_DIR}")
-    print("[intercom] Starting on http://0.0.0.0:8764")
+    logging.basicConfig(level=logging.INFO, format="[intercom] %(message)s", stream=sys.stdout)
+
+    print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
+    print("[intercom] Starting on http://0.0.0.0:8764", flush=True)
     serve(app, host="0.0.0.0", port=8764,
           trusted_proxy="*",
           trusted_proxy_headers={"x-forwarded-proto"})
