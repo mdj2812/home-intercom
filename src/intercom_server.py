@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换 → 本地 serve → 回调 n8n webhook → HA 播放
 """
-import os, json, subprocess, ssl, shutil, sys, struct
+import os, json, subprocess, ssl, shutil, sys, wave
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -95,11 +95,14 @@ def convert():
     if raw_audio[:4] == b'RIFF':
         with open(tmp_wav, "wb") as f:
             f.write(raw_audio)
-        # 从 WAV 头解析采样率和数据长度
-        sr = struct.unpack_from('<I', raw_audio, 24)[0]
-        data_size = struct.unpack_from('<I', raw_audio, 40)[0]
-        duration = data_size / (sr * 2)  # mono 16-bit
-        print(f"[intercom] WAV passthrough {len(raw_audio)} bytes, {sr}Hz, {duration:.1f}s")
+        # 用 wave 模块解析 WAV 头，不硬编码 offset
+        with wave.open(tmp_wav, 'rb') as wf:
+            sr = wf.getframerate()
+            nframes = wf.getnframes()
+            sampwidth = wf.getsampwidth()
+            duration = nframes / sr
+        print(f"[intercom] WAV passthrough {len(raw_audio)} bytes, "
+              f"{sr}Hz, {sampwidth*8}-bit, {duration:.1f}s")
     else:
         # PWA 发来的 webm/opus → ffmpeg 转码
         tmp_webm = f"/tmp/msg_{target}.webm"
