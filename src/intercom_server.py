@@ -26,25 +26,9 @@ def index():
 def rooms():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 
-@app.route("/favicon-32.png")
-def favicon():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "favicon-32.png")
-
-@app.route("/apple-touch-icon.png")
-def apple_touch_icon():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "apple-touch-icon.png")
-
-@app.route("/icon-192.png")
-def icon_192():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "icon-192.png")
-
-@app.route("/icon-512.png")
-def icon_512():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "icon-512.png")
-
-@app.route("/manifest.json")
-def manifest():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "manifest.json")
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"), filename)
 
 @app.route("/convert", methods=["POST"])
 def convert():

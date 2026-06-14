@@ -9,7 +9,7 @@ services:
       # SSH key for SCP to HA
       - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
       # rooms.json editable without rebuild
-      - ./rooms.json:/app/rooms.json:ro
+      - ../src/rooms.json:/app/rooms.json:ro
     environment:
       - HA_HOST=192.168.99.4
       - HA_WWW=/config/www/intercom/

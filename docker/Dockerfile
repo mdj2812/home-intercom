@@ -6,11 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY intercom_server.py intercom.html rooms.json manifest.json ./
-COPY favicon-32.png apple-touch-icon.png icon-192.png icon-512.png ./
+COPY src/intercom_server.py src/intercom.html src/rooms.json ./
+COPY src/manifest.json src/static/ ./static/
 
 EXPOSE 8765
 
