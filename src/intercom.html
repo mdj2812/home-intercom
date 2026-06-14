@@ -181,7 +181,8 @@ body {
 .status {
   font-size: 0.75rem;
   color: #555;
-  min-height: 1.2em;
+  height: 1.4em;
+  line-height: 1.4em;
   text-align: center;
   transition: color .3s;
 }
@@ -228,8 +229,12 @@ body {
 }
 
 /* sending */
+.room-card.sending {
+  border-color: rgba(51,209,122,.35);
+  box-shadow: 0 0 24px rgba(51,209,122,.08);
+}
 .room-card.sending .ptt-btn {
-  background: #3a3a3a;
+  background: #2a5038;
 }
 .room-card.sending .bars { opacity: 0; }
 .room-card.sending .checkmark { display: none; }
