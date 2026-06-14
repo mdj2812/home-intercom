@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.2 (2026-06-14)
+
+- **修复音频 URL 为 http** — 读取 X-Forwarded-Proto 头，Caddy 反代时正确拼 https
+
+
 ## v1.4.1 (2026-06-14)
 
 - **去掉 SELF_URL** — 改用 `request.host_url` 自动获取，无需手动配置

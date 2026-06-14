@@ -112,7 +112,8 @@ def convert():
     # 移动到本地音频目录，Flask 直接 serve
     dest = os.path.join(AUDIO_DIR, filename)
     shutil.move(tmp_wav, dest)
-    audio_url = f"{request.host_url}audio/{filename}"
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    audio_url = f"{scheme}://{request.host}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
     # 回调 n8n 触发播放 — 全部广播时逐个触发每个房间
