@@ -142,4 +142,6 @@ if __name__ == "__main__":
 
     print(f"[intercom] Audio dir: {AUDIO_DIR}")
     print("[intercom] Starting on http://0.0.0.0:8764")
-    serve(app, host="0.0.0.0", port=8764)
+    serve(app, host="0.0.0.0", port=8764,
+          trusted_proxy="*",
+          trusted_proxy_headers={"x-forwarded-proto"})
