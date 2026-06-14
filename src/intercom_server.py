@@ -200,9 +200,11 @@ def convert():
             ok_count += 1
             print(f"[intercom] HA play → {tgt_room['name']}")
 
-            # 后台线程：n8n 等效——确认播放 → 等 duration → pause → 确认已停
+            # 后台线程：n8n 等效——确认播放 → 等剩余 duration → pause → 确认已停
             def _auto_pause(entity_id, wait_sec):
                 import time
+
+                t0 = time.monotonic()
 
                 # 1) 轮询确认开始播放（state == "playing"），最多等 5s
                 for attempt in range(1, 11):  # 10 × 0.5s
@@ -214,8 +216,12 @@ def convert():
                 else:
                     print(f"[intercom] WARNING: {entity_id} never reached 'playing', pausing anyway")
 
-                # 2) 等音频播完
-                time.sleep(wait_sec)
+                # 2) 等音频播完（减去确认 playing 已经花掉的时间）
+                elapsed = time.monotonic() - t0
+                remaining = max(0, wait_sec - elapsed)
+                if remaining > 0:
+                    print(f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s")
+                    time.sleep(remaining)
 
                 # 3) pause + 确认已停，最多重试 5 次
                 for attempt in range(1, 6):
