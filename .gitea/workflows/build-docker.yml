@@ -1,0 +1,51 @@
+name: Build & Push Docker Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/Dockerfile'
+      - 'docker/.docker-image'
+      - '.dockerignore'
+      - '.gitea/workflows/build-docker.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: "Build home-intercom image"
+    runs-on: docker-build
+
+    steps:
+      - name: Checkout
+        run: |
+          git clone --depth 1 \
+            ${{ github.server_url }}/${{ github.repository }}.git .
+          git fetch origin "${{ github.ref }}"
+          git checkout FETCH_HEAD
+
+      - name: Build image
+        run: |
+          IMAGE=$(cat docker/.docker-image)
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          echo "Building $IMAGE"
+          docker build --network host \
+            -f docker/Dockerfile \
+            -t "$IMAGE" .
+
+      - name: Push image
+        run: |
+          echo "Pushing $IMAGE"
+          docker push "$IMAGE"
+
+      - name: Tag and push :latest
+        run: |
+          LATEST="${IMAGE%:*}:latest"
+          echo "Tagging $LATEST"
+          docker tag "$IMAGE" "$LATEST"
+          docker push "$LATEST"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rmi "$IMAGE" 2>/dev/null || true
+          docker rmi "${IMAGE%:*}:latest" 2>/dev/null || true
