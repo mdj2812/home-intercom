@@ -33,7 +33,7 @@ PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
 | `HA_HOST` | Home Assistant 地址 |
 | `N8N_HOOK` | n8n webhook URL |
 | `HA_TOKEN` | HA 长期访问令牌（状态查询用） |
-| `SELF_URL` | Flask 自身可访问 URL（HA 拉音频用） |
+| `SELF_URL` | HA 拉取音频用的 Flask 对外地址 |
 | `AUDIO_DIR` | 音频文件存储目录 |
 
 ## 目录结构
