@@ -216,9 +216,9 @@ def convert():
                 else:
                     print(f"[intercom] WARNING: {entity_id} never reached 'playing', pausing anyway")
 
-                # 2) 等音频播完（减去确认 playing 已经花掉的时间）
+                # 2) 等音频播完（减去确认 playing 已经花掉的时间，下限 0.5s）
                 elapsed = time.monotonic() - t0
-                remaining = max(0, wait_sec - elapsed)
+                remaining = max(0.5, wait_sec - elapsed)
                 if remaining > 0:
                     print(f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s")
                     time.sleep(remaining)
