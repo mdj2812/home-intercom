@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.4 (2026-06-15)
+
+- **修复** — `stopRecording()` 中停止 MediaStream tracks 后漏设 `mediaRecorder = null`，导致第二次录音失败（400）
+
 ## v1.4.3 (2026-06-15)
 
 - **WAV 直通** — ESP32 硬件按键发来的 PCM WAV 跳过 ffmpeg，直接 serve；用 `wave` 模块解析头，不硬编码 offset
