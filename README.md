@@ -1,6 +1,6 @@
 # Home Intercom 家庭广播系统
 
-手机 PWA 按住录音 → 松开后在小爱音箱播放。支持单房间和全部广播。
+手机 PWA 卡片式界面，按住房间卡片录音 → 松开后在小爱音箱播放。支持单房间和全部广播，实时显示音箱在线状态。
 
 URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8764）
 部署: NAS（Celeron N5095, Docker）
@@ -10,11 +10,29 @@ URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8764）
 ```
 PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entity, url, duration} → HA play_media → 小爱
         ↑ 动态加载 rooms.json                         ↑ 逐个房间 POST（全部广播时 4 并发）
+        ↕ /rooms/status → HA API（音箱在线状态，每 30s 轮询）
 ```
 
-- **Flask** 负责音频接收、转码、上传
+- **Flask** 负责音频接收、转码、上传、音箱状态查询
 - **n8n** 只负责 HA 调度：`play_media` → 状态轮询确认开始播放 → `Wait(duration)` → `Pause` 循环防止 repeat
 - **rooms.json** 是单一真相源，PWA 和 Flask 都从这里读
+
+## UI 特性
+
+- 卡片网格布局，每房间独立圆形按压说话按钮
+- 录音：波纹扩散 + 声波跳动，按钮变绿
+- 发送中：绿色光环绕按钮旋转
+- 已发送：绿色大对勾
+- 房间名右侧指示灯：🟢 音箱在线 / ⚫ 离线（HA API 每 30s 轮询）
+
+## 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `HA_HOST` | Home Assistant 地址 | `192.168.99.4` |
+| `HA_WWW` | HA 音频文件目录 | `/config/www/intercom/` |
+| `N8N_HOOK` | n8n webhook URL | — |
+| `HA_TOKEN` | HA 长期访问令牌（状态查询用） | — |
 
 ## 目录结构
 
