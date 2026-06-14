@@ -1,6 +1,8 @@
-# Home Intercom 家庭广播系统 v1.1.0
+# Home Intercom 家庭广播系统 v1.2.0
 
 手机 PWA 按住录音 → 松开后在小爱音箱播放。支持单房间和全部广播。
+
+URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8765）
 
 ## 架构
 
@@ -13,6 +15,32 @@ PWA → Flask :8765 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 - **n8n** 只负责 HA 调度：`play_media` → 状态轮询确认开始播放 → `Wait(duration)` → `Pause` 循环防止 repeat
 - **rooms.json** 是单一真相源，PWA 和 Flask 都从这里读
 
+## 目录结构
+
+```
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── src/
+│   ├── intercom_server.py    # Flask 后端
+│   ├── intercom.html         # PWA 前端
+│   ├── rooms.json            # 房间配置
+│   ├── requirements.txt      # Python 依赖
+│   └── static/               # PWA 图标 + manifest
+├── assets/
+│   └── icon.svg              # 图标源文件
+├── n8n/
+│   └── n8n_workflow.json     # n8n workflow 备份
+└── README.md
+```
+
+## v1.2.0 更新 (2026-06-14)
+
+- **PWA 图标** — 广播主题图标（SVG + 4 尺寸 PNG），支持添加到主屏幕
+- **Caddy 反向代理** — `https://broadcast.home.mdj2812.top/` HTTPS 访问，满足 PWA getUserMedia 要求
+- **项目目录整理** — `src/` 源码、`docker/` 容器配置、`assets/` 素材、`n8n/` workflow 备份
+- **静态文件路由** — `/static/<path>` catch-all 替代 5 个独立路由
+
 ## v1.1.0 更新 (2026-06-14)
 
 - **全部广播** — 顶部金色「全部」按钮，一次录音同时发送到所有房间
@@ -21,33 +49,36 @@ PWA → Flask :8765 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 - **rooms.json 外部化** — 添加/修改房间只需改 JSON，PWA 按钮自动生成，无需改代码
 - **PWA 触感优化** — 按钮间距、高度自适应、「按住录音松开发送」提示
 
-## 文件
-
-| 文件 | 说明 |
-|------|------|
-| `intercom_server.py` | Flask 后端 — PWA 页面 + `/convert` 端点 + `/rooms.json` 端点 |
-| `intercom.html` | 手机 PWA — 动态加载 rooms.json 生成按钮，全部广播按钮固定置顶 |
-| `rooms.json` | 房间映射配置 — 单文件即可增删房间 |
-| `n8n_workflow.json` | n8n v3 — Webhook → HA 播放 → 状态轮询 → Wait → Pause 循环 |
-
 ## 部署
 
 ### Docker（推荐）
 
 ```bash
 cd /path/to/home-intercom
-docker compose up -d
+docker compose -f docker/docker-compose.yml up -d
 ```
 
-首次会在 `http://<host>:8765/` 启动，`rooms.json` volume 挂载，改完 `docker compose restart` 即可。
+首次会在 `http://<host>:8765/` 启动，`rooms.json` volume 挂载，改完 `docker compose -f docker/docker-compose.yml restart` 即可。
 
-镜像已在私有 registry：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
+镜像：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
 
 **前置条件**：容器内 SCP 到 HA 需要 SSH key。确认 `~/.ssh/id_ed25519` 存在且已授权访问 HA（`192.168.99.4`）。
+
+### Caddy 反代
+
+```Caddyfile
+broadcast.home.mdj2812.top {
+    reverse_proxy 127.0.0.1:8765
+}
+```
+
+HTTPS 是 PWA 录音（getUserMedia）的浏览器强制要求。
 
 ### 裸机
 
 ```bash
+cd src
+pip install -r requirements.txt
 python3 intercom_server.py  # HTTP :8765
 ```
 
