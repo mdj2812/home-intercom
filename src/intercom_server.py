@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换 → 本地 serve → 直接调 HA API 播放
 """
-import os, json, subprocess, ssl, shutil, sys, wave
+import os, json, subprocess, ssl, shutil, sys, wave, threading
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -172,17 +172,31 @@ def convert():
     audio_url = f"{scheme}://{request.host}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
-    # 直接调 HA API 播放
+    # 直接调 HA API 播放，后台线程播完后 pause 防 repeat
     ok_count = 0
     for tgt_key, tgt_room in targets:
+        entity = tgt_room["entity"]
         ok = _ha_call("media_player/play_media", {
-            "entity_id": tgt_room["entity"],
+            "entity_id": entity,
             "media_content_id": audio_url,
             "media_content_type": "music",
         })
         if ok:
             ok_count += 1
             print(f"[intercom] HA play → {tgt_room['name']}")
+
+            # 后台线程：等音频播完 → pause，防止小爱 repeat
+            def _auto_pause(entity_id, wait_sec):
+                import time
+                time.sleep(wait_sec)
+                print(f"[intercom] Auto-pause → {entity_id} after {wait_sec:.1f}s")
+                _ha_call("media_player/media_pause", {"entity_id": entity_id})
+
+            threading.Thread(
+                target=_auto_pause,
+                args=(entity, duration + 1),
+                daemon=True,
+            ).start()
 
     return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
 
