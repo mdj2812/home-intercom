@@ -420,6 +420,7 @@ function stopRecording() {
     mediaRecorder.stop();
     // Release mic immediately — data already captured in audioChunks
     mediaRecorder.stream.getTracks().forEach(t => t.stop());
+    mediaRecorder = null;
     setCardState(currentCard, 'sending', '发送中…');
   }
 }
