@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/intercom_server.py src/intercom.html src/rooms.json ./
 COPY src/manifest.json src/static/ ./static/
 
-EXPOSE 8765
+EXPOSE 8764
 
 # Flask dev server is fine for LAN use; switch to gunicorn if needed
 CMD ["python3", "intercom_server.py"]

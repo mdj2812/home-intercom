@@ -116,5 +116,5 @@ if __name__ == "__main__":
         ["ssh", "-o", "StrictHostKeyChecking=no", HA_HOST, f"mkdir -p {HA_WWW}"],
         check=False, timeout=5
     )
-    print("[intercom] Starting on http://0.0.0.0:8765")
-    app.run(host="0.0.0.0", port=8765)
+    print("[intercom] Starting on http://0.0.0.0:8764")
+    app.run(host="0.0.0.0", port=8764)

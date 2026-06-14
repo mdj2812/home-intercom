@@ -1,13 +1,13 @@
-# Home Intercom 家庭广播系统 v1.2.0
+# Home Intercom 家庭广播系统 v1.2.1
 
 手机 PWA 按住录音 → 松开后在小爱音箱播放。支持单房间和全部广播。
 
-URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8765）
+URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8764）
 
 ## 架构
 
 ```
-PWA → Flask :8765 /convert → ffmpeg + SCP → POST n8n /intercom/play {entity, url, duration} → HA play_media → 小爱
+PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entity, url, duration} → HA play_media → 小爱
         ↑ 动态加载 rooms.json                         ↑ 逐个房间 POST（全部广播时 4 并发）
 ```
 
@@ -34,6 +34,10 @@ PWA → Flask :8765 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 └── README.md
 ```
 
+## v1.2.1 更新 (2026-06-14)
+
+- **端口改为 8764** — 避免与 NAS 上其他容器冲突
+
 ## v1.2.0 更新 (2026-06-14)
 
 - **PWA 图标** — 广播主题图标（SVG + 4 尺寸 PNG），支持添加到主屏幕
@@ -58,7 +62,7 @@ cd /path/to/home-intercom
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-首次会在 `http://<host>:8765/` 启动，`rooms.json` volume 挂载，改完 `docker compose -f docker/docker-compose.yml restart` 即可。
+首次会在 `http://<host>:8764/` 启动，`rooms.json` volume 挂载，改完 `docker compose -f docker/docker-compose.yml restart` 即可。
 
 镜像：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
 
@@ -70,7 +74,7 @@ docker compose -f docker/docker-compose.yml up -d
 
 ```Caddyfile
 broadcast.home.mdj2812.top {
-    reverse_proxy 127.0.0.1:8765
+    reverse_proxy 127.0.0.1:8764
 }
 ```
 
@@ -81,7 +85,7 @@ HTTPS 是 PWA 录音（getUserMedia）的浏览器强制要求。
 ```bash
 cd src
 pip install -r requirements.txt
-python3 intercom_server.py  # HTTP :8765
+python3 intercom_server.py  # HTTP :8764
 ```
 
 依赖：`flask`、`ffmpeg`、`openssh-client`（SCP）。
