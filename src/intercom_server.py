@@ -2,7 +2,7 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换 → 本地 serve → 回调 n8n webhook → HA 播放
 """
-import os, json, subprocess, ssl, shutil, sys
+import os, json, subprocess, ssl, shutil, sys, struct
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -88,26 +88,35 @@ def convert():
     name = ROOM_MAP[target]["name"] if target != "all" else "全部"
     print(f"[intercom] Received {len(raw_audio)} bytes for {name}")
 
-    tmp_webm = f"/tmp/msg_{target}.webm"
     tmp_wav = f"/tmp/msg_{target}.wav"
     filename = f"intercom_{target}.wav"
 
-    with open(tmp_webm, "wb") as f:
-        f.write(raw_audio)
-
-    # ffmpeg webm → wav
-    try:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", tmp_webm,
-            "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
-            tmp_wav
-        ], check=True, timeout=60, capture_output=True)
-        os.unlink(tmp_webm)
-        size_out = os.path.getsize(tmp_wav)
-        duration = size_out / 32000
-    except subprocess.CalledProcessError as e:
-        print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
-        return jsonify({"ok": False, "error": "conversion failed"}), 500
+    # ESP32 硬件按键发来的 PCM WAV → 直通，跳过 ffmpeg
+    if raw_audio[:4] == b'RIFF':
+        with open(tmp_wav, "wb") as f:
+            f.write(raw_audio)
+        # 从 WAV 头解析采样率和数据长度
+        sr = struct.unpack_from('<I', raw_audio, 24)[0]
+        data_size = struct.unpack_from('<I', raw_audio, 40)[0]
+        duration = data_size / (sr * 2)  # mono 16-bit
+        print(f"[intercom] WAV passthrough {len(raw_audio)} bytes, {sr}Hz, {duration:.1f}s")
+    else:
+        # PWA 发来的 webm/opus → ffmpeg 转码
+        tmp_webm = f"/tmp/msg_{target}.webm"
+        with open(tmp_webm, "wb") as f:
+            f.write(raw_audio)
+        try:
+            subprocess.run([
+                "ffmpeg", "-y", "-i", tmp_webm,
+                "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
+                tmp_wav
+            ], check=True, timeout=60, capture_output=True)
+            os.unlink(tmp_webm)
+            size_out = os.path.getsize(tmp_wav)
+            duration = size_out / 32000
+        except subprocess.CalledProcessError as e:
+            print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
+            return jsonify({"ok": False, "error": "conversion failed"}), 500
 
     # 移动到本地音频目录，Flask 直接 serve
     dest = os.path.join(AUDIO_DIR, filename)
