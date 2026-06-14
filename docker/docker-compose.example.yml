@@ -6,12 +6,13 @@ services:
     ports:
       - "8764:8764"
     volumes:
-      # SSH key for SCP to HA
-      - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
+      # Audio files served by Flask (no SCP)
+      - ./audio:/data/audio
       # rooms.json editable without rebuild
       - ../src/rooms.json:/app/rooms.json:ro
     environment:
       - HA_HOST=<YOUR_HA_IP>
-      - HA_WWW=/config/www/intercom/
       - N8N_HOOK=https://<YOUR_N8N_HOST>/webhook/intercom/play
+      - HA_TOKEN=<YOUR_HA_LONG_LIVED_TOKEN>
+      - SELF_URL=http://<YOUR_NAS_IP>:8764
     network_mode: host

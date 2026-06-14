@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """家庭广播系统 — 手机对讲站后端
-PWA POST 音频 → Flask 转换+SCP → 回调 n8n webhook → HA 播放
+PWA POST 音频 → Flask 转换 → 本地 serve → 回调 n8n webhook → HA 播放
 """
-import os, json, subprocess, ssl
+import os, json, subprocess, ssl, shutil
 import urllib.request
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
 HA_HOST = os.environ.get("HA_HOST", "192.168.99.4")
-HA_WWW = os.environ.get("HA_WWW", "/config/www/intercom/")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 N8N_HOOK = os.environ.get("N8N_HOOK", "")
+SELF_URL = os.environ.get("SELF_URL", "http://192.168.99.10:8764")
+AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
 
 # 从 rooms.json 加载房间配置
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
@@ -30,6 +32,10 @@ def rooms():
 @app.route("/static/<path:filename>")
 def static_files(filename):
     return send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"), filename)
+
+@app.route("/audio/<path:filename>")
+def serve_audio(filename):
+    return send_from_directory(AUDIO_DIR, filename)
 
 @app.route("/rooms/status")
 def rooms_status():
@@ -61,7 +67,7 @@ def rooms_status():
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    """PWA 直连：接收音频 → 转换 → SCP → 回调 n8n"""
+    """PWA 直连：接收音频 → 转换 → 本地 serve → 回调 n8n"""
     target = request.args.get("target", "")
 
     # 接收原始音频
@@ -104,19 +110,10 @@ def convert():
         print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
         return jsonify({"ok": False, "error": "conversion failed"}), 500
 
-    # SCP 到 HA
-    try:
-        subprocess.run(
-            ["scp", "-o", "StrictHostKeyChecking=no", tmp_wav,
-             f"{HA_HOST}:{HA_WWW}{filename}"],
-            check=True, timeout=30, capture_output=True
-        )
-        os.unlink(tmp_wav)
-    except subprocess.CalledProcessError as e:
-        print(f"[intercom] SCP failed: {e.stderr.decode()}")
-        return jsonify({"ok": False, "error": "upload failed"}), 500
-
-    audio_url = f"http://{HA_HOST}:8123/local/intercom/{filename}"
+    # 移动到本地音频目录，Flask 直接 serve
+    dest = os.path.join(AUDIO_DIR, filename)
+    shutil.move(tmp_wav, dest)
+    audio_url = f"{SELF_URL}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
     # 回调 n8n 触发播放 — 全部广播时逐个触发每个房间
@@ -141,9 +138,7 @@ def convert():
 
 
 if __name__ == "__main__":
-    subprocess.run(
-        ["ssh", "-o", "StrictHostKeyChecking=no", HA_HOST, f"mkdir -p {HA_WWW}"],
-        check=False, timeout=5
-    )
+    print(f"[intercom] Audio dir: {AUDIO_DIR}")
+    print(f"[intercom] Self URL:   {SELF_URL}")
     print("[intercom] Starting on http://0.0.0.0:8764")
     app.run(host="0.0.0.0", port=8764)

@@ -8,12 +8,13 @@ URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8764）
 ## 架构
 
 ```
-PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entity, url, duration} → HA play_media → 小爱
-        ↑ 动态加载 rooms.json                         ↑ 逐个房间 POST（全部广播时 4 并发）
-        ↕ /rooms/status → HA API（音箱在线状态，每 30s 轮询）
+PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
+        ↑ 动态加载 rooms.json       ↓ POST n8n {entity, url, duration}
+        ↕ /rooms/status → HA API    ↓ HA play_media → 小爱（直接 HTTP 拉 Flask 音频）
 ```
 
-- **Flask** 负责音频接收、转码、上传、音箱状态查询
+- **Flask** 负责音频接收、转码、本地存储和 serve、音箱状态查询
+- **HA 直接从 Flask HTTP 拉音频**，不再依赖 SCP/SSH
 - **n8n** 只负责 HA 调度：`play_media` → 状态轮询确认开始播放 → `Wait(duration)` → `Pause` 循环防止 repeat
 - **rooms.json** 是单一真相源，PWA 和 Flask 都从这里读
 
@@ -30,9 +31,10 @@ PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `HA_HOST` | Home Assistant 地址 | `192.168.99.4` |
-| `HA_WWW` | HA 音频文件目录 | `/config/www/intercom/` |
 | `N8N_HOOK` | n8n webhook URL | — |
 | `HA_TOKEN` | HA 长期访问令牌（状态查询用） | — |
+| `SELF_URL` | Flask 自身可访问 URL（HA 拉音频用） | `http://192.168.99.10:8764` |
+| `AUDIO_DIR` | 音频文件存储目录 | `/data/audio` |
 
 ## 目录结构
 
@@ -79,7 +81,7 @@ docker compose -f docker/docker-compose.yml pull
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-**前置条件**：容器内 SCP 到 HA 需要 SSH key。确认 `~/.ssh/id_ed25519` 存在且已授权访问 HA（`192.168.99.4`）。
+**前置条件**：无需 SSH key。Flask 直接 serve 音频，HA 通过 HTTP 拉取。确保 `SELF_URL` 配置为 HA 能访问到的地址。
 
 ### 性能验证
 
@@ -109,7 +111,7 @@ pip install -r requirements.txt
 python3 intercom_server.py  # HTTP :8764
 ```
 
-依赖：`flask`、`ffmpeg`、`openssh-client`（SCP）。
+依赖：`flask`、`ffmpeg`。
 
 不管用哪种方式部署 Flask，都需要在 n8n 导入 `n8n_workflow.json` 并激活。
 

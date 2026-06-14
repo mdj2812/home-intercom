@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.0 (2026-06-14)
+
+- **去掉 SCP/SSH** — Flask 本地 serve 音频，HA 通过 HTTP 直接拉取，不再依赖 SSH key
+- 新增 `SELF_URL`、`AUDIO_DIR` 环境变量
+- Dockerfile 移除 openssh-client，compose 移除 SSH key 挂载
+
 ## v1.3.2 (2026-06-14)
 
 - **全部广播卡片横排布局** — 左文右按钮，Grid 布局，space-around 均匀分布
