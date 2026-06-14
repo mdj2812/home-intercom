@@ -127,15 +127,16 @@ def convert():
     filename = f"intercom_{target}.wav"
 
     # 分支：WAV 直通 vs webm 转码（魔数检测，比扩展名更可靠）
-    try:
-        if raw_audio[:4] == WAV_MAGIC:
-            duration = _handle_wav_passthrough(raw_audio, tmp_wav)
-        else:
-            tmp_webm = f"{TMP_PREFIX}{target}.webm"
+    if raw_audio[:4] == WAV_MAGIC:
+        duration = _handle_wav_passthrough(raw_audio, tmp_wav)
+    else:
+        tmp_webm = f"{TMP_PREFIX}{target}.webm"
+        try:
             duration = _handle_webm_convert(raw_audio, tmp_webm, tmp_wav)
-    except subprocess.CalledProcessError as e:
-        print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
-        return jsonify({"ok": False, "error": "conversion failed"}), 500
+        except subprocess.CalledProcessError as e:
+            print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
+            os.unlink(tmp_wav)  # 清理 ffmpeg 残留的部分输出文件
+            return jsonify({"ok": False, "error": "conversion failed"}), 500
 
     # 移动到本地音频目录，Flask 直接 serve
     dest = os.path.join(AUDIO_DIR, filename)
