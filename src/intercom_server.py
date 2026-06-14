@@ -127,7 +127,7 @@ def convert():
     filename = f"intercom_{target}.wav"
 
     # 分支：WAV 直通 vs webm 转码（魔数检测，比扩展名更可靠）
-    if raw_audio[:4] == WAV_MAGIC:
+    if raw_audio[:len(WAV_MAGIC)] == WAV_MAGIC:
         duration = _handle_wav_passthrough(raw_audio, tmp_wav)
     else:
         tmp_webm = f"{TMP_PREFIX}{target}.webm"
