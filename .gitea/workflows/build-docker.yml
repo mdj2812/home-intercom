@@ -18,8 +18,10 @@ jobs:
     steps:
       - name: Checkout
         run: |
+          SERVER=$(echo "${{ github.server_url }}" | sed 's|https\?://||')
           git clone --depth 1 \
-            ${{ github.server_url }}/${{ github.repository }}.git .
+            "https://oauth2:${{ secrets.GITHUB_TOKEN }}@${SERVER}/${{ github.repository }}.git" \
+            .
           git fetch origin "${{ github.ref }}"
           git checkout FETCH_HEAD
 
