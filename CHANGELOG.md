@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.2 (2026-06-14)
+
+- **Flask → waitress** — 生产级 WSGI 服务器，支持多线程并发，去掉开发服务器警告
+- **waitress trusted_proxy 配置** — 正确传递 `X-Forwarded-Proto` header，Caddy 反代时 URL 正确拼 `https://`
+- **麦克风释放** — 发送完成后释放 MediaStream，浏览器不再显示麦克风占用
+- **日志修复** — `PYTHONUNBUFFERED=1` + logging 配置，waitress 下日志正常输出
+
 ## v1.4.1 (2026-06-14)
 
 - **去掉 SELF_URL** — 改用 `request.host_url` + `X-Forwarded-Proto` 自动获取，Caddy 反代时正确拼 `https://`
