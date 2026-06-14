@@ -14,6 +14,13 @@ N8N_HOOK = os.environ.get("N8N_HOOK", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
+# ——— 版本号 ———
+try:
+    with open("/app/.docker-image") as f:
+        VERSION = f.read().strip().split(":")[-1]
+except Exception:
+    VERSION = os.environ.get("VERSION", "dev")
+
 # ——— 音频处理常量 ———
 WAV_MAGIC = b'RIFF'           # WAV 文件魔数
 TMP_PREFIX = "/tmp/intercom_"  # 临时文件前缀
@@ -69,6 +76,11 @@ def rooms_status():
             status[key] = False
 
     return jsonify(status)
+
+
+@app.route("/version")
+def version():
+    return jsonify({"version": VERSION})
 
 
 def _handle_wav_passthrough(raw_audio, tmp_wav):

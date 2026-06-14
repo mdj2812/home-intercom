@@ -41,6 +41,15 @@ body {
   color: #ccc;
   letter-spacing: 0.02em;
 }
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.header .ver {
+  font-size: 0.7rem;
+  color: #444;
+}
 .header .hint {
   font-size: 0.8rem;
   color: #555;
@@ -302,8 +311,8 @@ body {
 
 <div class="container">
   <div class="header">
-    <h1>📢 家庭广播</h1>
-    <p class="hint">按住录音 · 松开发送</p>
+    <div><h1>📢 家庭广播</h1><p class="hint">按住录音 · 松开发送</p></div>
+    <span class="ver" id="ver">…</span>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -463,6 +472,13 @@ async function pollSpeakerStatus() {
 loadRooms();
 setTimeout(pollSpeakerStatus, 1000);
 setInterval(pollSpeakerStatus, 30000);
+
+// 显示版本号
+fetch('/version').then(r => r.json()).then(d => {
+  document.getElementById('ver').textContent = 'v' + d.version;
+}).catch(() => {
+  document.getElementById('ver').textContent = '';
+});
 </script>
 </body>
 </html>
