@@ -4,9 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docker/Dockerfile'
       - 'docker/.docker-image'
-      - '.dockerignore'
       - '.gitea/workflows/build-docker.yml'
   workflow_dispatch:
 
