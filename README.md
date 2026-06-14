@@ -9,14 +9,13 @@ URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8764）
 
 ```
 PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
-        ↑ 动态加载 rooms.json       ↓ POST n8n {entity, url, duration}
-        ↕ /rooms/status → HA API    ↓ HA play_media → 小爱（直接 HTTP 拉 Flask 音频）
+        ↑ 动态加载 rooms.json       ↓ HA API play_media
+        ↕ /rooms/status → HA API    ↓ 小爱直接 HTTP 拉 Flask 音频
 ```
 
-- **Flask** 负责音频接收、转码、本地存储和 serve、音箱状态查询
-- **HA 直接从 Flask HTTP 拉音频**，不再依赖 SCP/SSH
-- **n8n** 只负责 HA 调度：`play_media` → 状态轮询确认开始播放 → `Wait(duration)` → `Pause` 循环防止 repeat
-- **rooms.json** 是单一真相源，PWA 和 Flask 都从这里读
+- **Flask** 负责一切：音频接收、转码、本地 serve、音箱状态查询、调 HA API 播放
+- **HA 直接从 Flask HTTP 拉音频**
+- **无需 n8n、无需 SSH** —— Flask 拿到 HA_TOKEN 直接调 REST API
 
 ## UI 特性
 
@@ -28,12 +27,12 @@ PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
 
 ## 环境变量
 
-| 变量 | 说明 |
-|------|------|
-| `HA_HOST` | Home Assistant 地址 |
-| `N8N_HOOK` | n8n webhook URL |
-| `HA_TOKEN` | HA 长期访问令牌 |
-| `AUDIO_DIR` | 音频文件存储目录 |
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `HA_HOST` | Home Assistant 地址 | `192.168.99.4` |
+| `HA_TOKEN` | HA 长期访问令牌 | — |
+| `SELF_URL` | Flask 自身可访问 URL（HA 拉音频用） | `http://192.168.99.10:8764` |
+| `AUDIO_DIR` | 音频文件存储目录 | `/data/audio` |
 
 ## 目录结构
 
@@ -52,7 +51,7 @@ PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
 ├── assets/
 │   └── icon.svg              # 图标源文件
 ├── n8n/
-│   └── n8n_workflow.json     # n8n workflow 备份
+│   └── n8n_workflow.json     # n8n workflow 备份（v1.5.0 后不再需要）
 ├── scripts/
 │   └── bench_ffmpeg.sh       # NAS 性能测试
 ├── .gitea/workflows/
@@ -80,7 +79,11 @@ docker compose -f docker/docker-compose.yml pull
 docker compose -f docker/docker-compose.yml up -d
 ```
 
+<<<<<<< HEAD
 **前置条件**：无需 SSH key。Flask 直接 serve 音频，HA 通过 HTTP 拉取。
+=======
+**前置条件**：Flask 直接调 HA API，确保 `HA_TOKEN` 配置正确。HA 通过 HTTP 拉音频，确保 `SELF_URL` 为 HA 能访问到的地址。**无需 SSH key、无需 n8n**。
+>>>>>>> 95aed69 (refactor: remove n8n, Flask calls HA API directly)
 
 ### 性能验证
 
@@ -112,12 +115,10 @@ python3 intercom_server.py  # HTTP :8764
 
 依赖：`flask`、`ffmpeg`。
 
-不管用哪种方式部署 Flask，都需要在 n8n 导入 `n8n_workflow.json` 并激活。
-
 ## 全部广播 vs 单房间
 
 | | 单房间 | 全部广播 |
 |------|--------|------|
 | 触发 | `target=<room>` | `target=all` |
-| Flask | 转码一次，POST n8n 一次 | 转码一次，POST n8n 四次（并发） |
-| n8n | 1 个 workflow run | 4 个独立 workflow run，各自轮询+等待+暂停 |
+| Flask | 转码一次，调 HA API 一次 | 转码一次，调 HA API N 次（并行 fire-and-forget） |
+| 播放 | HA play_media → 小爱 | 各房间独立 HA play_media |

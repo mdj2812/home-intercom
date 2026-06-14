@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """家庭广播系统 — 手机对讲站后端
-PWA POST 音频 → Flask 转换 → 本地 serve → 回调 n8n webhook → HA 播放
+PWA POST 音频 → Flask 转换 → 本地 serve → 直接调 HA API 播放
 """
 import os, json, subprocess, ssl, shutil, sys, wave
 import urllib.request
@@ -10,7 +10,7 @@ app = Flask(__name__)
 
 HA_HOST = os.environ.get("HA_HOST", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
-N8N_HOOK = os.environ.get("N8N_HOOK", "")
+SELF_URL = os.environ.get("SELF_URL", "http://192.168.99.10:8764")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
@@ -112,9 +112,25 @@ def _handle_webm_convert(raw_audio, tmp_webm, tmp_wav):
     return duration
 
 
+def _ha_call(service: str, data: dict) -> bool:
+    """调用 Home Assistant REST API"""
+    url = f"http://{HA_HOST}:8123/api/services/{service}"
+    body = json.dumps(data).encode()
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Authorization", f"Bearer {HA_TOKEN}")
+    req.add_header("Content-Type", "application/json")
+    ctx = ssl._create_unverified_context()
+    try:
+        urllib.request.urlopen(req, timeout=10, context=ctx)
+        return True
+    except Exception as e:
+        print(f"[intercom] HA call failed ({service}): {e}")
+        return False
+
+
 @app.route("/convert", methods=["POST"])
 def convert():
-    """PWA 直连：接收音频 → 转换 → 本地 serve → 回调 n8n"""
+    """PWA 直连：接收音频 → 转换 → 本地 serve → 直接调 HA 播放"""
     target = request.args.get("target", "")
 
     raw_audio = request.get_data()
@@ -157,23 +173,17 @@ def convert():
     audio_url = f"{scheme}://{request.host}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
-    # 回调 n8n 触发播放
+    # 直接调 HA API 播放
     ok_count = 0
     for tgt_key, tgt_room in targets:
-        try:
-            body = json.dumps({
-                "entity": tgt_room["entity"],
-                "url": audio_url,
-                "duration": duration
-            }).encode()
-            req = urllib.request.Request(N8N_HOOK, data=body, method="POST")
-            req.add_header("Content-Type", "application/json")
-            ctx = ssl._create_unverified_context()
-            urllib.request.urlopen(req, timeout=10, context=ctx)
+        ok = _ha_call("media_player/play_media", {
+            "entity_id": tgt_room["entity"],
+            "media_content_id": audio_url,
+            "media_content_type": "music",
+        })
+        if ok:
             ok_count += 1
-            print(f"[intercom] → n8n play {tgt_room['name']}")
-        except Exception as e:
-            print(f"[intercom] n8n hook failed ({tgt_room['name']}): {e}")
+            print(f"[intercom] HA play → {tgt_room['name']}")
 
     return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
 
