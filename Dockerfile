@@ -9,7 +9,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY intercom_server.py intercom.html rooms.json ./
+COPY intercom_server.py intercom.html rooms.json manifest.json ./
+COPY favicon-32.png apple-touch-icon.png icon-192.png icon-512.png ./
 
 EXPOSE 8765
 
