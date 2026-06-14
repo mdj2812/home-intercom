@@ -67,7 +67,7 @@ def convert():
             "ffmpeg", "-y", "-i", tmp_webm,
             "-acodec", "pcm_s16le", "-ac", "1", "-ar", "16000",
             tmp_wav
-        ], check=True, timeout=15, capture_output=True)
+        ], check=True, timeout=60, capture_output=True)
         os.unlink(tmp_webm)
         size_out = os.path.getsize(tmp_wav)
         duration = size_out / 32000
@@ -80,7 +80,7 @@ def convert():
         subprocess.run(
             ["scp", "-o", "StrictHostKeyChecking=no", tmp_wav,
              f"{HA_HOST}:{HA_WWW}{filename}"],
-            check=True, timeout=10, capture_output=True
+            check=True, timeout=30, capture_output=True
         )
         os.unlink(tmp_wav)
     except subprocess.CalledProcessError as e:
