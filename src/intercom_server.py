@@ -111,6 +111,21 @@ def _handle_webm_convert(raw_audio, tmp_webm, tmp_wav):
     return duration
 
 
+def _ha_state(entity_id: str) -> str:
+    """查询 HA 中 entity 的 state，失败返回空字符串"""
+    if not HA_TOKEN:
+        return ""
+    url = f"http://{HA_HOST}:8123/api/states/{entity_id}"
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {HA_TOKEN}")
+    ctx = ssl._create_unverified_context()
+    try:
+        resp = urllib.request.urlopen(req, timeout=3, context=ctx)
+        return json.loads(resp.read()).get("state", "")
+    except Exception:
+        return ""
+
+
 def _ha_call(service: str, data: dict) -> bool:
     """调用 Home Assistant REST API"""
     url = f"http://{HA_HOST}:8123/api/services/{service}"
@@ -185,12 +200,34 @@ def convert():
             ok_count += 1
             print(f"[intercom] HA play → {tgt_room['name']}")
 
-            # 后台线程：等音频播完 → pause，防止小爱 repeat
+            # 后台线程：n8n 等效——确认播放 → 等 duration → pause → 确认已停
             def _auto_pause(entity_id, wait_sec):
                 import time
+
+                # 1) 轮询确认开始播放（state == "playing"），最多等 5s
+                for attempt in range(1, 11):  # 10 × 0.5s
+                    state = _ha_state(entity_id)
+                    if state == "playing":
+                        print(f"[intercom] {entity_id} playing confirmed (attempt {attempt})")
+                        break
+                    time.sleep(0.5)
+                else:
+                    print(f"[intercom] WARNING: {entity_id} never reached 'playing', pausing anyway")
+
+                # 2) 等音频播完
                 time.sleep(wait_sec)
-                print(f"[intercom] Auto-pause → {entity_id} after {wait_sec:.1f}s")
-                _ha_call("media_player/media_pause", {"entity_id": entity_id})
+
+                # 3) pause + 确认已停，最多重试 5 次
+                for attempt in range(1, 6):
+                    _ha_call("media_player/media_pause", {"entity_id": entity_id})
+                    time.sleep(0.5)
+                    state = _ha_state(entity_id)
+                    if state != "playing":
+                        print(f"[intercom] {entity_id} paused (attempt {attempt})")
+                        break
+                    print(f"[intercom] {entity_id} still playing, retry pause ({attempt}/5)")
+                else:
+                    print(f"[intercom] WARNING: {entity_id} may still be playing after 5 retries")
 
             threading.Thread(
                 target=_auto_pause,
