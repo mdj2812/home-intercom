@@ -418,17 +418,13 @@ async function startRecording(target, card) {
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop();
+    // Release mic immediately — data already captured in audioChunks
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
     setCardState(currentCard, 'sending', '发送中…');
   }
 }
 
 async function sendAudio() {
-  // Release microphone immediately — recording already stopped, data is in audioChunks
-  if (mediaRecorder && mediaRecorder.stream) {
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    mediaRecorder = null;
-  }
-
   const blob = new Blob(audioChunks, { type: 'audio/webm' });
 
   try {
