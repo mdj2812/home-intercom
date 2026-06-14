@@ -58,6 +58,23 @@ body {
 .broadcast-card {
   grid-column: 1 / -1;
   margin-bottom: 6px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+.broadcast-card .room-header {
+  flex: 0 0 auto;
+}
+.broadcast-card .ptt-wrap {
+  width: 80px; height: 80px;
+}
+.broadcast-card .ptt-btn {
+  width: 100%; height: 100%;
+}
+.broadcast-card .status {
+  width: 100%;
+  text-align: left;
 }
 
 /* ──── Room card ──── */
