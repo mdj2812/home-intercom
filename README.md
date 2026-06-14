@@ -1,4 +1,4 @@
-# Home Intercom 家庭广播系统 v1.2.2
+# Home Intercom 家庭广播系统
 
 手机 PWA 按住录音 → 松开后在小爱音箱播放。支持单房间和全部广播。
 
