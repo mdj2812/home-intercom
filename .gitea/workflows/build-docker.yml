@@ -34,6 +34,18 @@ jobs:
           echo "Pushing $IMAGE"
           docker push "$IMAGE"
 
+      - name: Tag and push :latest (stable only)
+        run: |
+          VERSION="${IMAGE##*:}"
+          if echo "$VERSION" | grep -q 'rc'; then
+            echo "Skip :latest — $VERSION is pre-release"
+          else
+            LATEST="${IMAGE%:*}:latest"
+            echo "Tagging $LATEST"
+            docker tag "$IMAGE" "$LATEST"
+            docker push "$LATEST"
+          fi
+
       - name: Cleanup
         if: always()
         run: |
