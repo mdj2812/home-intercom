@@ -38,24 +38,9 @@ PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 │   └── bench_ffmpeg.sh       # NAS 性能测试
 ├── .gitea/workflows/
 │   └── build-docker.yml      # CI：.docker-image 变更 → 自动 build & push
+├── CHANGELOG.md
 └── README.md
 ```
-
-## v1.2.2 更新 (2026-06-14)
-
-- **NAS 部署** — 确认 Celeron N5095 转码足够快（10s 音频 < 10ms），迁移到 NAS
-- **超时调整** — ffmpeg 15→60s, SCP 10→30s，兼容低性能设备
-
-## v1.2.1 更新 (2026-06-14)
-
-- **端口改为 8764** — 避免与 NAS 上其他容器冲突
-
-## v1.2.0 更新 (2026-06-14)
-
-- **PWA 图标** — 广播主题图标（SVG + 4 尺寸 PNG），支持添加到主屏幕
-- **Caddy 反向代理** — `https://broadcast.home.mdj2812.top/` HTTPS 访问，满足 PWA getUserMedia 要求
-- **项目目录整理** — `src/` 源码、`docker/` 容器配置、`assets/` 素材、`n8n/` workflow 备份
-- **静态文件路由** — `/static/<path>` catch-all 替代 5 个独立路由
 
 ## 部署
 
@@ -68,7 +53,13 @@ docker compose -f docker/docker-compose.yml up -d
 
 镜像：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
 
-版本号由 `docker/.docker-image` 维护（单一真相源），`docker/.env` 供 compose 使用。升级时 `git pull && docker compose -f docker/docker-compose.yml pull && docker compose -f docker/docker-compose.yml up -d`。
+版本号由 `docker/.docker-image` 维护（单一真相源），`docker/.env` 供 compose 使用。升级时：
+
+```bash
+git pull
+docker compose -f docker/docker-compose.yml pull
+docker compose -f docker/docker-compose.yml up -d
+```
 
 **前置条件**：容器内 SCP 到 HA 需要 SSH key。确认 `~/.ssh/id_ed25519` 存在且已授权访问 HA（`192.168.99.4`）。
 

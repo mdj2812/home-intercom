@@ -1,0 +1,27 @@
+# Changelog
+
+## v1.2.2 (2026-06-14)
+
+- **NAS 部署** — 确认 Celeron N5095 转码足够快（10s 音频 < 10ms），迁移到 NAS
+- **超时调整** — ffmpeg 15→60s, SCP 10→30s，兼容低性能设备
+- **CI** — 建立 Gitea Actions，`.docker-image` 变更自动 build & push
+
+## v1.2.1 (2026-06-14)
+
+- **端口改为 8764** — 避免与 NAS 上其他容器冲突
+
+## v1.2.0 (2026-06-14)
+
+- **PWA 图标** — 广播主题图标（SVG + 4 尺寸 PNG），支持添加到主屏幕
+- **Caddy 反向代理** — `https://broadcast.home.mdj2812.top/` HTTPS 访问，满足 PWA getUserMedia 要求
+- **项目目录整理** — `src/` 源码、`docker/` 容器配置、`assets/` 素材、`n8n/` workflow 备份
+- **静态文件路由** — `/static/<path>` catch-all 替代 5 个独立路由
+- **镜像版本管理** — `docker/.docker-image` 单一真相源
+
+## v1.1.0 (2026-06-14)
+
+- **全部广播** — 顶部金色「全部」按钮，一次录音同时发送到所有房间
+- **n8n 状态轮询** — 播放后轮询 `state=="playing"` 确认音箱真正开始播，再倒计时 Wait(duration)；Pause 后循环确认停止，解决 repeat:all 导致的重播
+- **固定文件名** — 每房间一个固定文件 `intercom_<room>.wav`，新录音覆盖旧，不会堆积
+- **rooms.json 外部化** — 添加/修改房间只需改 JSON，PWA 按钮自动生成，无需改代码
+- **PWA 触感优化** — 按钮间距、高度自适应、「按住录音松开发送」提示
