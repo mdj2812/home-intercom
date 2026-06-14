@@ -62,6 +62,8 @@ docker compose -f docker/docker-compose.yml up -d
 
 镜像：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
 
+版本号由 `docker/.docker-image` 维护（单一真相源），`docker/.env` 供 compose 使用。升级版本时同步更新这两个文件。
+
 **前置条件**：容器内 SCP 到 HA 需要 SSH key。确认 `~/.ssh/id_ed25519` 存在且已授权访问 HA（`192.168.99.4`）。
 
 ### Caddy 反代
