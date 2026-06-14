@@ -1,13 +1,10 @@
 # Changelog
 
-## v1.4.2 (2026-06-14)
-
-- **修复音频 URL 为 http** — 读取 X-Forwarded-Proto 头，Caddy 反代时正确拼 https
-
-
 ## v1.4.1 (2026-06-14)
 
-- **去掉 SELF_URL** — 改用 `request.host_url` 自动获取，无需手动配置
+- **去掉 SELF_URL** — 改用 `request.host_url` + `X-Forwarded-Proto` 自动获取，Caddy 反代时正确拼 `https://`
+- **去掉 compose ports** — host 网络模式无需端口映射
+- **README 清理** — 去掉环境变量默认值
 
 ## v1.4.0 (2026-06-14)
 
@@ -35,7 +32,7 @@
 
 ## v1.2.1 (2026-06-14)
 
-- **端口改为 8764** — 避免与 NAS 上其他容器冲突
+- **端口改为 8764** — 避免与 NAS 上其他容器衝突
 
 ## v1.2.0 (2026-06-14)
 
