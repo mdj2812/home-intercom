@@ -1,8 +1,9 @@
-# Home Intercom 家庭广播系统 v1.2.1
+# Home Intercom 家庭广播系统 v1.2.2
 
 手机 PWA 按住录音 → 松开后在小爱音箱播放。支持单房间和全部广播。
 
 URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8764）
+部署: NAS（Celeron N5095, Docker）
 
 ## 架构
 
@@ -20,7 +21,9 @@ PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 ```
 ├── docker/
 │   ├── Dockerfile
-│   └── docker-compose.yml
+│   ├── docker-compose.yml
+│   ├── .docker-image       # 单一版本真相源
+│   └── .env.example
 ├── src/
 │   ├── intercom_server.py    # Flask 后端
 │   ├── intercom.html         # PWA 前端
@@ -31,8 +34,17 @@ PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 │   └── icon.svg              # 图标源文件
 ├── n8n/
 │   └── n8n_workflow.json     # n8n workflow 备份
+├── scripts/
+│   └── bench_ffmpeg.sh       # NAS 性能测试
+├── .gitea/workflows/
+│   └── build-docker.yml      # CI：.docker-image 变更 → 自动 build & push
 └── README.md
 ```
+
+## v1.2.2 更新 (2026-06-14)
+
+- **NAS 部署** — 确认 Celeron N5095 转码足够快（10s 音频 < 10ms），迁移到 NAS
+- **超时调整** — ffmpeg 15→60s, SCP 10→30s，兼容低性能设备
 
 ## v1.2.1 更新 (2026-06-14)
 
@@ -45,32 +57,32 @@ PWA → Flask :8764 /convert → ffmpeg + SCP → POST n8n /intercom/play {entit
 - **项目目录整理** — `src/` 源码、`docker/` 容器配置、`assets/` 素材、`n8n/` workflow 备份
 - **静态文件路由** — `/static/<path>` catch-all 替代 5 个独立路由
 
-## v1.1.0 更新 (2026-06-14)
-
-- **全部广播** — 顶部金色「全部」按钮，一次录音同时发送到所有房间
-- **n8n 状态轮询** — 播放后轮询 `state=="playing"` 确认音箱真正开始播，再倒计时 Wait(duration)；Pause 后循环确认停止，解决 repeat:all 导致的重播
-- **固定文件名** — 每房间一个固定文件 `intercom_<room>.wav`，新录音覆盖旧，不会堆积
-- **rooms.json 外部化** — 添加/修改房间只需改 JSON，PWA 按钮自动生成，无需改代码
-- **PWA 触感优化** — 按钮间距、高度自适应、「按住录音松开发送」提示
-
 ## 部署
 
-### Docker（推荐）
+### Docker（推荐，运行在 NAS）
 
 ```bash
 cd /path/to/home-intercom
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-首次会在 `http://<host>:8764/` 启动，`rooms.json` volume 挂载，改完 `docker compose -f docker/docker-compose.yml restart` 即可。
-
 镜像：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
 
-版本号由 `docker/.docker-image` 维护（单一真相源），`docker/.env` 供 compose 使用。升级版本时同步更新这两个文件。
+版本号由 `docker/.docker-image` 维护（单一真相源），`docker/.env` 供 compose 使用。升级时 `git pull && docker compose -f docker/docker-compose.yml pull && docker compose -f docker/docker-compose.yml up -d`。
 
 **前置条件**：容器内 SCP 到 HA 需要 SSH key。确认 `~/.ssh/id_ed25519` 存在且已授权访问 HA（`192.168.99.4`）。
 
+### 性能验证
+
+```bash
+bash scripts/bench_ffmpeg.sh
+```
+
+Celeron N5095 实测 10s 音频转码 < 10ms，绰绰有余。
+
 ### Caddy 反代
+
+NAS 上 Caddy：
 
 ```Caddyfile
 broadcast.home.mdj2812.top {
