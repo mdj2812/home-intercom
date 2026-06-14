@@ -11,7 +11,6 @@ app = Flask(__name__)
 HA_HOST = os.environ.get("HA_HOST", "192.168.99.4")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 N8N_HOOK = os.environ.get("N8N_HOOK", "")
-SELF_URL = os.environ.get("SELF_URL", "http://192.168.99.10:8764")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
@@ -113,7 +112,7 @@ def convert():
     # 移动到本地音频目录，Flask 直接 serve
     dest = os.path.join(AUDIO_DIR, filename)
     shutil.move(tmp_wav, dest)
-    audio_url = f"{SELF_URL}/audio/{filename}"
+    audio_url = f"{request.host_url}audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
     # 回调 n8n 触发播放 — 全部广播时逐个触发每个房间
@@ -139,6 +138,5 @@ def convert():
 
 if __name__ == "__main__":
     print(f"[intercom] Audio dir: {AUDIO_DIR}")
-    print(f"[intercom] Self URL:   {SELF_URL}")
     print("[intercom] Starting on http://0.0.0.0:8764")
     app.run(host="0.0.0.0", port=8764)
