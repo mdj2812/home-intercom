@@ -158,6 +158,7 @@ if __name__ == "__main__":
     # trusted_proxy: set via TRUSTED_PROXY env (default '*' for homelab, restrict for production)
     trusted_proxy = os.environ.get("TRUSTED_PROXY", "*")
 
+    print(f"[intercom] HA URL: {HA_URL}", flush=True)
     print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
     print(f"[intercom] Trusted proxy: {trusted_proxy}", flush=True)
     print("[intercom] Starting on http://0.0.0.0:8764", flush=True)

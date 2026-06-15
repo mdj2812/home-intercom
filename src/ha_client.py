@@ -93,7 +93,7 @@ class HAClient:
                 break
             time.sleep(STATE_POLL_INTERVAL)
         else:
-            print(f"[intercom] WARNING: {entity_id} never reached 'playing', pausing anyway")
+            print(f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing")
 
         # 2) 等剩余时长
         elapsed = time.monotonic() - t0
