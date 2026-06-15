@@ -133,13 +133,7 @@ def convert():
     if raw_audio[:len(WAV_MAGIC)] == WAV_MAGIC:
         duration = _handle_wav_passthrough(raw_audio, tmp_wav)
     else:
-        try:
-            duration = _handle_webm_convert(raw_audio, target, tmp_wav)
-        except subprocess.CalledProcessError:
-            # 清理残留
-            if os.path.exists(tmp_wav):
-                os.unlink(tmp_wav)
-            return jsonify({"ok": False, "error": "conversion failed"}), 500
+        duration = _handle_webm_convert(raw_audio, target, tmp_wav)
 
     # 移动到本地音频目录，Flask 直接 serve
     dest = os.path.join(AUDIO_DIR, filename)
