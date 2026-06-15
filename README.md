@@ -29,7 +29,8 @@ PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `HA_HOST` | Home Assistant 地址 | `192.168.99.4` |
+| `HA_HOST` | Home Assistant 地址 | — |
+| `HA_SCHEME` | HA API 协议（`http`/`https`） | `http` |
 | `HA_TOKEN` | HA 长期访问令牌 | — |
 | `AUDIO_DIR` | 音频文件存储目录 | `/data/audio` |
 

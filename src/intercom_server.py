@@ -2,16 +2,19 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换 → 本地 serve → 直接调 HA API 播放
 """
-import os, json, subprocess, ssl, shutil, sys, wave, threading
-import urllib.request
+import os, json, subprocess, shutil, sys, wave
 from flask import Flask, request, jsonify, send_from_directory
+from ha_client import HAClient
 
 app = Flask(__name__)
 
 HA_HOST = os.environ.get("HA_HOST", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
+HA_SCHEME = os.environ.get("HA_SCHEME", "http")  # "https" if HA behind Caddy
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
+
+haclient = HAClient(HA_HOST, HA_TOKEN, HA_SCHEME)
 
 # ——— 版本号 ———
 try:
@@ -54,27 +57,7 @@ def rooms_status():
     """查询 HA 中小爱音箱的在线状态"""
     if not HA_TOKEN:
         return jsonify({"error": "no HA_TOKEN"}), 500
-
-    status = {}
-    ctx = ssl._create_unverified_context()
-
-    for key, room in ROOM_MAP.items():
-        entity = room.get("entity", "")
-        if not entity:
-            status[key] = True
-            continue
-        try:
-            url = f"http://{HA_HOST}:8123/api/states/{entity}"
-            req = urllib.request.Request(url)
-            req.add_header("Authorization", f"Bearer {HA_TOKEN}")
-            resp = urllib.request.urlopen(req, timeout=3, context=ctx)
-            data = json.loads(resp.read())
-            status[key] = data.get("state") != "unavailable"
-        except Exception as e:
-            print(f"[intercom] HA query failed for {key}: {e}")
-            status[key] = False
-
-    return jsonify(status)
+    return jsonify(haclient.query_statuses(ROOM_MAP))
 
 
 @app.route("/version")
@@ -109,37 +92,6 @@ def _handle_webm_convert(raw_audio, tmp_webm, tmp_wav):
     size_out = os.path.getsize(tmp_wav)
     duration = size_out / FFMPEG_BYTERATE
     return duration
-
-
-def _ha_state(entity_id: str) -> str:
-    """查询 HA 中 entity 的 state，失败返回空字符串"""
-    if not HA_TOKEN:
-        return ""
-    url = f"http://{HA_HOST}:8123/api/states/{entity_id}"
-    req = urllib.request.Request(url)
-    req.add_header("Authorization", f"Bearer {HA_TOKEN}")
-    ctx = ssl._create_unverified_context()
-    try:
-        resp = urllib.request.urlopen(req, timeout=3, context=ctx)
-        return json.loads(resp.read()).get("state", "")
-    except Exception:
-        return ""
-
-
-def _ha_call(service: str, data: dict) -> bool:
-    """调用 Home Assistant REST API"""
-    url = f"http://{HA_HOST}:8123/api/services/{service}"
-    body = json.dumps(data).encode()
-    req = urllib.request.Request(url, data=body, method="POST")
-    req.add_header("Authorization", f"Bearer {HA_TOKEN}")
-    req.add_header("Content-Type", "application/json")
-    ctx = ssl._create_unverified_context()
-    try:
-        urllib.request.urlopen(req, timeout=10, context=ctx)
-        return True
-    except Exception as e:
-        print(f"[intercom] HA call failed ({service}): {e}")
-        return False
 
 
 @app.route("/convert", methods=["POST"])
@@ -187,59 +139,13 @@ def convert():
     audio_url = f"{scheme}://{request.host}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
-    # 直接调 HA API 播放，后台线程播完后 pause 防 repeat
+    # 直接调 HA API 播放，后台线程自动 pause
     ok_count = 0
     for tgt_key, tgt_room in targets:
         entity = tgt_room["entity"]
-        ok = _ha_call("media_player/play_media", {
-            "entity_id": entity,
-            "media_content_id": audio_url,
-            "media_content_type": "music",
-        })
-        if ok:
-            ok_count += 1
-            print(f"[intercom] HA play → {tgt_room['name']}")
-
-            # 后台线程：n8n 等效——确认播放 → 等剩余 duration → pause → 确认已停
-            def _auto_pause(entity_id, wait_sec):
-                import time
-
-                t0 = time.monotonic()
-
-                # 1) 轮询确认开始播放（state == "playing"），最多等 5s
-                for attempt in range(1, 11):  # 10 × 0.5s
-                    state = _ha_state(entity_id)
-                    if state == "playing":
-                        print(f"[intercom] {entity_id} playing confirmed (attempt {attempt})")
-                        break
-                    time.sleep(0.5)
-                else:
-                    print(f"[intercom] WARNING: {entity_id} never reached 'playing', pausing anyway")
-
-                # 2) 等音频播完（减去确认 playing 已经花掉的时间）
-                elapsed = time.monotonic() - t0
-                remaining = max(0, wait_sec - elapsed)
-                if remaining > 0:
-                    print(f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s")
-                    time.sleep(remaining)
-
-                # 3) pause + 确认已停，最多重试 5 次
-                for attempt in range(1, 6):
-                    _ha_call("media_player/media_pause", {"entity_id": entity_id})
-                    time.sleep(0.5)
-                    state = _ha_state(entity_id)
-                    if state != "playing":
-                        print(f"[intercom] {entity_id} paused (attempt {attempt})")
-                        break
-                    print(f"[intercom] {entity_id} still playing, retry pause ({attempt}/5)")
-                else:
-                    print(f"[intercom] WARNING: {entity_id} may still be playing after 5 retries")
-
-            threading.Thread(
-                target=_auto_pause,
-                args=(entity, duration),
-                daemon=True,
-            ).start()
+        haclient.play_and_auto_pause(entity, audio_url, duration)
+        ok_count += 1
+        print(f"[intercom] HA play → {tgt_room['name']}")
 
     return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
 

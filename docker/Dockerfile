@@ -9,7 +9,7 @@ WORKDIR /app
 COPY src/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/intercom_server.py src/intercom.html src/rooms.json ./
+COPY src/intercom_server.py src/ha_client.py src/intercom.html src/rooms.json ./
 COPY src/manifest.json src/static/ ./static/
 COPY docker/.docker-image /app/.docker-image
 
