@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.5.0 (2026-06-15)
+
+- **去掉 n8n** — Flask 直接调 HA REST API，不再依赖 n8n webhook
+- **HAClient** — 抽取 `ha_client.py`，封装 HA 状态查询、服务调用、播放+自动暂停
+- **auto-pause** — 后台线程轮询确认播放开始 → 等音频时长 → pause + 5 次重试，防止小爱 repeat
+- **HA_URL** — 废弃 `HA_HOST` + `HA_SCHEME`，改为单一 `HA_URL` 变量，`urlparse()` 解析
+- **SELF_URL 移除** — 废代码清理，URL 自动检测
+- **docker-compose.example** — 同步更新 HA_URL 配置
+
 ## v1.4.4 (2026-06-15)
 
 - **修复** — `stopRecording()` 中停止 MediaStream tracks 后漏设 `mediaRecorder = null`，导致第二次录音失败（400）
