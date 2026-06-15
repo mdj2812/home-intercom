@@ -12,6 +12,7 @@
 <meta name="theme-color" content="#0f0f0f">
 
 <title>家庭广播</title>
+<script src="/static/i18n.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html, body { height:100%; }
@@ -32,19 +33,21 @@ body {
   padding: 16px;
 }
 .header {
-  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   padding: 8px 0 12px;
+}
+.header-right {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
 }
 .header h1 {
   font-size: 1rem;
   font-weight: 600;
   color: #ccc;
   letter-spacing: 0.02em;
-}
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
 }
 .header .ver {
   font-size: 0.7rem;
@@ -55,6 +58,17 @@ body {
   color: #555;
   margin-top: 4px;
 }
+#lang-toggle {
+  background: none;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #888;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: color .2s, border-color .2s;
+}
+#lang-toggle:hover { color: #ccc; border-color: #666; }
 
 /* ──── Grid ──── */
 .grid {
@@ -311,8 +325,14 @@ body {
 
 <div class="container">
   <div class="header">
-    <div><h1>📢 家庭广播</h1><p class="hint">按住录音 · 松开发送</p></div>
-    <span class="ver" id="ver">…</span>
+    <div>
+      <h1 id="app-title">📢 家庭广播</h1>
+      <p class="hint" id="app-hint">按住录音 · 松开发送</p>
+    </div>
+    <div class="header-right">
+      <button id="lang-toggle" onclick="I18N.toggleLang()">EN</button>
+      <span class="ver" id="ver">…</span>
+    </div>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -347,7 +367,7 @@ function makeCard(target, name, isBroadcast) {
   card.innerHTML = `
     <div class="room-header">
       <span class="room-icon">${roomIcon(target)}</span>
-      <span>${name}</span>
+      <span${isBroadcast ? ' data-i18n="broadcastAll"' : ` data-room-name="${target}"`}>${name}</span>
       <span class="dot"></span>
     </div>
     <div class="ptt-wrap">
@@ -359,7 +379,7 @@ function makeCard(target, name, isBroadcast) {
         <div class="checkmark">✓</div>
       </button>
     </div>
-    <div class="status">准备好</div>
+    <div class="status">${I18N.t('statusReady')}</div>
   `;
 
   const btn = card.querySelector('.ptt-btn');
@@ -382,18 +402,23 @@ function makeCard(target, name, isBroadcast) {
 }
 
 async function loadRooms() {
-  ROOM_NAMES['all'] = '全部广播';
-  GRID.appendChild(makeCard('all', '全部广播', true));
+  // Expose room data for i18n language switching
+  window._ROOM_DATA = {};
+  window._ROOM_DATA['all'] = { name: I18N.t('broadcastAll'), name_en: 'Broadcast All' };
+  ROOM_NAMES['all'] = I18N.t('broadcastAll');
+  GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
   try {
     const resp = await fetch('/rooms.json');
     const rooms = await resp.json();
     for (const [key, room] of Object.entries(rooms)) {
+      window._ROOM_DATA[key] = room;
       ROOM_NAMES[key] = room.name;
       GRID.appendChild(makeCard(key, room.name, false));
     }
   } catch (e) {
-    GRID.querySelector('.status').textContent = '加载失败';
+    const firstStatus = GRID.querySelector('.status');
+    if (firstStatus) firstStatus.textContent = I18N.t('statusLoadFailed');
   }
 }
 
@@ -415,13 +440,13 @@ async function startRecording(target, card) {
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
       mediaRecorder.onstop = () => sendAudio();
     } catch (e) {
-      setCardState(card, '', '❌ 麦克风: ' + e.message);
+      setCardState(card, '', I18N.t('micError') + e.message);
       return;
     }
   }
 
   mediaRecorder.start();
-  setCardState(card, 'recording', '录音中…');
+  setCardState(card, 'recording', I18N.t('statusRecording'));
 }
 
 function stopRecording() {
@@ -430,7 +455,7 @@ function stopRecording() {
     // Release mic immediately — data already captured in audioChunks
     mediaRecorder.stream.getTracks().forEach(t => t.stop());
     mediaRecorder = null;
-    setCardState(currentCard, 'sending', '发送中…');
+    setCardState(currentCard, 'sending', I18N.t('statusSending'));
   }
 }
 
@@ -443,16 +468,16 @@ async function sendAudio() {
     });
 
     if (resp.ok) {
-      setCardState(currentCard, 'sent', '已发送');
+      setCardState(currentCard, 'sent', I18N.t('statusSent'));
     } else {
-      setCardState(currentCard, '', '失败 ' + resp.status);
+      setCardState(currentCard, '', I18N.t('statusFailed') + ' ' + resp.status);
     }
   } catch (e) {
-    setCardState(currentCard, '', '网络错误');
+    setCardState(currentCard, '', I18N.t('statusNetworkError'));
   }
 
   setTimeout(() => {
-    if (currentCard) setCardState(currentCard, '', '准备好');
+    if (currentCard) setCardState(currentCard, '', I18N.t('statusReady'));
   }, 1500);
 }
 
@@ -473,7 +498,7 @@ loadRooms();
 setTimeout(pollSpeakerStatus, 1000);
 setInterval(pollSpeakerStatus, 30000);
 
-// 显示版本号
+// Show version number
 fetch('/version').then(r => r.json()).then(d => {
   document.getElementById('ver').textContent = d.version;
 }).catch(() => {
