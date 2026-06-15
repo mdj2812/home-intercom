@@ -10,17 +10,9 @@ jobs:
   lint-and-test:
     name: "Lint + Unit Tests"
     runs-on: check
-    container:
-      image: python:3.13-slim
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install system deps (Node.js for JS syntax check)
-        run: |
-          apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-            nodejs \
-            && rm -rf /var/lib/apt/lists/*
 
       - name: Install Python deps
         run: |
