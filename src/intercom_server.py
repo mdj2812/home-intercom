@@ -8,7 +8,7 @@ from ha_client import HAClient
 
 app = Flask(__name__)
 
-HA_URL = os.environ.get("HA_URL", "http://192.168.99.4:8123")
+HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)

@@ -43,14 +43,13 @@ PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
 │   └── .env.example
 ├── src/
 │   ├── intercom_server.py    # Flask 后端
+│   ├── ha_client.py          # HA API 客户端
 │   ├── intercom.html         # PWA 前端
 │   ├── rooms.json            # 房间配置
 │   ├── requirements.txt      # Python 依赖
 │   └── static/               # PWA 图标 + manifest
 ├── assets/
 │   └── icon.svg              # 图标源文件
-├── n8n/
-│   └── n8n_workflow.json     # n8n workflow 备份（v1.5.0 后不再需要）
 ├── scripts/
 │   └── bench_ffmpeg.sh       # NAS 性能测试
 ├── .gitea/workflows/
@@ -78,7 +77,6 @@ docker compose -f docker/docker-compose.yml pull
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-<<<<<<< HEAD
 **前置条件**：Flask 直接调 HA API，确保 `HA_TOKEN` 配置正确。HA 通过 HTTP 拉音频，URL 由 Flask 自动检测。**无需 SSH key、无需 n8n**。
 
 ### 性能验证
