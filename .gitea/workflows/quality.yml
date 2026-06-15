@@ -9,7 +9,7 @@ on:
 jobs:
   lint-and-test:
     name: "Lint + Unit Tests"
-    runs-on: docker-build
+    runs-on: butler-runner
     container:
       image: python:3.13-slim
 
