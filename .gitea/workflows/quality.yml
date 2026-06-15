@@ -1,0 +1,33 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, quality, 'dev/**', 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: "Lint + Unit Tests"
+    runs-on: check
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python deps
+        run: |
+          pip install --break-system-packages --no-cache-dir -r src/requirements.txt
+          pip install --break-system-packages --no-cache-dir -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: |
+          echo "=== Ruff Check ==="
+          ruff check src/ tests/
+          echo "=== Ruff Format Check ==="
+          ruff format --check src/ tests/
+
+      - name: Pytest with coverage
+        run: |
+          python3 -m pytest tests/ -v --tb=short \
+            --cov=src \
+            --cov-report=term-missing

@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
+htmlcov/
 /tmp/
 *.webm
 *.wav
