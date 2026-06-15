@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.5.2 (2026-06-15)
+
+- **i18n** — PWA 中英文切换（zh-CN / en），右上角按钮，localStorage 持久化
+- **i18n 房间名** — 语言切换时房间名同步翻译，使用 `rooms.json` 的 `name_en` 字段
+- **测试** — 57 个 pytest 测试，93% 覆盖率，含 HTML/JS 质量检查
+- **lint** — ruff 静态检查 + format，CI 自动执行
+- **CI quality workflow** — push/PR 自动 lint + test + coverage≥85%
+
 ## v1.5.1 (2026-06-15)
 
 - **修复** — ffmpeg 失败时 `os.unlink()` 文件不存在导致 500 crash，加 `os.path.exists()` 守卫
