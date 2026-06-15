@@ -28,6 +28,6 @@ jobs:
 
       - name: Pytest with coverage
         run: |
-          python -m pytest tests/ -v --tb=short \
+          python3 -m pytest tests/ -v --tb=short \
             --cov=src \
             --cov-report=term-missing
