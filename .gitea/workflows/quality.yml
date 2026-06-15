@@ -14,9 +14,10 @@ jobs:
       image: python:3.13-slim
 
     steps:
-      - name: Install system deps (Node.js for JS syntax check)
+      - name: Install system deps (git + Node.js for JS syntax check)
         run: |
           apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+            git \
             nodejs \
             && rm -rf /var/lib/apt/lists/*
 
