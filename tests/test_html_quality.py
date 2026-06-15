@@ -180,15 +180,23 @@ class TestI18N:
             i18n = f.read()
 
         required_keys = [
-            "appTitle", "appHint", "broadcastAll",
-            "statusReady", "statusRecording", "statusSending", "statusSent",
-            "statusFailed", "statusNetworkError", "statusLoadFailed",
-            "micError", "langLabel",
+            "appTitle",
+            "appHint",
+            "broadcastAll",
+            "statusReady",
+            "statusRecording",
+            "statusSending",
+            "statusSent",
+            "statusFailed",
+            "statusNetworkError",
+            "statusLoadFailed",
+            "micError",
+            "langLabel",
         ]
 
         # Extract zh-CN block and en block
         zh_match = re.search(r'"zh-CN":\s*\{(.*?)\n\s+\}', i18n, re.DOTALL)
-        en_match = re.search(r'en:\s*\{(.*?)\n\s+\}', i18n, re.DOTALL)
+        en_match = re.search(r"en:\s*\{(.*?)\n\s+\}", i18n, re.DOTALL)
 
         assert zh_match, "zh-CN block not found in i18n.js"
         assert en_match, "en block not found in i18n.js"
