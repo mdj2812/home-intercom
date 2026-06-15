@@ -38,12 +38,6 @@
 - **去掉 compose ports** — host 网络模式无需端口映射
 - **README 清理** — 去掉环境变量默认值
 
-## v1.5.0 (2026-06-14)
-
-- **去掉 n8n** — Flask 直接调 HA REST API `media_player/play_media`，不再依赖 n8n webhook
-- 删除 `N8N_HOOK` 环境变量，`_ha_call()` 直接 POST HA 服务端点
-- 全部广播：Flask 并行 fire-and-forget 各房间，不再通过 n8n 串行调度
-
 ## v1.4.0 (2026-06-14)
 
 - **去掉 SCP/SSH** — Flask 本地 serve 音频，HA 通过 HTTP 直接拉取，不再依赖 SSH key
