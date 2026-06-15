@@ -9,8 +9,7 @@ services:
       # rooms.json editable without rebuild
       - ../src/rooms.json:/app/rooms.json:ro
     environment:
-      - HA_HOST=<YOUR_HA_IP>
-      - N8N_HOOK=https://<YOUR_N8N_HOST>/webhook/intercom/play
+      - HA_URL=http://<YOUR_HA_IP>:8123
       - HA_TOKEN=<YOUR_HA_LONG_LIVED_TOKEN>
       # - TRUSTED_PROXY=<your caddy/nginx ip>  # restrict forwarded headers for security
     network_mode: host

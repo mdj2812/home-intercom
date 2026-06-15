@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """家庭广播系统 — 手机对讲站后端
-PWA POST 音频 → Flask 转换 → 本地 serve → 回调 n8n webhook → HA 播放
+PWA POST 音频 → Flask 转换 → 本地 serve → 直接调 HA API 播放
 """
-import os, json, subprocess, ssl, shutil, sys, wave
-import urllib.request
+import os, json, subprocess, shutil, sys, wave
 from flask import Flask, request, jsonify, send_from_directory
+from ha_client import HAClient
 
 app = Flask(__name__)
 
-HA_HOST = os.environ.get("HA_HOST", "")
+HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
-N8N_HOOK = os.environ.get("N8N_HOOK", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
+
+haclient = HAClient(HA_URL, HA_TOKEN)
 
 # ——— 版本号 ———
 try:
@@ -55,27 +56,7 @@ def rooms_status():
     """查询 HA 中小爱音箱的在线状态"""
     if not HA_TOKEN:
         return jsonify({"error": "no HA_TOKEN"}), 500
-
-    status = {}
-    ctx = ssl._create_unverified_context()
-
-    for key, room in ROOM_MAP.items():
-        entity = room.get("entity", "")
-        if not entity:
-            status[key] = True
-            continue
-        try:
-            url = f"http://{HA_HOST}:8123/api/states/{entity}"
-            req = urllib.request.Request(url)
-            req.add_header("Authorization", f"Bearer {HA_TOKEN}")
-            resp = urllib.request.urlopen(req, timeout=3, context=ctx)
-            data = json.loads(resp.read())
-            status[key] = data.get("state") != "unavailable"
-        except Exception as e:
-            print(f"[intercom] HA query failed for {key}: {e}")
-            status[key] = False
-
-    return jsonify(status)
+    return jsonify(haclient.query_statuses(ROOM_MAP))
 
 
 @app.route("/version")
@@ -114,7 +95,7 @@ def _handle_webm_convert(raw_audio, tmp_webm, tmp_wav):
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    """PWA 直连：接收音频 → 转换 → 本地 serve → 回调 n8n"""
+    """PWA 直连：接收音频 → 转换 → 本地 serve → 直接调 HA 播放"""
     target = request.args.get("target", "")
 
     raw_audio = request.get_data()
@@ -157,23 +138,13 @@ def convert():
     audio_url = f"{scheme}://{request.host}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
-    # 回调 n8n 触发播放
+    # 直接调 HA API 播放，后台线程自动 pause
     ok_count = 0
     for tgt_key, tgt_room in targets:
-        try:
-            body = json.dumps({
-                "entity": tgt_room["entity"],
-                "url": audio_url,
-                "duration": duration
-            }).encode()
-            req = urllib.request.Request(N8N_HOOK, data=body, method="POST")
-            req.add_header("Content-Type", "application/json")
-            ctx = ssl._create_unverified_context()
-            urllib.request.urlopen(req, timeout=10, context=ctx)
-            ok_count += 1
-            print(f"[intercom] → n8n play {tgt_room['name']}")
-        except Exception as e:
-            print(f"[intercom] n8n hook failed ({tgt_room['name']}): {e}")
+        entity = tgt_room["entity"]
+        haclient.play_and_auto_pause(entity, audio_url, duration)
+        ok_count += 1
+        print(f"[intercom] HA play → {tgt_room['name']}")
 
     return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
 
@@ -187,6 +158,7 @@ if __name__ == "__main__":
     # trusted_proxy: set via TRUSTED_PROXY env (default '*' for homelab, restrict for production)
     trusted_proxy = os.environ.get("TRUSTED_PROXY", "*")
 
+    print(f"[intercom] HA URL: {HA_URL}", flush=True)
     print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
     print(f"[intercom] Trusted proxy: {trusted_proxy}", flush=True)
     print("[intercom] Starting on http://0.0.0.0:8764", flush=True)
