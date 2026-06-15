@@ -8,13 +8,12 @@ from ha_client import HAClient
 
 app = Flask(__name__)
 
-HA_HOST = os.environ.get("HA_HOST", "")
+HA_URL = os.environ.get("HA_URL", "http://192.168.99.4:8123")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
-HA_SCHEME = os.environ.get("HA_SCHEME", "http")  # "https" if HA behind Caddy
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-haclient = HAClient(HA_HOST, HA_TOKEN, HA_SCHEME)
+haclient = HAClient(HA_URL, HA_TOKEN)
 
 # ——— 版本号 ———
 try:

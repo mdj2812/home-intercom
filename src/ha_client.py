@@ -4,6 +4,7 @@
 import os, json, ssl, threading, time
 import urllib.request
 import urllib.error
+import urllib.parse
 
 # ——— 重试常量 ———
 STATE_POLL_INTERVAL = 0.5   # 轮询 state 间隔 (s)
@@ -14,10 +15,11 @@ PAUSE_RETRIES = 5           # pause 重试次数
 class HAClient:
     """Home Assistant REST API 客户端"""
 
-    def __init__(self, host: str, token: str, scheme: str = "http"):
-        self._host = host
+    def __init__(self, ha_url: str, token: str):
+        """ha_url: full HA URL like http://192.168.99.4:8123 or https://ha.example.com"""
+        parsed = urllib.parse.urlparse(ha_url)
+        self._base = f"{parsed.scheme}://{parsed.netloc}/api"
         self._token = token
-        self._base = f"{scheme}://{host}:8123/api"
         self._ctx = ssl._create_unverified_context()
 
     def _request(self, method: str, path: str, data: dict | None = None,
