@@ -1,4 +1,4 @@
-"""PWA 前端质量检查 — HTML 结构 + JS 语法 + DOM 一致性"""
+"""PWA frontend quality checks — HTML structure + JS syntax + DOM consistency."""
 
 import json
 import os
@@ -28,7 +28,7 @@ class TestHtmlStructure:
         assert 'name="viewport"' in html_content
 
     def test_no_console_log_left(self, html_content):
-        """Production PWA should have no console.log debugging"""
+        """Production PWA should have no console.log debugging."""
         assert "console.log" not in html_content
 
     def test_no_debugger_statements(self, html_content):
@@ -88,7 +88,7 @@ class TestJsSyntax:
 
 
 class TestDomConsistency:
-    """Verify JS-referenced DOM IDs actually exist in HTML"""
+    """Verify JS-referenced DOM IDs actually exist in HTML."""
 
     def test_all_js_element_ids_exist(self):
         with open(HTML_PATH) as f:
@@ -110,7 +110,7 @@ class TestDomConsistency:
             )
 
     def test_room_card_prefix_consistent(self, html_content):
-        """JS generates card-<target> IDs — verify the format is consistent"""
+        """JS generates card-<target> IDs — verify the format is consistent."""
         assert "card-' + target" in html_content or 'card-" + target' in html_content
         assert "card-" in html_content
 
@@ -122,7 +122,7 @@ class TestManifestAndIcons:
         with open(manifest_path) as f:
             manifest = json.load(f)
 
-        assert manifest["name"] == "家庭广播"
+        assert manifest["name"] == "\u5bb6\u5ead\u5e7f\u64ad"
         assert "icons" in manifest
         assert len(manifest["icons"]) > 0
 

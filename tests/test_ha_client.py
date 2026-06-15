@@ -1,4 +1,4 @@
-"""HAClient 单元测试 — 用 mock 模拟 HA REST API 响应"""
+"""Unit tests for HAClient — mock HA REST API responses."""
 
 import urllib.error
 import urllib.request
@@ -161,7 +161,7 @@ class TestHAClientQueryStatuses:
 
     def test_no_entity_defaults_available(self):
         client = HAClient("http://ha:8123", "tok")
-        room_map = {"broadcast": {"name": "全部"}}
+        room_map = {"broadcast": {"name": "All"}}
 
         with patch("urllib.request.urlopen") as mock_open:
             result = client.query_statuses(room_map)
@@ -215,7 +215,7 @@ class TestHAClientPlayAndAutoPause:
 
 class TestAutoPauseBg:
     def test_confirms_playing_then_pauses(self):
-        """Simulate full cycle: playing → wait → pause → confirmed stopped"""
+        """Simulate full cycle: playing → wait → pause → confirmed stopped."""
         client = HAClient("http://ha:8123", "tok")
 
         call_args = []
@@ -240,14 +240,13 @@ class TestAutoPauseBg:
             patch.object(client, "call", side_effect=fake_call),
             patch("time.sleep"),
         ):
-            # duration = 3s, but after confirming playing we won't sleep much
             client._auto_pause_bg("media_player.test", 3.0)
 
         # Should have called pause at least once
         assert "media_player/media_pause" in call_args
 
     def test_short_audio_no_playing_detected(self):
-        """Short audio: polling never catches 'playing' — still pauses"""
+        """Short audio: polling never catches 'playing' — still pauses."""
         client = HAClient("http://ha:8123", "tok")
 
         call_args = []

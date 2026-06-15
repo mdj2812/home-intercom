@@ -1,5 +1,6 @@
-"""Home Assistant REST API 客户端
-封装所有 HA 交互：状态查询、服务调用、播放+自动暂停
+"""Home Assistant REST API client.
+
+Encapsulates all HA interactions: state queries, service calls, play + auto-pause.
 """
 
 import json
@@ -10,14 +11,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# ——— 重试常量 ———
-STATE_POLL_INTERVAL = 0.5  # 轮询 state 间隔 (s)
-PLAYING_CONFIRM_RETRIES = 10  # 确认 "playing" 最多 10 次 (10×0.5s=5s)
-PAUSE_RETRIES = 5  # pause 重试次数
+# ——— Retry constants ———
+STATE_POLL_INTERVAL = 0.5  # poll interval for state checks (seconds)
+PLAYING_CONFIRM_RETRIES = 10  # max attempts to confirm "playing" (10 × 0.5s = 5s)
+PAUSE_RETRIES = 5  # pause retry count
 
 
 class HAClient:
-    """Home Assistant REST API 客户端"""
+    """Home Assistant REST API client."""
 
     def __init__(self, ha_url: str, token: str):
         """ha_url: full HA URL like http://192.168.99.4:8123 or https://ha.example.com"""
@@ -29,7 +30,7 @@ class HAClient:
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
     ) -> tuple[int, dict | str]:
-        """发送 HA API 请求，返回 (http_status, response_data_or_error_string)"""
+        """Send HA API request, returns (http_status, response_data_or_error_string)."""
         url = f"{self._base}{path}"
         body = json.dumps(data).encode() if data else None
         req = urllib.request.Request(url, data=body, method=method)
@@ -46,7 +47,7 @@ class HAClient:
             return 0, str(e)
 
     def state(self, entity_id: str) -> str:
-        """查询 entity state，失败返回空字符串"""
+        """Query entity state, returns empty string on failure."""
         if not self._token:
             return ""
         code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
@@ -55,7 +56,7 @@ class HAClient:
         return ""
 
     def call(self, service: str, data: dict) -> bool:
-        """调用 HA 服务，返回成功/失败"""
+        """Call HA service, returns success/failure."""
         if not self._token:
             return False
         code, _ = self._request("POST", f"/services/{service}", data=data, timeout=10)
@@ -65,10 +66,10 @@ class HAClient:
         return ok
 
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float):
-        """后台线程：播放音频 → 确认 playing → 等 duration → pause + retry
+        """Background: play audio → confirm playing → wait duration → pause + retry.
 
-        等效于 n8n 的 play → poll state → wait → pause → verify 流水线。
-        duration 参数为音频时长（秒）。
+        Equivalent to the n8n pipeline: play → poll state → wait → pause → verify.
+        duration is audio length in seconds.
         """
         ok = self.call(
             "media_player/play_media",
@@ -82,7 +83,7 @@ class HAClient:
             print(f"[intercom] HA play failed for {entity_id}")
             return
 
-        # 后台线程处理 pause
+        # Spawn background thread for auto-pause
         threading.Thread(
             target=self._auto_pause_bg,
             args=(entity_id, duration),
@@ -90,10 +91,10 @@ class HAClient:
         ).start()
 
     def _auto_pause_bg(self, entity_id: str, wait_sec: float):
-        """后台线程逻辑：确认播放 → 等待 → pause + 验证"""
+        """Background thread: confirm playback → wait → pause + verify."""
         t0 = time.monotonic()
 
-        # 1) 轮询确认开始播放
+        # 1) Poll until "playing" state is confirmed
         for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
             state = self.state(entity_id)
             if state == "playing":
@@ -103,14 +104,14 @@ class HAClient:
         else:
             print(f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing")
 
-        # 2) 等剩余时长
+        # 2) Wait for remaining duration
         elapsed = time.monotonic() - t0
         remaining = max(0, wait_sec - elapsed)
         if remaining > 0:
             print(f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s")
             time.sleep(remaining)
 
-        # 3) pause + 确认已停
+        # 3) Pause + confirm stopped
         for attempt in range(1, PAUSE_RETRIES + 1):
             self.call("media_player/media_pause", {"entity_id": entity_id})
             time.sleep(STATE_POLL_INTERVAL)
@@ -122,7 +123,7 @@ class HAClient:
         print(f"[intercom] WARNING: {entity_id} may still be playing after {PAUSE_RETRIES} retries")
 
     def query_statuses(self, room_map: dict) -> dict[str, bool]:
-        """批量查询房间音箱在线状态"""
+        """Batch query speaker online status for all rooms."""
         status = {}
         for key, room in room_map.items():
             entity = room.get("entity", "")

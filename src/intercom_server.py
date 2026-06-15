@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""家庭广播系统 — 手机对讲站后端
-PWA POST 音频 → Flask 转换 → 本地 serve → 直接调 HA API 播放
+"""Home Intercom — PWA-based family broadcast system backend.
+
+PWA POST audio → Flask convert → local serve → direct HA API playback.
 """
 
 import json
@@ -23,21 +24,21 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 
 haclient = HAClient(HA_URL, HA_TOKEN)
 
-# ——— 版本号 ———
+# ——— Version ———
 try:
     with open("/app/.docker-image") as f:
         VERSION = f.read().strip().split(":")[-1]
 except Exception:
     VERSION = os.environ.get("VERSION", "dev")
 
-# ——— 音频处理常量 ———
-WAV_MAGIC = b"RIFF"  # WAV 文件魔数
-TMP_PREFIX = "/tmp/intercom_"  # 临时文件前缀
-FFMPEG_SR = 16000  # ffmpeg 输出采样率 (Hz)
+# ——— Audio processing constants ———
+WAV_MAGIC = b"RIFF"  # WAV file magic bytes
+TMP_PREFIX = "/tmp/intercom_"  # temp file prefix
+FFMPEG_SR = 16000  # ffmpeg output sample rate (Hz)
 FFMPEG_BPS = 2  # s16le = 2 bytes/sample
 FFMPEG_BYTERATE = FFMPEG_SR * FFMPEG_BPS  # 16000 Hz × 2 = 32000 B/s
 
-# 从 rooms.json 加载房间配置
+# Load room config from rooms.json
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 with open(ROOMS_FILE) as f:
     ROOM_MAP = json.load(f)
@@ -68,7 +69,7 @@ def serve_audio(filename):
 
 @app.route("/rooms/status")
 def rooms_status():
-    """查询 HA 中小爱音箱的在线状态"""
+    """Query Xiaomi speaker online status from HA."""
     if not HA_TOKEN:
         return jsonify({"error": "no HA_TOKEN"}), 500
     return jsonify(haclient.query_statuses(ROOM_MAP))
@@ -80,7 +81,7 @@ def version():
 
 
 def _handle_wav_passthrough(raw_audio, tmp_wav):
-    """ESP32 硬件按键发来的 PCM WAV → 直通，解析头返回 duration"""
+    """ESP32 hardware button → PCM WAV passthrough, parse header for duration."""
     with open(tmp_wav, "wb") as f:
         f.write(raw_audio)
     with wave.open(tmp_wav, "rb") as wf:
@@ -96,7 +97,7 @@ def _handle_wav_passthrough(raw_audio, tmp_wav):
 
 
 def _handle_webm_convert(raw_audio, target, tmp_wav):
-    """PWA 发来的 webm/opus → ffmpeg 转 16kHz mono WAV，返回 duration"""
+    """PWA webm/opus → ffmpeg to 16kHz mono WAV, return duration."""
     tmp_webm = f"{TMP_PREFIX}{target}.webm"
     with open(tmp_webm, "wb") as f:
         f.write(raw_audio)
@@ -137,14 +138,14 @@ def _handle_webm_convert(raw_audio, target, tmp_wav):
 
 @app.route("/convert", methods=["POST"])
 def convert():
-    """PWA 直连：接收音频 → 转换 → 本地 serve → 直接调 HA 播放"""
+    """PWA direct: receive audio → convert → local serve → direct HA playback."""
     target = request.args.get("target", "")
 
     raw_audio = request.get_data()
     if not raw_audio:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
-    # 全部广播：遍历所有有 entity 的房间
+    # Broadcast to all: iterate rooms with an entity
     if target == "all":
         targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
         if not targets:
@@ -155,26 +156,26 @@ def convert():
             return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
         targets = [(target, room)]
 
-    name = ROOM_MAP[target]["name"] if target != "all" else "全部"
+    name = ROOM_MAP[target]["name"] if target != "all" else "\u5168\u90e8"
     print(f"[intercom] Received {len(raw_audio)} bytes for {name}")
 
     tmp_wav = f"{TMP_PREFIX}{target}.wav"
     filename = f"intercom_{target}.wav"
 
-    # 分支：WAV 直通 vs webm 转码（魔数检测）
+    # Branch: WAV passthrough vs webm transcode (magic byte detection)
     if raw_audio[: len(WAV_MAGIC)] == WAV_MAGIC:
         duration = _handle_wav_passthrough(raw_audio, tmp_wav)
     else:
         duration = _handle_webm_convert(raw_audio, target, tmp_wav)
 
-    # 移动到本地音频目录，Flask 直接 serve
+    # Move to local audio dir for Flask serve
     dest = os.path.join(AUDIO_DIR, filename)
     shutil.move(tmp_wav, dest)
     scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
     audio_url = f"{scheme}://{request.host}/audio/{filename}"
     print(f"[intercom] Converted → {audio_url}")
 
-    # 直接调 HA API 播放，后台线程自动 pause
+    # Direct HA API playback with background auto-pause
     ok_count = 0
     for _tgt_key, tgt_room in targets:
         entity = tgt_room["entity"]
@@ -192,7 +193,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO, format="[intercom] %(message)s", stream=sys.stdout)
 
-    # trusted_proxy: set via TRUSTED_PROXY env (default '*' for homelab, restrict for production)
+    # trusted_proxy: set via TRUSTED_PROXY env (default '*' for homelab)
     trusted_proxy = os.environ.get("TRUSTED_PROXY", "*")
 
     print(f"[intercom] HA URL: {HA_URL}", flush=True)

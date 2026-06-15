@@ -1,4 +1,4 @@
-"""Flask 路由测试 — 用 app.test_client() 模拟请求"""
+"""Flask route tests — using app.test_client() to simulate requests."""
 
 import io
 import json
@@ -15,7 +15,7 @@ from intercom_server import TMP_PREFIX, app
 
 @pytest.fixture
 def client():
-    """Flask test client"""
+    """Flask test client."""
     app.config["TESTING"] = True
     with app.test_client() as c:
         yield c
@@ -32,10 +32,10 @@ class TestStaticRoutes:
         assert resp.status_code == 200
         data = json.loads(resp.data)
         assert "living" in data
-        assert data["living"]["name"] == "客厅"
+        assert data["living"]["name"] == "\u5ba2\u5385"
 
     def test_static_icon_192(self, client):
-        """icon-192.png exists in src/static/ — manifest is copied there at build time"""
+        """icon-192.png exists in src/static/ — manifest is copied there at build time."""
         resp = client.get("/static/icon-192.png")
         assert resp.status_code == 200
         assert resp.content_length > 0
@@ -55,7 +55,7 @@ class TestVersionRoute:
 
 class TestRoomsStatus:
     def test_returns_500_without_token(self, client, monkeypatch):
-        """Patch module-level HA_TOKEN to empty so endpoint returns 500"""
+        """Patch module-level HA_TOKEN to empty so endpoint returns 500."""
         monkeypatch.setattr("intercom_server.HA_TOKEN", "")
         resp = client.get("/rooms/status")
         assert resp.status_code == 500
@@ -77,7 +77,7 @@ class TestConvertValidation:
         assert "unknown" in data["error"].lower()
 
     def test_target_all_with_no_rooms(self, client, monkeypatch):
-        """When ROOM_MAP has no entities, broadcast should fail"""
+        """When ROOM_MAP has no entities, broadcast should fail."""
         import intercom_server
 
         monkeypatch.setattr(intercom_server, "ROOM_MAP", {})
@@ -129,7 +129,6 @@ class TestHandleWebmConvert:
             with patch("subprocess.run") as mock_run:
                 # Simulate ffmpeg producing a WAV file
                 def side_effect(*args, **kwargs):
-                    # Create a fake output WAV
                     import wave
 
                     with wave.open(wav_path, "wb") as wf:
@@ -177,7 +176,7 @@ class TestHandleWebmConvert:
 
 
 class TestWavMagicDetection:
-    """Test the WAV magic byte detection in convert()"""
+    """Test the WAV magic byte detection in convert()."""
 
     def test_wav_bytes_routed_to_passthrough(self, client, monkeypatch, tmp_path):
         import intercom_server
@@ -200,8 +199,8 @@ class TestWavMagicDetection:
             # Must actually create the file so shutil.move doesn't fail
             import wave
 
-            buf = io.BytesIO(raw)
-            with wave.open(buf, "rb") as wf_read:
+            buf2 = io.BytesIO(raw)
+            with wave.open(buf2, "rb") as wf_read:
                 params = wf_read.getparams()
             with wave.open(tmp_wav, "wb") as wf:
                 wf.setparams(params)
@@ -234,7 +233,6 @@ class TestWavMagicDetection:
                 wf.setsampwidth(2)
                 wf.setframerate(16000)
                 wf.writeframes(b"\x00\x00" * 16000)
-            # Move the file to AUDIO_DIR (mocked downstream)
             return 1.0
 
         monkeypatch.setattr(intercom_server, "_handle_webm_convert", fake_convert)
