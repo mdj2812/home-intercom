@@ -1,0 +1,47 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main, quality, 'dev/**', 'feat/**', 'fix/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: "Lint + Unit Tests"
+    runs-on: docker-build
+    container:
+      image: python:3.13-slim
+
+    steps:
+      - name: Install system deps (Node.js for JS syntax check)
+        run: |
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+            nodejs \
+            && rm -rf /var/lib/apt/lists/*
+
+      - name: Checkout
+        run: |
+          git clone --depth 1 \
+            ${{ github.server_url }}/${{ github.repository }}.git .
+          git fetch origin "${{ github.ref }}"
+          git checkout FETCH_HEAD
+
+      - name: Install Python deps
+        run: |
+          pip install --no-cache-dir -r src/requirements.txt
+          pip install --no-cache-dir -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: |
+          echo "=== Ruff Check ==="
+          ruff check src/ tests/
+          echo "=== Ruff Format Check ==="
+          ruff format --check src/ tests/
+
+      - name: Pytest with coverage
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            --cov=src \
+            --cov-report=term-missing \
+            --timeout=30

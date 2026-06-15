@@ -2,8 +2,16 @@
 """家庭广播系统 — 手机对讲站后端
 PWA POST 音频 → Flask 转换 → 本地 serve → 直接调 HA API 播放
 """
-import os, json, subprocess, shutil, sys, wave
-from flask import Flask, request, jsonify, send_from_directory
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import wave
+
+from flask import Flask, jsonify, request, send_from_directory
+
 from ha_client import HAClient
 
 app = Flask(__name__)
@@ -23,10 +31,10 @@ except Exception:
     VERSION = os.environ.get("VERSION", "dev")
 
 # ——— 音频处理常量 ———
-WAV_MAGIC = b'RIFF'           # WAV 文件魔数
+WAV_MAGIC = b"RIFF"  # WAV 文件魔数
 TMP_PREFIX = "/tmp/intercom_"  # 临时文件前缀
-FFMPEG_SR = 16000              # ffmpeg 输出采样率 (Hz)
-FFMPEG_BPS = 2                 # s16le = 2 bytes/sample
+FFMPEG_SR = 16000  # ffmpeg 输出采样率 (Hz)
+FFMPEG_BPS = 2  # s16le = 2 bytes/sample
 FFMPEG_BYTERATE = FFMPEG_SR * FFMPEG_BPS  # 16000 Hz × 2 = 32000 B/s
 
 # 从 rooms.json 加载房间配置
@@ -34,22 +42,29 @@ ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.jso
 with open(ROOMS_FILE) as f:
     ROOM_MAP = json.load(f)
 
+
 @app.route("/")
 def index():
     here = os.path.dirname(os.path.abspath(__file__))
     return send_from_directory(here, "intercom.html")
 
+
 @app.route("/rooms.json")
 def rooms():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 
+
 @app.route("/static/<path:filename>")
 def static_files(filename):
-    return send_from_directory(os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"), filename)
+    return send_from_directory(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"), filename
+    )
+
 
 @app.route("/audio/<path:filename>")
 def serve_audio(filename):
     return send_from_directory(AUDIO_DIR, filename)
+
 
 @app.route("/rooms/status")
 def rooms_status():
@@ -68,13 +83,15 @@ def _handle_wav_passthrough(raw_audio, tmp_wav):
     """ESP32 硬件按键发来的 PCM WAV → 直通，解析头返回 duration"""
     with open(tmp_wav, "wb") as f:
         f.write(raw_audio)
-    with wave.open(tmp_wav, 'rb') as wf:
+    with wave.open(tmp_wav, "rb") as wf:
         sr = wf.getframerate()
         nframes = wf.getnframes()
         sampwidth = wf.getsampwidth()
         duration = nframes / sr
-    print(f"[intercom] WAV passthrough {len(raw_audio)} bytes, "
-          f"{sr}Hz, {sampwidth*8}-bit, {duration:.1f}s")
+    print(
+        f"[intercom] WAV passthrough {len(raw_audio)} bytes, "
+        f"{sr}Hz, {sampwidth * 8}-bit, {duration:.1f}s"
+    )
     return duration
 
 
@@ -86,14 +103,29 @@ def _handle_webm_convert(raw_audio, target, tmp_wav):
     webm_size = os.path.getsize(tmp_webm)
     print(f"[intercom] webm: {webm_size} bytes → ffmpeg")
     try:
-        subprocess.run([
-            "ffmpeg", "-y", "-i", tmp_webm,
-            "-acodec", "pcm_s16le", "-ac", "1", "-ar", str(FFMPEG_SR),
-            tmp_wav
-        ], check=True, timeout=60, capture_output=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                tmp_webm,
+                "-acodec",
+                "pcm_s16le",
+                "-ac",
+                "1",
+                "-ar",
+                str(FFMPEG_SR),
+                tmp_wav,
+            ],
+            check=True,
+            timeout=60,
+            capture_output=True,
+        )
     except subprocess.CalledProcessError as e:
         stderr_text = e.stderr.decode(errors="replace") if e.stderr else "(no stderr)"
-        print(f"[intercom] ffmpeg FAILED webm={webm_size}b exit={e.returncode}: {stderr_text[:500]}")
+        print(
+            f"[intercom] ffmpeg FAILED webm={webm_size}b exit={e.returncode}: {stderr_text[:500]}"
+        )
         raise
     finally:
         if os.path.exists(tmp_webm):
@@ -130,7 +162,7 @@ def convert():
     filename = f"intercom_{target}.wav"
 
     # 分支：WAV 直通 vs webm 转码（魔数检测）
-    if raw_audio[:len(WAV_MAGIC)] == WAV_MAGIC:
+    if raw_audio[: len(WAV_MAGIC)] == WAV_MAGIC:
         duration = _handle_wav_passthrough(raw_audio, tmp_wav)
     else:
         duration = _handle_webm_convert(raw_audio, target, tmp_wav)
@@ -144,7 +176,7 @@ def convert():
 
     # 直接调 HA API 播放，后台线程自动 pause
     ok_count = 0
-    for tgt_key, tgt_room in targets:
+    for _tgt_key, tgt_room in targets:
         entity = tgt_room["entity"]
         haclient.play_and_auto_pause(entity, audio_url, duration)
         ok_count += 1
@@ -154,8 +186,9 @@ def convert():
 
 
 if __name__ == "__main__":
-    from waitress import serve
     import logging
+
+    from waitress import serve
 
     logging.basicConfig(level=logging.INFO, format="[intercom] %(message)s", stream=sys.stdout)
 
@@ -166,6 +199,10 @@ if __name__ == "__main__":
     print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
     print(f"[intercom] Trusted proxy: {trusted_proxy}", flush=True)
     print("[intercom] Starting on http://0.0.0.0:8764", flush=True)
-    serve(app, host="0.0.0.0", port=8764,
-          trusted_proxy=trusted_proxy,
-          trusted_proxy_headers={"x-forwarded-proto"})
+    serve(
+        app,
+        host="0.0.0.0",
+        port=8764,
+        trusted_proxy=trusted_proxy,
+        trusted_proxy_headers={"x-forwarded-proto"},
+    )

@@ -1,15 +1,19 @@
 """Home Assistant REST API 客户端
 封装所有 HA 交互：状态查询、服务调用、播放+自动暂停
 """
-import os, json, ssl, threading, time
-import urllib.request
+
+import json
+import ssl
+import threading
+import time
 import urllib.error
 import urllib.parse
+import urllib.request
 
 # ——— 重试常量 ———
-STATE_POLL_INTERVAL = 0.5   # 轮询 state 间隔 (s)
+STATE_POLL_INTERVAL = 0.5  # 轮询 state 间隔 (s)
 PLAYING_CONFIRM_RETRIES = 10  # 确认 "playing" 最多 10 次 (10×0.5s=5s)
-PAUSE_RETRIES = 5           # pause 重试次数
+PAUSE_RETRIES = 5  # pause 重试次数
 
 
 class HAClient:
@@ -22,8 +26,9 @@ class HAClient:
         self._token = token
         self._ctx = ssl._create_unverified_context()
 
-    def _request(self, method: str, path: str, data: dict | None = None,
-                 timeout: int = 10) -> tuple[int, dict | str]:
+    def _request(
+        self, method: str, path: str, data: dict | None = None, timeout: int = 10
+    ) -> tuple[int, dict | str]:
         """发送 HA API 请求，返回 (http_status, response_data_or_error_string)"""
         url = f"{self._base}{path}"
         body = json.dumps(data).encode() if data else None
@@ -65,11 +70,14 @@ class HAClient:
         等效于 n8n 的 play → poll state → wait → pause → verify 流水线。
         duration 参数为音频时长（秒）。
         """
-        ok = self.call("media_player/play_media", {
-            "entity_id": entity_id,
-            "media_content_id": audio_url,
-            "media_content_type": "music",
-        })
+        ok = self.call(
+            "media_player/play_media",
+            {
+                "entity_id": entity_id,
+                "media_content_id": audio_url,
+                "media_content_type": "music",
+            },
+        )
         if not ok:
             print(f"[intercom] HA play failed for {entity_id}")
             return
