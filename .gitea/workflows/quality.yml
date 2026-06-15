@@ -14,19 +14,13 @@ jobs:
       image: python:3.13-slim
 
     steps:
-      - name: Install system deps (git + Node.js for JS syntax check)
+      - uses: actions/checkout@v4
+
+      - name: Install system deps (Node.js for JS syntax check)
         run: |
           apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-            git \
             nodejs \
             && rm -rf /var/lib/apt/lists/*
-
-      - name: Checkout
-        run: |
-          git clone --depth 1 \
-            ${{ github.server_url }}/${{ github.repository }}.git .
-          git fetch origin "${{ github.ref }}"
-          git checkout FETCH_HEAD
 
       - name: Install Python deps
         run: |
