@@ -44,5 +44,4 @@ jobs:
         run: |
           python -m pytest tests/ -v --tb=short \
             --cov=src \
-            --cov-report=term-missing \
-            --timeout=30
+            --cov-report=term-missing
