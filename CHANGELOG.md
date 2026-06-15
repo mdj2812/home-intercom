@@ -1,4 +1,13 @@
+## v1.5.2 (2026-06-15)
+
+- **诊断** — ffmpeg 失败时打印完整 webm 大小、exit code、stderr，方便排查根因
+- **清理** — 删除不再需要的 `_handle_webm_convert()` 函数，逻辑内联
+
 # Changelog
+
+## v1.5.1 (2026-06-15)
+
+- **修复** — ffmpeg 失败时 `os.unlink()` 文件不存在导致 500 crash，加 `os.path.exists()` 守卫
 
 ## v1.5.0 (2026-06-15)
 

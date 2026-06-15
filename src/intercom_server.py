@@ -78,16 +78,26 @@ def _handle_wav_passthrough(raw_audio, tmp_wav):
     return duration
 
 
-def _handle_webm_convert(raw_audio, tmp_webm, tmp_wav):
+def _handle_webm_convert(raw_audio, target, tmp_wav):
     """PWA 发来的 webm/opus → ffmpeg 转 16kHz mono WAV，返回 duration"""
+    tmp_webm = f"{TMP_PREFIX}{target}.webm"
     with open(tmp_webm, "wb") as f:
         f.write(raw_audio)
-    subprocess.run([
-        "ffmpeg", "-y", "-i", tmp_webm,
-        "-acodec", "pcm_s16le", "-ac", "1", "-ar", str(FFMPEG_SR),
-        tmp_wav
-    ], check=True, timeout=60, capture_output=True)
-    os.unlink(tmp_webm)
+    webm_size = os.path.getsize(tmp_webm)
+    print(f"[intercom] webm: {webm_size} bytes → ffmpeg")
+    try:
+        subprocess.run([
+            "ffmpeg", "-y", "-i", tmp_webm,
+            "-acodec", "pcm_s16le", "-ac", "1", "-ar", str(FFMPEG_SR),
+            tmp_wav
+        ], check=True, timeout=60, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        stderr_text = e.stderr.decode(errors="replace") if e.stderr else "(no stderr)"
+        print(f"[intercom] ffmpeg FAILED webm={webm_size}b exit={e.returncode}: {stderr_text[:500]}")
+        raise
+    finally:
+        if os.path.exists(tmp_webm):
+            os.unlink(tmp_webm)
     size_out = os.path.getsize(tmp_wav)
     duration = size_out / FFMPEG_BYTERATE
     return duration
@@ -119,16 +129,16 @@ def convert():
     tmp_wav = f"{TMP_PREFIX}{target}.wav"
     filename = f"intercom_{target}.wav"
 
-    # 分支：WAV 直通 vs webm 转码（魔数检测，比扩展名更可靠）
+    # 分支：WAV 直通 vs webm 转码（魔数检测）
     if raw_audio[:len(WAV_MAGIC)] == WAV_MAGIC:
         duration = _handle_wav_passthrough(raw_audio, tmp_wav)
     else:
-        tmp_webm = f"{TMP_PREFIX}{target}.webm"
         try:
-            duration = _handle_webm_convert(raw_audio, tmp_webm, tmp_wav)
-        except subprocess.CalledProcessError as e:
-            print(f"[intercom] ffmpeg failed: {e.stderr.decode()}")
-            os.unlink(tmp_wav)  # 清理 ffmpeg 残留的部分输出文件
+            duration = _handle_webm_convert(raw_audio, target, tmp_wav)
+        except subprocess.CalledProcessError:
+            # 清理残留
+            if os.path.exists(tmp_wav):
+                os.unlink(tmp_wav)
             return jsonify({"ok": False, "error": "conversion failed"}), 500
 
     # 移动到本地音频目录，Flask 直接 serve
