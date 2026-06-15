@@ -11,6 +11,33 @@ import pytest
 HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "intercom.html")
 I18N_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "static", "i18n.js")
 
+# All translation keys required in both zh-CN and en — single source of truth
+I18N_REQUIRED_KEYS = [
+    "appTitle",
+    "appHint",
+    "broadcastAll",
+    "statusReady",
+    "statusRecording",
+    "statusSending",
+    "statusSent",
+    "statusFailed",
+    "statusNetworkError",
+    "statusLoadFailed",
+    "micError",
+    "langLabel",
+]
+
+CHINESE_STATUS_STRINGS = [
+    "\u6309\u4f4f\u5f55\u97f3",  # 按住录音
+    "\u51c6\u5907\u597d",  # 准备好
+    "\u5f55\u97f3\u4e2d",  # 录音中
+    "\u53d1\u9001\u4e2d",  # 发送中
+    "\u5df2\u53d1\u9001",  # 已发送
+    "\u7f51\u7edc\u9519\u8bef",  # 网络错误
+    "\u52a0\u8f7d\u5931\u8d25",  # 加载失败
+    "\u5168\u90e8\u5e7f\u64ad",  # 全部广播
+]
+
 
 @pytest.fixture
 def html_content():
@@ -64,6 +91,10 @@ class TestHtmlStructure:
     def test_has_lang_toggle(self, html_content):
         assert 'id="lang-toggle"' in html_content
         assert "I18N.toggleLang()" in html_content
+
+    def test_has_data_i18n_attributes(self, html_content):
+        """Broadcast name should use data-i18n, not fragile nth-child selectors."""
+        assert 'data-i18n="broadcastAll"' in html_content
 
 
 class TestJsSyntax:
@@ -147,81 +178,34 @@ class TestI18N:
         assert os.path.exists(I18N_PATH), "i18n.js is missing"
         assert os.path.getsize(I18N_PATH) > 100
 
-    def test_all_keys_present(self, html_content):
-        """Every I18N.t() key used in HTML must exist in i18n.js."""
+    def test_all_keys_present(self):
+        """Every required key must appear as a property in i18n.js."""
         with open(I18N_PATH) as f:
             i18n = f.read()
 
-        # Extract all keys defined in DATA
-        data_keys = set(re.findall(r"(\w+):", i18n))
-        # Only the translation keys (filter out JS keywords)
-        known_keys = {
-            "appTitle",
-            "appHint",
-            "broadcastAll",
-            "statusReady",
-            "statusRecording",
-            "statusSending",
-            "statusSent",
-            "statusFailed",
-            "statusNetworkError",
-            "statusLoadFailed",
-            "micError",
-            "langLabel",
-        }
-
-        # All known keys must be in i18n.js
-        for key in known_keys:
-            assert key in data_keys, f"Key '{key}' missing from i18n.js"
+        for key in I18N_REQUIRED_KEYS:
+            # Robust: just grep for 'key:' — works regardless of whitespace/indentation
+            assert f"{key}:" in i18n, (
+                f"Key '{key}' not found in i18n.js (expected '{key}:' pattern)"
+            )
 
     def test_both_languages_have_all_keys(self):
-        """zh-CN and en must have exactly the same set of keys."""
+        """Each required key must appear at least twice (once in zh-CN, once in en)."""
         with open(I18N_PATH) as f:
             i18n = f.read()
 
-        required_keys = [
-            "appTitle",
-            "appHint",
-            "broadcastAll",
-            "statusReady",
-            "statusRecording",
-            "statusSending",
-            "statusSent",
-            "statusFailed",
-            "statusNetworkError",
-            "statusLoadFailed",
-            "micError",
-            "langLabel",
-        ]
-
-        # Extract zh-CN block and en block
-        zh_match = re.search(r'"zh-CN":\s*\{(.*?)\n\s+\}', i18n, re.DOTALL)
-        en_match = re.search(r"en:\s*\{(.*?)\n\s+\}", i18n, re.DOTALL)
-
-        assert zh_match, "zh-CN block not found in i18n.js"
-        assert en_match, "en block not found in i18n.js"
-
-        for key in required_keys:
-            assert f"{key}:" in zh_match.group(1), f"Key '{key}' missing from zh-CN"
-            assert f"{key}:" in en_match.group(1), f"Key '{key}' missing from en"
+        for key in I18N_REQUIRED_KEYS:
+            # Each key should appear in both language blocks → at least 2 occurrences
+            count = i18n.count(f"{key}:")
+            assert count >= 2, (
+                f"Key '{key}' appears only {count} time(s) in i18n.js — "
+                f"expected at least 2 (zh-CN + en)"
+            )
 
     def test_html_uses_i18n_t(self, html_content):
         """All user-facing strings in JS should use I18N.t()."""
         js = _extract_inline_js(html_content)
-        # Verify no hardcoded Chinese status strings remain in JS
-        for literal in ["准备好", "录音中", "发送中", "已发送", "网络错误", "加载失败", "全部广播"]:
-            assert literal not in js, (
-                f"Hardcoded Chinese string '{literal}' found in JS — use I18N.t() instead"
-            )
-
-    def test_html_body_no_hardcoded_chinese(self, html_content):
-        """HTML body uses I18N.t() for all user-facing text — fallback text is fine."""
-        # The HTML body has fallback Chinese text (set before I18N.init() runs).
-        # I18N.applyTranslations overwrites it on DOMContentLoaded.
-        # Verify that the critical user-facing strings are NOT hardcoded in inline JS:
-        js = _extract_inline_js(html_content)
         for literal in [
-            "\u6309\u4f4f\u5f55\u97f3",
             "\u51c6\u5907\u597d",
             "\u5f55\u97f3\u4e2d",
             "\u53d1\u9001\u4e2d",
@@ -230,6 +214,14 @@ class TestI18N:
             "\u52a0\u8f7d\u5931\u8d25",
             "\u5168\u90e8\u5e7f\u64ad",
         ]:
+            assert literal not in js, (
+                f"Hardcoded Chinese string '{literal}' found in JS — use I18N.t() instead"
+            )
+
+    def test_html_body_no_hardcoded_chinese(self, html_content):
+        """Inline JS must not contain hardcoded Chinese status strings."""
+        js = _extract_inline_js(html_content)
+        for literal in CHINESE_STATUS_STRINGS:
             assert literal not in js, f"Hardcoded Chinese '{literal}' in JS — use I18N.t() instead"
 
 

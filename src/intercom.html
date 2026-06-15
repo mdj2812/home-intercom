@@ -367,7 +367,7 @@ function makeCard(target, name, isBroadcast) {
   card.innerHTML = `
     <div class="room-header">
       <span class="room-icon">${roomIcon(target)}</span>
-      <span>${name}</span>
+      <span${isBroadcast ? ' data-i18n="broadcastAll"' : ""}>${name}</span>
       <span class="dot"></span>
     </div>
     <div class="ptt-wrap">
@@ -488,18 +488,6 @@ async function pollSpeakerStatus() {
       dot.style.boxShadow = online ? '0 0 4px #33d17a' : 'none';
     }
   } catch (e) { /* ignore */ }
-}
-
-// Apply translations on DOM ready — I18N.init() handles document.readyState
-document.addEventListener('DOMContentLoaded', () => {
-  applyTranslations();
-});
-
-function applyTranslations() {
-  document.getElementById('app-title').textContent = I18N.t('appTitle');
-  document.getElementById('app-hint').textContent = I18N.t('appHint');
-  document.getElementById('lang-toggle').textContent = I18N.t('langLabel');
-  document.title = I18N.t('appTitle').replace(/^📢 /, '');
 }
 
 loadRooms();

@@ -66,9 +66,12 @@ const I18N = (() => {
     const langBtn = document.getElementById("lang-toggle");
     if (langBtn) langBtn.textContent = t("langLabel");
 
-    // Broadcast card name
-    const bcName = document.querySelector(".broadcast-card .room-header span:nth-child(2)");
+    // Broadcast card name — uses data-i18n attribute, not nth-child selector
+    const bcName = document.querySelector('[data-i18n="broadcastAll"]');
     if (bcName) bcName.textContent = t("broadcastAll");
+
+    // Page title
+    document.title = t("appTitle").replace(/^📢 /, "");
 
     // All status elements — reset to ready
     document.querySelectorAll(".room-card .status").forEach((el) => {
