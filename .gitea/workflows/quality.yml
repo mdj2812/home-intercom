@@ -16,8 +16,8 @@ jobs:
 
       - name: Install Python deps
         run: |
-          pip install --no-cache-dir -r src/requirements.txt
-          pip install --no-cache-dir -r requirements-dev.txt
+          pip install --break-system-packages --no-cache-dir -r src/requirements.txt
+          pip install --break-system-packages --no-cache-dir -r requirements-dev.txt
 
       - name: Ruff lint
         run: |
