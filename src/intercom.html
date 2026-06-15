@@ -367,7 +367,7 @@ function makeCard(target, name, isBroadcast) {
   card.innerHTML = `
     <div class="room-header">
       <span class="room-icon">${roomIcon(target)}</span>
-      <span${isBroadcast ? ' data-i18n="broadcastAll"' : ""}>${name}</span>
+      <span${isBroadcast ? ' data-i18n="broadcastAll"' : ` data-room-name="${target}"`}>${name}</span>
       <span class="dot"></span>
     </div>
     <div class="ptt-wrap">
@@ -402,6 +402,9 @@ function makeCard(target, name, isBroadcast) {
 }
 
 async function loadRooms() {
+  // Expose room data for i18n language switching
+  window._ROOM_DATA = {};
+  window._ROOM_DATA['all'] = { name: I18N.t('broadcastAll'), name_en: 'Broadcast All' };
   ROOM_NAMES['all'] = I18N.t('broadcastAll');
   GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
@@ -409,6 +412,7 @@ async function loadRooms() {
     const resp = await fetch('/rooms.json');
     const rooms = await resp.json();
     for (const [key, room] of Object.entries(rooms)) {
+      window._ROOM_DATA[key] = room;
       ROOM_NAMES[key] = room.name;
       GRID.appendChild(makeCard(key, room.name, false));
     }

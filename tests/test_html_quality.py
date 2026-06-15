@@ -224,6 +224,11 @@ class TestI18N:
         for literal in CHINESE_STATUS_STRINGS:
             assert literal not in js, f"Hardcoded Chinese '{literal}' in JS — use I18N.t() instead"
 
+    def test_data_room_name_attributes(self, html_content):
+        """Room cards must have data-room-name for i18n room name switching."""
+        assert "data-room-name=" in html_content
+        assert "window._ROOM_DATA" in html_content
+
 
 class TestManifestAndIcons:
     def test_manifest_json_valid(self):

@@ -66,9 +66,17 @@ const I18N = (() => {
     const langBtn = document.getElementById("lang-toggle");
     if (langBtn) langBtn.textContent = t("langLabel");
 
-    // Broadcast card name — uses data-i18n attribute, not nth-child selector
+    // Broadcast card name — uses data-i18n attribute
     const bcName = document.querySelector('[data-i18n="broadcastAll"]');
     if (bcName) bcName.textContent = t("broadcastAll");
+
+    // Room names — use name_en from rooms.json when in English mode
+    document.querySelectorAll("[data-room-name]").forEach((el) => {
+      const key = el.getAttribute("data-room-name");
+      const room = window._ROOM_DATA ? window._ROOM_DATA[key] : null;
+      if (!room) return;
+      el.textContent = lang === "en" && room.name_en ? room.name_en : room.name;
+    });
 
     // Page title
     document.title = t("appTitle").replace(/^📢 /, "");
