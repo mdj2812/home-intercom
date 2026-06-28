@@ -341,14 +341,12 @@ body {
 <script>
 const GRID = document.getElementById('grid');
 const RECORD_URL = '/record';
-const PCM_SAMPLE_RATE = 48000;
+const TARGET_RATE = 16000;
 
-let audioCtx = null;
-let scriptProc = null;
-let micStream = null;
+let mediaRecorder = null;
+let audioChunks = [];
 let currentTarget = '';
 let currentCard = null;
-let pcmChunks = [];
 let ROOM_NAMES = {};
 
 // Room icon mapping (extensible, falls back to 📢)
@@ -398,7 +396,7 @@ function makeCard(target, name, isBroadcast) {
     stopRecording();
   });
   btn.addEventListener('lostpointercapture', () => {
-    if (scriptProc) stopRecording();
+    if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
   });
   btn.addEventListener('touchstart', e => e.preventDefault());
   btn.addEventListener('contextmenu', e => e.preventDefault());
@@ -433,46 +431,21 @@ function setCardState(card, state, msg) {
   card.querySelector('.status').textContent = msg;
 }
 
-function float32ToPCM(input) {
-  const pcm = new Int16Array(input.length);
-  for (let i = 0; i < input.length; i++) {
-    const s = Math.max(-1, Math.min(1, input[i]));
-    pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-  }
-  return new Uint8Array(pcm.buffer);
-}
-
-function cleanupAudio() {
-  if (scriptProc) { scriptProc.disconnect(); scriptProc = null; }
-  if (audioCtx && audioCtx.state !== 'closed') {
-    audioCtx.close().catch(() => {});
-    audioCtx = null;
-  }
-  if (micStream) {
-    micStream.getTracks().forEach(t => t.stop());
-    micStream = null;
-  }
-  pcmChunks = [];
-}
-
 async function startRecording(target, card) {
   currentTarget = target;
   currentCard = card;
-  cleanupAudio();
+  audioChunks = [];
 
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: PCM_SAMPLE_RATE });
-    await audioCtx.resume();
-
-    const source = audioCtx.createMediaStreamSource(micStream);
-    scriptProc = audioCtx.createScriptProcessor(1024, 1, 1);
-    scriptProc.onaudioprocess = (e) => {
-      pcmChunks.push(float32ToPCM(e.inputBuffer.getChannelData(0)));
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = () => {
+      mediaRecorder.stream.getTracks().forEach(t => t.stop());
+      mediaRecorder = null;
+      processAndSend();
     };
-    source.connect(scriptProc);
-    scriptProc.connect(audioCtx.destination);
-
+    mediaRecorder.start();
     setCardState(card, 'recording', I18N.t('statusRecording'));
   } catch (e) {
     setCardState(card, '', I18N.t('micError') + e.message);
@@ -480,20 +453,46 @@ async function startRecording(target, card) {
 }
 
 function stopRecording() {
-  if (!scriptProc) return;
-  const chunks = pcmChunks;
-  const rate = audioCtx.sampleRate;
-  cleanupAudio();
-  setCardState(currentCard, 'sending', I18N.t('statusSending'));
-  sendAudio(chunks, rate);
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    setCardState(currentCard, 'sending', I18N.t('statusSending'));
+  }
 }
 
-async function sendAudio(chunks, rate) {
-  const pcm = new Blob(chunks);
+async function processAndSend() {
+  const webm = new Blob(audioChunks, { type: 'audio/webm' });
 
   try {
-    const resp = await fetch(RECORD_URL + '?target=' + currentTarget + '&rate=' + rate, {
-      method: 'POST', body: pcm,
+    // Decode webm/opus → AudioBuffer (browser's native decoder)
+    const arrayBuf = await webm.arrayBuffer();
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuf = await actx.decodeAudioData(arrayBuf);
+    const srcRate = audioBuf.sampleRate;
+    const srcData = audioBuf.getChannelData(0);
+    actx.close();
+
+    // Resample to TARGET_RATE using OfflineAudioContext
+    const duration = srcData.length / srcRate;
+    const offlineCtx = new OfflineAudioContext(1, Math.ceil(duration * TARGET_RATE), TARGET_RATE);
+    const bufferSrc = offlineCtx.createBufferSource();
+    const offlineBuf = offlineCtx.createBuffer(1, srcData.length, srcRate);
+    offlineBuf.copyToChannel(srcData, 0);
+    bufferSrc.buffer = offlineBuf;
+    bufferSrc.connect(offlineCtx.destination);
+    bufferSrc.start(0);
+
+    const rendered = await offlineCtx.startRendering();
+    const resampled = rendered.getChannelData(0);
+
+    // Float32 → Int16 PCM
+    const pcm = new Int16Array(resampled.length);
+    for (let i = 0; i < resampled.length; i++) {
+      const s = Math.max(-1, Math.min(1, resampled[i]));
+      pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+
+    const resp = await fetch(RECORD_URL + '?target=' + currentTarget + '&rate=' + TARGET_RATE, {
+      method: 'POST', body: new Blob([pcm.buffer]),
     });
 
     if (resp.ok) {
@@ -503,6 +502,7 @@ async function sendAudio(chunks, rate) {
     }
   } catch (e) {
     setCardState(currentCard, '', I18N.t('statusNetworkError'));
+    console.error('processAndSend:', e);
   }
 
   setTimeout(() => {
