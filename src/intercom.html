@@ -340,11 +340,19 @@ body {
 
 <script>
 const GRID = document.getElementById('grid');
-const CONVERT_URL = '/convert';
-let mediaRecorder = null;
-let audioChunks = [];
+const STREAM_URL = '/stream/start';
+const PCM_SAMPLE_RATE = 16000;
+const PCM_CHANNELS = 1;
+const SCRIPT_NODE_SIZE = 1024;  // buffer size per onaudioprocess callback
+
+let audioCtx = null;
+let scriptProc = null;
+let micStream = null;
 let currentTarget = '';
 let currentCard = null;
+let pcmChunks = [];          // Float32→Int16 PCM chunk queue
+let resolvePull = null;      // resolve pending ReadableStream pull()
+let abortCtrl = null;          // AbortController for the streaming fetch
 let ROOM_NAMES = {};
 
 // Room icon mapping (extensible, falls back to 📢)
@@ -386,14 +394,15 @@ function makeCard(target, name, isBroadcast) {
 
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    startRecording(target, card);
+    btn.setPointerCapture(e.pointerId);
+    startStreaming(target, card);
   });
   btn.addEventListener('pointerup', (e) => {
     e.preventDefault();
-    stopRecording();
+    stopStreaming();
   });
-  btn.addEventListener('pointerleave', (e) => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+  btn.addEventListener('lostpointercapture', (e) => {
+    if (abortCtrl) stopStreaming();
   });
   btn.addEventListener('touchstart', e => e.preventDefault());
   btn.addEventListener('contextmenu', e => e.preventDefault());
@@ -428,58 +437,135 @@ function setCardState(card, state, msg) {
   card.querySelector('.status').textContent = msg;
 }
 
-async function startRecording(target, card) {
+// ── Real-time PCM streaming (issue #7) ──────────────────────────
+
+/** Float32Array [-1,+1] → Int16Array little-endian bytes */
+function float32ToPCM(input) {
+  const pcm = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return new Uint8Array(pcm.buffer);
+}
+
+function cleanupAudio() {
+  if (scriptProc) {
+    scriptProc.disconnect();
+    scriptProc = null;
+  }
+  if (audioCtx && audioCtx.state !== 'closed') {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+  }
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  pcmChunks = [];
+  if (abortCtrl) {
+    abortCtrl.abort();
+    abortCtrl = null;
+  }
+  // Resolve any pending Pull to unblock ReadableStream
+  if (resolvePull) {
+    resolvePull();
+    resolvePull = null;
+  }
+}
+
+async function startStreaming(target, card) {
   currentTarget = target;
   currentCard = card;
-  audioChunks = [];
-
-  if (!mediaRecorder) {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => sendAudio();
-    } catch (e) {
-      setCardState(card, '', I18N.t('micError') + e.message);
-      return;
-    }
-  }
-
-  mediaRecorder.start();
-  setCardState(card, 'recording', I18N.t('statusRecording'));
-}
-
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
-    // Release mic immediately — data already captured in audioChunks
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    mediaRecorder = null;
-    setCardState(currentCard, 'sending', I18N.t('statusSending'));
-  }
-}
-
-async function sendAudio() {
-  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  cleanupAudio();
 
   try {
-    const resp = await fetch(CONVERT_URL + '?target=' + currentTarget, {
-      method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' }
+    // AudioContext at 16kHz to match server-side WAV header
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: PCM_SAMPLE_RATE });
+    const source = audioCtx.createMediaStreamSource(micStream);
+
+    // ScriptProcessorNode to access raw PCM samples
+    // Note: deprecated but still the most portable way to get raw PCM.
+    // AudioWorklet would be preferred but requires a separate file / CORS-safe URL.
+    scriptProc = audioCtx.createScriptProcessor(SCRIPT_NODE_SIZE, PCM_CHANNELS, PCM_CHANNELS);
+    scriptProc.onaudioprocess = (e) => {
+      const input = e.inputBuffer.getChannelData(0);
+      pcmChunks.push(float32ToPCM(input));
+      // Wake up the ReadableStream pull() if it's waiting
+      if (resolvePull) {
+        const r = resolvePull;
+        resolvePull = null;
+        r();
+      }
+    };
+
+    source.connect(scriptProc);
+    // Create a silent gain node to keep the audio graph alive
+    // without creating mic→speaker feedback loop.
+    const silentGain = audioCtx.createGain();
+    silentGain.gain.value = 0;
+    scriptProc.connect(silentGain);
+    silentGain.connect(audioCtx.destination);
+
+    // Ensure AudioContext is running (may be suspended by browser policy)
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+
+    // Log audio context state for debugging
+    const _ac = audioCtx;
+    console.log('[stream] AudioContext state:', _ac.state, 'sampleRate:', _ac.sampleRate);
+
+    // Build a ReadableStream that feeds PCM chunks to the HTTP request body
+    const streamBody = new ReadableStream({
+      pull(controller) {
+        if (pcmChunks.length > 0) {
+          controller.enqueue(pcmChunks.shift());
+          return Promise.resolve();
+        }
+        // No data yet — wait for onaudioprocess to push + resolve
+        return new Promise(resolve => { resolvePull = resolve; });
+      },
+      cancel() {
+        cleanupAudio();
+      }
+    });
+
+    abortCtrl = new AbortController();
+    setCardState(card, 'recording', I18N.t('statusRecording'));
+
+    const resp = await fetch(STREAM_URL + '?target=' + target, {
+      method: 'POST',
+      body: streamBody,
+      headers: { 'Content-Type': 'application/octet-stream' },
+      duplex: 'half',
+      signal: abortCtrl.signal,
     });
 
     if (resp.ok) {
-      setCardState(currentCard, 'sent', I18N.t('statusSent'));
+      setCardState(card, 'sent', I18N.t('statusSent'));
     } else {
-      setCardState(currentCard, '', I18N.t('statusFailed') + ' ' + resp.status);
+      setCardState(card, '', I18N.t('statusFailed') + ' ' + resp.status);
     }
   } catch (e) {
-    setCardState(currentCard, '', I18N.t('statusNetworkError'));
+    if (e.name === 'AbortError') return; // normal — stream cancelled
+    setCardState(card, '', I18N.t('micError') + e.message);
+  } finally {
+    cleanupAudio();
+    setTimeout(() => {
+      if (card) setCardState(card, '', I18N.t('statusReady'));
+    }, 1500);
   }
-
-  setTimeout(() => {
-    if (currentCard) setCardState(currentCard, '', I18N.t('statusReady'));
-  }, 1500);
 }
+
+function stopStreaming() {
+  // Closing the AudioContext will cause ScriptProcessor to stop firing,
+  // which will unblock the ReadableStream pull() → stream ends → fetch completes.
+  cleanupAudio();
+}
+
+// ── Speaker status polling ──────────────────────────────────────
 
 async function pollSpeakerStatus() {
   try {

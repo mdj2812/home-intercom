@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Home Intercom — PWA-based family broadcast system backend.
 
-PWA POST audio → Flask convert → local serve → direct HA API playback.
+PWA POST PCM → Flask write WAV → local serve → direct HA API playback.
 """
 
 import json
 import os
-import shutil
-import subprocess
 import sys
 import wave
 
@@ -16,6 +14,8 @@ from flask import Flask, jsonify, request, send_from_directory
 from ha_client import HAClient
 
 app = Flask(__name__)
+
+PCM_RATE = 16000  # 16kHz mono PCM
 
 HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
@@ -31,13 +31,6 @@ try:
 except Exception:
     VERSION = os.environ.get("VERSION", "dev")
 
-# ——— Audio processing constants ———
-WAV_MAGIC = b"RIFF"  # WAV file magic bytes
-TMP_PREFIX = "/tmp/intercom_"  # temp file prefix
-FFMPEG_SR = 16000  # ffmpeg output sample rate (Hz)
-FFMPEG_BPS = 2  # s16le = 2 bytes/sample
-FFMPEG_BYTERATE = FFMPEG_SR * FFMPEG_BPS  # 16000 Hz × 2 = 32000 B/s
-
 # Load room config from rooms.json
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 with open(ROOMS_FILE) as f:
@@ -46,20 +39,12 @@ with open(ROOMS_FILE) as f:
 
 @app.route("/")
 def index():
-    here = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(here, "intercom.html")
+    return send_from_directory(".", "intercom.html")
 
 
 @app.route("/rooms.json")
 def rooms():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
-
-
-@app.route("/static/<path:filename>")
-def static_files(filename):
-    return send_from_directory(
-        os.path.join(os.path.dirname(os.path.abspath(__file__)), "static"), filename
-    )
+    return send_from_directory(".", "rooms.json")
 
 
 @app.route("/audio/<path:filename>")
@@ -69,10 +54,8 @@ def serve_audio(filename):
 
 @app.route("/rooms/status")
 def rooms_status():
-    """Query Xiaomi speaker online status from HA."""
-    if not HA_TOKEN:
-        return jsonify({"error": "no HA_TOKEN"}), 500
-    return jsonify(haclient.query_statuses(ROOM_MAP))
+    status = haclient.query_statuses(ROOM_MAP)
+    return jsonify(status)
 
 
 @app.route("/version")
@@ -80,109 +63,97 @@ def version():
     return jsonify({"version": VERSION})
 
 
-def _handle_wav_passthrough(raw_audio, tmp_wav):
-    """ESP32 hardware button → PCM WAV passthrough, parse header for duration."""
-    with open(tmp_wav, "wb") as f:
-        f.write(raw_audio)
-    with wave.open(tmp_wav, "rb") as wf:
-        sr = wf.getframerate()
-        nframes = wf.getnframes()
-        sampwidth = wf.getsampwidth()
-        duration = nframes / sr
-    print(
-        f"[intercom] WAV passthrough {len(raw_audio)} bytes, "
-        f"{sr}Hz, {sampwidth * 8}-bit, {duration:.1f}s"
-    )
-    return duration
+# ═══════════════════════════════════════════════════════════════════
+#  PCM streaming route  (issue #7)
+# ═══════════════════════════════════════════════════════════════════
+
+_STREAM_CHUNK = 4096  # read request.stream in 4 KiB chunks
 
 
-def _handle_webm_convert(raw_audio, target, tmp_wav):
-    """PWA webm/opus → ffmpeg to 16kHz mono WAV, return duration."""
-    tmp_webm = f"{TMP_PREFIX}{target}.webm"
-    with open(tmp_webm, "wb") as f:
-        f.write(raw_audio)
-    webm_size = os.path.getsize(tmp_webm)
-    print(f"[intercom] webm: {webm_size} bytes → ffmpeg")
-    try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                tmp_webm,
-                "-acodec",
-                "pcm_s16le",
-                "-ac",
-                "1",
-                "-ar",
-                str(FFMPEG_SR),
-                tmp_wav,
-            ],
-            check=True,
-            timeout=60,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError as e:
-        stderr_text = e.stderr.decode(errors="replace") if e.stderr else "(no stderr)"
-        print(
-            f"[intercom] ffmpeg FAILED webm={webm_size}b exit={e.returncode}: {stderr_text[:500]}"
-        )
-        raise
-    finally:
-        if os.path.exists(tmp_webm):
-            os.unlink(tmp_webm)
-    size_out = os.path.getsize(tmp_wav)
-    duration = size_out / FFMPEG_BYTERATE
-    return duration
+def _resolve_targets(target: str) -> list[tuple[str, dict]]:
+    """Resolve a target string into a list of (key, room_dict) pairs."""
+    if target == "all":
+        return [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
+    room = ROOM_MAP.get(target)
+    if not room or not room.get("entity"):
+        return []
+    return [(target, room)]
 
 
-@app.route("/convert", methods=["POST"])
-def convert():
-    """PWA direct: receive audio → convert → local serve → direct HA playback."""
+@app.route("/stream/start", methods=["POST"])
+def stream_start():
+    """Receive PCM stream from PWA → write WAV → HA playback.
+
+    PWA sends a ReadableStream body (16kHz mono 16-bit signed int PCM).
+    PCM is accumulated and written as a complete WAV file with correct header.
+    HA play_and_auto_pause plays the file — Xiaomi gateway downloads and plays it.
+    """
+    import uuid
+
     target = request.args.get("target", "")
+    if not target:
+        return jsonify({"ok": False, "error": "missing target"}), 400
 
-    raw_audio = request.get_data()
-    if not raw_audio:
+    targets = _resolve_targets(target)
+    if not targets:
+        return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
+
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.host
+    public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
+    if public_base:
+        base = public_base
+    else:
+        base = f"{scheme}://{host}"
+
+    # ── Accumulate PCM from request.stream ─────────────────────────
+    pcm = bytearray()
+    pcm_started = False
+
+    try:
+        while True:
+            chunk = request.stream.read(_STREAM_CHUNK)
+            if not chunk:
+                break
+            if not pcm_started:
+                pcm_started = True
+                print(f"[intercom] stream PCM arriving for {target}")
+            pcm.extend(chunk)
+    except Exception as e:
+        print(f"[intercom] stream read error: {e}")
+
+    if len(pcm) < 44:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
-    # Broadcast to all: iterate rooms with an entity
-    if target == "all":
-        targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
-        if not targets:
-            return jsonify({"ok": False, "error": "no rooms configured"}), 500
-    else:
-        room = ROOM_MAP.get(target)
-        if not room or not room.get("entity"):
-            return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
-        targets = [(target, room)]
+    # ── Write WAV file (16kHz mono 16-bit PCM) ─────────────────────
+    filename = f"{uuid.uuid4().hex}.wav"
+    filepath = os.path.join(AUDIO_DIR, filename)
+    n_samples = len(pcm) // 2
 
-    name = ROOM_MAP[target]["name"] if target != "all" else "\u5168\u90e8"
-    print(f"[intercom] Received {len(raw_audio)} bytes for {name}")
+    with wave.open(filepath, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(PCM_RATE)
+        wf.writeframes(pcm)
 
-    tmp_wav = f"{TMP_PREFIX}{target}.wav"
-    filename = f"intercom_{target}.wav"
+    duration = n_samples / PCM_RATE
+    file_size = os.path.getsize(filepath)
+    print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s)")
 
-    # Branch: WAV passthrough vs webm transcode (magic byte detection)
-    if raw_audio[: len(WAV_MAGIC)] == WAV_MAGIC:
-        duration = _handle_wav_passthrough(raw_audio, tmp_wav)
-    else:
-        duration = _handle_webm_convert(raw_audio, target, tmp_wav)
-
-    # Move to local audio dir for Flask serve
-    dest = os.path.join(AUDIO_DIR, filename)
-    shutil.move(tmp_wav, dest)
-    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
-    audio_url = f"{scheme}://{request.host}/audio/{filename}"
-    print(f"[intercom] Converted → {audio_url}")
-
-    # Direct HA API playback with background auto-pause
+    # ── Play on all targets ────────────────────────────────────────
+    audio_url = f"{base}/audio/{filename}"
     ok_count = 0
     for _tgt_key, tgt_room in targets:
         entity = tgt_room["entity"]
-        haclient.play_and_auto_pause(entity, audio_url, duration)
+        ok = haclient.play_and_auto_pause(entity, audio_url, duration)
+        if not ok:
+            print(f"[intercom] HA play failed for {tgt_room['name']}")
+            continue
         ok_count += 1
         print(f"[intercom] HA play → {tgt_room['name']}")
 
+    name = ROOM_MAP[target]["name"] if target != "all" else "全部"
+    print(f"[intercom] stream ended for {name} → {ok_count}/{len(targets)} rooms")
     return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
 
 
