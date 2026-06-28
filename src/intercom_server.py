@@ -19,10 +19,10 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 
 haclient = HAClient(HA_URL, HA_TOKEN)
 
-PCM_RATE = 16000       # target sample rate (Hz) for Xiaomi speaker WAV output
-PCM_BPS = 2            # 16-bit audio = 2 bytes per sample
+PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
+PCM_BPS = 2  # 16-bit audio = 2 bytes per sample
 WAV_MAGIC = b"RIFF"
-WAV_HEADER_SIZE = 44   # RIFF(12) + fmt(24) + data(8) = minimum valid WAV header
+WAV_HEADER_SIZE = 44  # RIFF(12) + fmt(24) + data(8) = minimum valid WAV header
 
 # ——— Version ———
 try:
@@ -103,8 +103,10 @@ def _handle_pcm_to_wav(data, rate, filepath):
         wf.writeframes(data)
     duration = len(data) / (rate * PCM_BPS)
     file_size = os.path.getsize(filepath)
-    print(f"[intercom] WAV written: {os.path.basename(filepath)} "
-          f"({file_size}B, {duration:.1f}s, {rate}Hz)")
+    print(
+        f"[intercom] WAV written: {os.path.basename(filepath)} "
+        f"({file_size}B, {duration:.1f}s, {rate}Hz)"
+    )
     return duration
 
 
@@ -135,7 +137,7 @@ def record():
     filename = f"intercom_{target}.wav"
     filepath = os.path.join(AUDIO_DIR, filename)
 
-    if data[:len(WAV_MAGIC)] == WAV_MAGIC:
+    if data[: len(WAV_MAGIC)] == WAV_MAGIC:
         _rate, duration = _handle_wav_passthrough(data, filepath)
     else:
         rate = int(request.args.get("rate", PCM_RATE))
