@@ -180,11 +180,6 @@ class HAWebSocketClient:
                             if self._waiter is None or eid != self._entity_id:
                                 continue
                             expected = self._expected_state
-                            print(
-                                f"[intercom] ws event: {eid}"
-                                f" → state={state!r}"
-                                f" (expected={expected!r})"
-                            )
                             if expected is None:
                                 # pause-confirm: anything != "playing"
                                 if state != "playing":
