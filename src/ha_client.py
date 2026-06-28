@@ -552,13 +552,28 @@ class HAClient:
         t0 = time.monotonic()
         ws = self._ws  # local snapshot for type narrowing + thread safety
         use_ws = ws is not None and ws.ready
+        playing_confirmed = False
 
         try:
             # 1) Confirm "playing" state
-            if use_ws and ws.wait_for_state(entity_id, "playing", WS_PLAYING_TIMEOUT):
-                _logger.info(f"[intercom] {entity_id} playing confirmed (ws)")
+            # Quick REST pre-check (avoid race: state may have changed
+            # before WS waiter was registered)
+            if self.state(entity_id) == "playing":
+                _logger.info(f"[intercom] {entity_id} already playing (already there)")
+                playing_confirmed = True
+            elif use_ws:
+                assert ws is not None
+                _logger.info(f"[intercom] {entity_id} waiting for playing via ws...")
+                if ws.wait_for_state(entity_id, "playing", WS_PLAYING_TIMEOUT):
+                    _logger.info(f"[intercom] {entity_id} playing confirmed (ws)")
+                    playing_confirmed = True
+                else:
+                    _logger.info(f"[intercom] {entity_id} ws timeout for playing, polling")
             else:
-                # Fallback to REST polling
+                _logger.info(f"[intercom] {entity_id} ws not ready, polling")
+
+            if not playing_confirmed:
+                # Polling fallback (ws timed out or not available)
                 for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
                     state = self.state(entity_id)
                     if state == "playing":
@@ -566,9 +581,10 @@ class HAClient:
                             f"[intercom] {entity_id} playing confirmed"
                             f" (poll attempt {attempt})"
                         )
+                        playing_confirmed = True
                         break
                     time.sleep(STATE_POLL_INTERVAL)
-                else:
+                if not playing_confirmed:
                     _logger.info(
                         f"[intercom] {entity_id} short audio"
                         " (polling missed 'playing'), pausing"
@@ -585,11 +601,17 @@ class HAClient:
                 time.sleep(remaining)
 
             # 3) Pause + confirm stopped
+            # Quick REST pre-check (already stopped)
+            if self.state(entity_id) != "playing":
+                _logger.info(f"[intercom] {entity_id} paused (already stopped)")
+                return
+
             for attempt in range(1, PAUSE_RETRIES + 1):
                 self.call("media_player/media_pause", {"entity_id": entity_id})
 
                 if use_ws:
                     assert ws is not None  # guarded by use_ws
+                    _logger.info(f"[intercom] {entity_id} waiting for pause via ws...")
                     if ws.wait_for_state(entity_id, None, WS_PAUSE_TIMEOUT):
                         _logger.info(f"[intercom] {entity_id} paused (ws)")
                         return
