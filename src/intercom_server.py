@@ -73,12 +73,15 @@ def version():
 
 @app.route("/record", methods=["POST"])
 def record():
-    """Receive raw PCM from PWA → write WAV → HA playback."""
+    """Receive audio → write WAV → HA playback.
+
+    Supports two input formats:
+    - Raw PCM (PWA): body is 16-bit mono PCM, wrapped into WAV
+    - WAV passthrough (ESP32): body is a complete WAV file, written as-is
+    """
     target = request.args.get("target", "")
     if not target:
         return jsonify({"ok": False, "error": "missing target"}), 400
-
-    rate = int(request.args.get("rate", PCM_RATE))
 
     if target == "all":
         targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
@@ -88,22 +91,36 @@ def record():
             return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
         targets = [(target, room)]
 
-    pcm = request.get_data()
-    if len(pcm) < 44:
+    data = request.get_data()
+    if len(data) < 44:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
     filename = f"{uuid.uuid4().hex}.wav"
     filepath = os.path.join(AUDIO_DIR, filename)
 
-    with wave.open(filepath, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(rate)
-        wf.writeframes(pcm)
-
-    duration = len(pcm) / (rate * 2)
-    file_size = os.path.getsize(filepath)
-    print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s, {rate}Hz)")
+    if data[:4] == b"RIFF":
+        # ── WAV passthrough (ESP32 button) ──────────────────────────
+        with open(filepath, "wb") as f:
+            f.write(data)
+        with wave.open(filepath, "rb") as wf:
+            rate = wf.getframerate()
+            nch = wf.getnchannels()
+            sw = wf.getsampwidth()
+            nframes = wf.getnframes()
+            duration = nframes / rate
+        print(f"[intercom] WAV passthrough {len(data)}B, {rate}Hz, "
+              f"{nch}ch, {sw * 8}bit, {duration:.1f}s")
+    else:
+        # ── Raw PCM (PWA) ───────────────────────────────────────────
+        rate = int(request.args.get("rate", PCM_RATE))
+        with wave.open(filepath, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(rate)
+            wf.writeframes(data)
+        duration = len(data) / (rate * 2)
+        file_size = os.path.getsize(filepath)
+        print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s, {rate}Hz)")
 
     public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
     scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
