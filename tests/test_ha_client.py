@@ -10,7 +10,6 @@ from ha_client import (
     SUPPORT_PLAY_MEDIA,
     SUPPORT_REPEAT_SET,
     HAClient,
-    HAWebSocketClient,
 )
 
 
