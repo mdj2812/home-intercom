@@ -71,6 +71,24 @@ def version():
     return jsonify({"version": VERSION})
 
 
+def _handle_wav_passthrough(data, filepath):
+    """ESP32 hardware button → complete WAV file, write as-is.
+
+    Returns (sample_rate, duration_seconds).
+    """
+    with open(filepath, "wb") as f:
+        f.write(data)
+    with wave.open(filepath, "rb") as wf:
+        rate = wf.getframerate()
+        nframes = wf.getnframes()
+        duration = nframes / rate
+    print(
+        f"[intercom] WAV passthrough {len(data)}B, "
+        f"{rate}Hz, {wf.getnchannels()}ch, {wf.getsampwidth() * 8}bit, {duration:.1f}s"
+    )
+    return rate, duration
+
+
 @app.route("/record", methods=["POST"])
 def record():
     """Receive audio → write WAV → HA playback.
@@ -99,19 +117,8 @@ def record():
     filepath = os.path.join(AUDIO_DIR, filename)
 
     if data[:4] == b"RIFF":
-        # ── WAV passthrough (ESP32 button) ──────────────────────────
-        with open(filepath, "wb") as f:
-            f.write(data)
-        with wave.open(filepath, "rb") as wf:
-            rate = wf.getframerate()
-            nch = wf.getnchannels()
-            sw = wf.getsampwidth()
-            nframes = wf.getnframes()
-            duration = nframes / rate
-        print(f"[intercom] WAV passthrough {len(data)}B, {rate}Hz, "
-              f"{nch}ch, {sw * 8}bit, {duration:.1f}s")
+        _rate, duration = _handle_wav_passthrough(data, filepath)
     else:
-        # ── Raw PCM (PWA) ───────────────────────────────────────────
         rate = int(request.args.get("rate", PCM_RATE))
         with wave.open(filepath, "wb") as wf:
             wf.setnchannels(1)
@@ -122,6 +129,8 @@ def record():
         file_size = os.path.getsize(filepath)
         print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s, {rate}Hz)")
 
+    # Build public URL — PUBLIC_URL env for reverse proxy (e.g. Caddy),
+    # fall back to X-Forwarded-Proto / request.host for direct access.
     public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
     scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
     base = public_base or f"{scheme}://{request.host}"
