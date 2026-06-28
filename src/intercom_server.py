@@ -4,6 +4,8 @@
 import json
 import os
 import sys
+import uuid
+import wave
 
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -17,6 +19,8 @@ AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 haclient = HAClient(HA_URL, HA_TOKEN)
+
+PCM_RATE = 16000  # 16 kHz mono PCM
 
 # ——— Version ———
 try:
@@ -65,6 +69,53 @@ def rooms_status():
 @app.route("/version")
 def version():
     return jsonify({"version": VERSION})
+
+
+@app.route("/record", methods=["POST"])
+def record():
+    """Receive raw PCM from PWA → write WAV → HA playback."""
+    target = request.args.get("target", "")
+    if not target:
+        return jsonify({"ok": False, "error": "missing target"}), 400
+
+    if target == "all":
+        targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
+    else:
+        room = ROOM_MAP.get(target)
+        if not room or not room.get("entity"):
+            return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
+        targets = [(target, room)]
+
+    pcm = request.get_data()
+    if len(pcm) < 44:
+        return jsonify({"ok": False, "error": "no audio data"}), 400
+
+    filename = f"{uuid.uuid4().hex}.wav"
+    filepath = os.path.join(AUDIO_DIR, filename)
+
+    with wave.open(filepath, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(PCM_RATE)
+        wf.writeframes(pcm)
+
+    duration = len(pcm) / (PCM_RATE * 2)
+    file_size = os.path.getsize(filepath)
+    print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s)")
+
+    public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    base = public_base or f"{scheme}://{request.host}"
+    audio_url = f"{base}/audio/{filename}"
+
+    ok_count = 0
+    for _tgt_key, tgt_room in targets:
+        if haclient.play_and_auto_pause(tgt_room["entity"], audio_url, duration):
+            ok_count += 1
+
+    name = ROOM_MAP[target]["name"] if target != "all" else "全部"
+    print(f"[intercom] played on {ok_count}/{len(targets)} rooms for {name}")
+    return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
 
 
 if __name__ == "__main__":

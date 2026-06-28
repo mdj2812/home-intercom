@@ -340,11 +340,15 @@ body {
 
 <script>
 const GRID = document.getElementById('grid');
-const CONVERT_URL = '/convert';
-let mediaRecorder = null;
-let audioChunks = [];
+const RECORD_URL = '/record';
+const PCM_SAMPLE_RATE = 16000;
+
+let audioCtx = null;
+let scriptProc = null;
+let micStream = null;
 let currentTarget = '';
 let currentCard = null;
+let pcmChunks = [];
 let ROOM_NAMES = {};
 
 // Room icon mapping (extensible, falls back to 📢)
@@ -386,14 +390,15 @@ function makeCard(target, name, isBroadcast) {
 
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
+    btn.setPointerCapture(e.pointerId);
     startRecording(target, card);
   });
   btn.addEventListener('pointerup', (e) => {
     e.preventDefault();
     stopRecording();
   });
-  btn.addEventListener('pointerleave', (e) => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+  btn.addEventListener('lostpointercapture', () => {
+    if (scriptProc) stopRecording();
   });
   btn.addEventListener('touchstart', e => e.preventDefault());
   btn.addEventListener('contextmenu', e => e.preventDefault());
@@ -428,43 +433,65 @@ function setCardState(card, state, msg) {
   card.querySelector('.status').textContent = msg;
 }
 
+function float32ToPCM(input) {
+  const pcm = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return new Uint8Array(pcm.buffer);
+}
+
+function cleanupAudio() {
+  if (scriptProc) { scriptProc.disconnect(); scriptProc = null; }
+  if (audioCtx && audioCtx.state !== 'closed') {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+  }
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  pcmChunks = [];
+}
+
 async function startRecording(target, card) {
   currentTarget = target;
   currentCard = card;
-  audioChunks = [];
+  cleanupAudio();
 
-  if (!mediaRecorder) {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.onstop = () => sendAudio();
-    } catch (e) {
-      setCardState(card, '', I18N.t('micError') + e.message);
-      return;
-    }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: PCM_SAMPLE_RATE });
+    await audioCtx.resume();
+
+    const source = audioCtx.createMediaStreamSource(micStream);
+    scriptProc = audioCtx.createScriptProcessor(1024, 1, 1);
+    scriptProc.onaudioprocess = (e) => {
+      pcmChunks.push(float32ToPCM(e.inputBuffer.getChannelData(0)));
+    };
+    source.connect(scriptProc);
+    scriptProc.connect(audioCtx.destination);
+
+    setCardState(card, 'recording', I18N.t('statusRecording'));
+  } catch (e) {
+    setCardState(card, '', I18N.t('micError') + e.message);
   }
-
-  mediaRecorder.start();
-  setCardState(card, 'recording', I18N.t('statusRecording'));
 }
 
 function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
-    // Release mic immediately — data already captured in audioChunks
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    mediaRecorder = null;
-    setCardState(currentCard, 'sending', I18N.t('statusSending'));
-  }
+  if (!scriptProc) return;
+  cleanupAudio();
+  setCardState(currentCard, 'sending', I18N.t('statusSending'));
+  sendAudio();
 }
 
 async function sendAudio() {
-  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  const pcm = new Blob(pcmChunks);
 
   try {
-    const resp = await fetch(CONVERT_URL + '?target=' + currentTarget, {
-      method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' }
+    const resp = await fetch(RECORD_URL + '?target=' + currentTarget, {
+      method: 'POST', body: pcm,
     });
 
     if (resp.ok) {
