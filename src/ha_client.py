@@ -116,76 +116,84 @@ class HAWebSocketClient:
         if self._ws_url.startswith("wss"):
             ssl_ctx = ssl._create_unverified_context()
 
-        async for ws in websockets.connect(self._ws_url, ssl=ssl_ctx, max_size=2**20):
+        while self._running:
             try:
-                # Phase 1: receive auth_ok (server says it's ready for auth)
-                msg = json.loads(await ws.recv())
-                if msg.get("type") != "auth_ok":
-                    print(f"[intercom] WebSocket unexpected msg: {msg}")
-                    return
+                async with websockets.connect(
+                    self._ws_url, ssl=ssl_ctx, max_size=2**20
+                ) as ws:
+                    # Phase 1: server sends auth_required (or auth_ok on older HA)
+                    msg = json.loads(await ws.recv())
+                    if msg.get("type") not in ("auth_required", "auth_ok"):
+                        print(f"[intercom] WebSocket unexpected msg: {msg}")
+                        return  # protocol mismatch, don't retry
 
-                # Phase 2: send auth with long-lived access token
-                self._msg_id += 1
-                await ws.send(json.dumps({
-                    "type": "auth",
-                    "access_token": self._token,
-                    "id": self._msg_id,
-                }))
-                msg = json.loads(await ws.recv())
-                if msg.get("type") != "auth_ok":
-                    print(f"[intercom] WebSocket auth failed: {msg}")
-                    return
+                    # Phase 2: send auth with long-lived access token
+                    self._msg_id += 1
+                    await ws.send(json.dumps({
+                        "type": "auth",
+                        "access_token": self._token,
+                        "id": self._msg_id,
+                    }))
+                    msg = json.loads(await ws.recv())
+                    if msg.get("type") != "auth_ok":
+                        print(f"[intercom] WebSocket auth failed: {msg}")
+                        return  # auth failure, don't retry
 
-                # Phase 3: subscribe to state_changed events
-                self._msg_id += 1
-                await ws.send(json.dumps({
-                    "id": self._msg_id,
-                    "type": "subscribe_events",
-                    "event_type": "state_changed",
-                }))
-                msg = json.loads(await ws.recv())
-                if not msg.get("success"):
-                    print(f"[intercom] WebSocket subscribe failed: {msg}")
-                    return
+                    # Phase 3: subscribe to state_changed events
+                    self._msg_id += 1
+                    await ws.send(json.dumps({
+                        "id": self._msg_id,
+                        "type": "subscribe_events",
+                        "event_type": "state_changed",
+                    }))
+                    msg = json.loads(await ws.recv())
+                    if not msg.get("success"):
+                        print(f"[intercom] WebSocket subscribe failed: {msg}")
+                        return
 
-                self._connected.set()
-                print("[intercom] WebSocket connected, subscribed to state_changed")
+                    self._connected.set()
+                    print(
+                        "[intercom] WebSocket connected,"
+                        " subscribed to state_changed"
+                    )
 
-                # Event loop: dispatch state_changed events to waiting callers
-                while self._running:
-                    try:
-                        msg = json.loads(
-                            await asyncio.wait_for(ws.recv(), timeout=5.0)
-                        )
-                    except asyncio.TimeoutError:
-                        continue  # no event, loop back
-
-                    if msg.get("type") != "event":
-                        continue
-
-                    event_data = msg.get("event", {})
-                    if event_data.get("event_type") != "state_changed":
-                        continue
-
-                    data = event_data.get("data", {})
-                    eid = data.get("entity_id", "")
-                    new_state = data.get("new_state", {}) or {}
-                    state = new_state.get("state", "")
-
-                    with self._lock:
-                        if self._waiter is None or eid != self._entity_id:
+                    # Event loop: dispatch state_changed events to callers
+                    while self._running:
+                        try:
+                            msg = json.loads(
+                                await asyncio.wait_for(ws.recv(), timeout=5.0)
+                            )
+                        except asyncio.TimeoutError:
                             continue
-                        expected = self._expected_state
-                        if expected is None:
-                            # pause-confirm mode: anything != "playing"
-                            if state != "playing":
+
+                        if msg.get("type") != "event":
+                            continue
+
+                        event_data = msg.get("event", {})
+                        if event_data.get("event_type") != "state_changed":
+                            continue
+
+                        data = event_data.get("data", {})
+                        eid = data.get("entity_id", "")
+                        new_state = data.get("new_state", {}) or {}
+                        state = new_state.get("state", "")
+
+                        with self._lock:
+                            if self._waiter is None or eid != self._entity_id:
+                                continue
+                            expected = self._expected_state
+                            if expected is None:
+                                # pause-confirm: anything != "playing"
+                                if state != "playing":
+                                    self._waiter.set()
+                            elif state == expected:
                                 self._waiter.set()
-                        elif state == expected:
-                            self._waiter.set()
 
             except Exception:
-                self._connected.clear()
-                await asyncio.sleep(2)  # reconnect delay
+                pass  # connection lost, will reconnect
+
+            self._connected.clear()
+            await asyncio.sleep(2)  # reconnect delay
 
     def wait_for_state(
         self, entity_id: str, expected_state: str | None, timeout: float
