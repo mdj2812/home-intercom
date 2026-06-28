@@ -124,6 +124,8 @@ def record():
 
     if target == "all":
         targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
+        if not targets:
+            return jsonify({"ok": False, "error": "no rooms configured"}), 500
     else:
         room = ROOM_MAP.get(target)
         if not room or not room.get("entity"):
