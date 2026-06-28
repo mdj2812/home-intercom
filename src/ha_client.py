@@ -128,11 +128,9 @@ class HAWebSocketClient:
                         return  # protocol mismatch, don't retry
 
                     # Phase 2: send auth with long-lived access token
-                    self._msg_id += 1
                     await ws.send(json.dumps({
                         "type": "auth",
                         "access_token": self._token,
-                        "id": self._msg_id,
                     }))
                     msg = json.loads(await ws.recv())
                     if msg.get("type") != "auth_ok":
