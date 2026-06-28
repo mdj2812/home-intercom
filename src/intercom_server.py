@@ -78,6 +78,8 @@ def record():
     if not target:
         return jsonify({"ok": False, "error": "missing target"}), 400
 
+    rate = int(request.args.get("rate", PCM_RATE))
+
     if target == "all":
         targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
     else:
@@ -96,12 +98,12 @@ def record():
     with wave.open(filepath, "wb") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
-        wf.setframerate(PCM_RATE)
+        wf.setframerate(rate)
         wf.writeframes(pcm)
 
-    duration = len(pcm) / (PCM_RATE * 2)
+    duration = len(pcm) / (rate * 2)
     file_size = os.path.getsize(filepath)
-    print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s)")
+    print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s, {rate}Hz)")
 
     public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
     scheme = request.headers.get("X-Forwarded-Proto", request.scheme)

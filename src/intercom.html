@@ -482,16 +482,17 @@ async function startRecording(target, card) {
 function stopRecording() {
   if (!scriptProc) return;
   const chunks = pcmChunks;
+  const rate = audioCtx.sampleRate;
   cleanupAudio();
   setCardState(currentCard, 'sending', I18N.t('statusSending'));
-  sendAudio(chunks);
+  sendAudio(chunks, rate);
 }
 
-async function sendAudio(chunks) {
+async function sendAudio(chunks, rate) {
   const pcm = new Blob(chunks);
 
   try {
-    const resp = await fetch(RECORD_URL + '?target=' + currentTarget, {
+    const resp = await fetch(RECORD_URL + '?target=' + currentTarget + '&rate=' + rate, {
       method: 'POST', body: pcm,
     });
 
