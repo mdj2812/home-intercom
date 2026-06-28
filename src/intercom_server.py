@@ -20,7 +20,9 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 
 haclient = HAClient(HA_URL, HA_TOKEN)
 
-PCM_RATE = 16000  # 16 kHz mono PCM
+PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
+PCM_BPS = 2       # 16-bit audio = 2 bytes per sample
+WAV_MAGIC = b"RIFF"
 
 # ——— Version ———
 try:
@@ -89,6 +91,23 @@ def _handle_wav_passthrough(data, filepath):
     return rate, duration
 
 
+def _handle_pcm_to_wav(data, rate, filepath):
+    """Raw 16-bit mono PCM → write WAV file with correct header.
+
+    Returns duration_seconds.
+    """
+    with wave.open(filepath, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(PCM_BPS)
+        wf.setframerate(rate)
+        wf.writeframes(data)
+    duration = len(data) / (rate * PCM_BPS)
+    file_size = os.path.getsize(filepath)
+    print(f"[intercom] WAV written: {os.path.basename(filepath)} "
+          f"({file_size}B, {duration:.1f}s, {rate}Hz)")
+    return duration
+
+
 @app.route("/record", methods=["POST"])
 def record():
     """Receive audio → write WAV → HA playback.
@@ -116,18 +135,11 @@ def record():
     filename = f"{uuid.uuid4().hex}.wav"
     filepath = os.path.join(AUDIO_DIR, filename)
 
-    if data[:4] == b"RIFF":
+    if data[:len(WAV_MAGIC)] == WAV_MAGIC:
         _rate, duration = _handle_wav_passthrough(data, filepath)
     else:
         rate = int(request.args.get("rate", PCM_RATE))
-        with wave.open(filepath, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(rate)
-            wf.writeframes(data)
-        duration = len(data) / (rate * 2)
-        file_size = os.path.getsize(filepath)
-        print(f"[intercom] WAV written: {filename} ({file_size}B, {duration:.1f}s, {rate}Hz)")
+        duration = _handle_pcm_to_wav(data, rate, filepath)
 
     # Build public URL — PUBLIC_URL env for reverse proxy (e.g. Caddy),
     # fall back to X-Forwarded-Proto / request.host for direct access.
