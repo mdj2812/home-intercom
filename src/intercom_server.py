@@ -22,7 +22,7 @@ haclient = HAClient(HA_URL, HA_TOKEN)
 PCM_RATE = 16000       # target sample rate (Hz) for Xiaomi speaker WAV output
 PCM_BPS = 2            # 16-bit audio = 2 bytes per sample
 WAV_MAGIC = b"RIFF"
-WAV_HEADER_SIZE = 44   # minimum valid WAV header size in bytes
+WAV_HEADER_SIZE = 44   # RIFF(12) + fmt(24) + data(8) = minimum valid WAV header
 
 # ——— Version ———
 try:
@@ -70,7 +70,7 @@ def rooms_status():
 
 @app.route("/version")
 def version():
-    return jsonify({"version": VERSION})
+    return jsonify({"version": VERSION, "pcm_rate": PCM_RATE})
 
 
 def _handle_wav_passthrough(data, filepath):

@@ -341,8 +341,8 @@ body {
 <script>
 const GRID = document.getElementById('grid');
 const RECORD_URL = '/record';
-// Xiaomi gateway speaker target rate — matches original ffmpeg output
-const TARGET_RATE = 16000;
+// PCM target rate fetched from /version on startup
+let TARGET_RATE = 16000;  // fallback, overwritten by server
 
 let mediaRecorder = null;
 let audioChunks = [];
@@ -493,7 +493,7 @@ async function processAndSend() {
     }
 
     const resp = await fetch(RECORD_URL + '?target=' + currentTarget + '&rate=' + TARGET_RATE, {
-      method: 'POST', body: new Blob([pcm.buffer]),
+      method: 'POST', body: new Blob([new Uint8Array(pcm.buffer, 0, pcm.byteLength)]),
     });
 
     if (resp.ok) {
@@ -528,9 +528,10 @@ loadRooms();
 setTimeout(pollSpeakerStatus, 1000);
 setInterval(pollSpeakerStatus, 30000);
 
-// Show version number
+// Show version number + fetch server config
 fetch('/version').then(r => r.json()).then(d => {
   document.getElementById('ver').textContent = d.version;
+  if (d.pcm_rate) TARGET_RATE = d.pcm_rate;
 }).catch(() => {
   document.getElementById('ver').textContent = '';
 });
