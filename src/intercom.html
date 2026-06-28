@@ -481,13 +481,14 @@ async function startRecording(target, card) {
 
 function stopRecording() {
   if (!scriptProc) return;
+  const chunks = pcmChunks;
   cleanupAudio();
   setCardState(currentCard, 'sending', I18N.t('statusSending'));
-  sendAudio();
+  sendAudio(chunks);
 }
 
-async function sendAudio() {
-  const pcm = new Blob(pcmChunks);
+async function sendAudio(chunks) {
+  const pcm = new Blob(chunks);
 
   try {
     const resp = await fetch(RECORD_URL + '?target=' + currentTarget, {
