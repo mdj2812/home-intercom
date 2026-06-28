@@ -45,6 +45,9 @@ def _parse_state_timeout() -> int:
 
 STATE_TIMEOUT = _parse_state_timeout()
 
+OTA_LOG_DIR = os.environ.get("DATA_DIR", "/data")
+OTA_LOG_PATH = os.path.join(OTA_LOG_DIR, "ota_log.json")
+
 haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER, state_timeout=STATE_TIMEOUT)
 
 PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output

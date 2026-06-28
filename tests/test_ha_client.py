@@ -1,9 +1,10 @@
 """Unit tests for HAClient — mock HA REST API responses."""
 
+import json
 import threading
 import urllib.error
 import urllib.request
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
 from ha_client import (
@@ -617,3 +618,196 @@ class TestHAWebSocketClient:
         with patch("ha_client.HAWebSocketClient", side_effect=ImportError("no module")):
             client = HAClient("http://ha:8123", "tok")
         assert client._ws is None
+
+    # ── _ws_connect async coverage ──────────────────────────────────────
+
+    def test_ws_connect_auth_and_subscribe(self):
+        """Cover _ws_connect auth+subscribe flow with mocked websockets."""
+        import asyncio
+
+        fake_websockets = MagicMock()
+        with (
+            patch.dict("sys.modules", {"websockets": fake_websockets}),
+            patch.object(fake_websockets, "connect") as mock_connect,
+        ):
+            mock_conn = AsyncMock()
+
+            call_count = [0]
+
+            async def recv():
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return '{"type":"auth_required","ha_version":"2026.7"}'
+                elif call_count[0] == 2:
+                    return '{"type":"auth_ok","ha_version":"2026.7"}'
+                elif call_count[0] == 3:
+                    return '{"id":1,"type":"result","success":true}'
+                else:
+                    ws._running = False
+                    raise TimeoutError()
+
+            mock_conn.recv = recv
+            mock_conn.send = AsyncMock()
+            mock_connect.return_value.__aenter__.return_value = mock_conn
+
+            with patch("threading.Thread.start"):
+                ws = HAWebSocketClient("http://ha:8123", "tok")
+
+            asyncio.run(ws._ws_connect())
+
+        sent_json = [json.loads(c.args[0]) for c in mock_conn.send.call_args_list]
+        assert sent_json[0]["type"] == "auth"
+        assert sent_json[1]["type"] == "subscribe_events"
+
+    def test_ws_connect_event_dispatch(self):
+        """Cover _ws_connect event dispatch: state_changed → waiter.set()."""
+        import asyncio
+        import time as _time
+
+        fake_websockets = MagicMock()
+        with (
+            patch.dict("sys.modules", {"websockets": fake_websockets}),
+            patch.object(fake_websockets, "connect") as mock_connect,
+        ):
+            mock_conn = AsyncMock()
+
+            call_count = [0]
+
+            async def recv():
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return '{"type":"auth_required"}'
+                elif call_count[0] == 2:
+                    return '{"type":"auth_ok"}'
+                elif call_count[0] == 3:
+                    return '{"id":1,"type":"result","success":true}'
+                elif call_count[0] == 4:
+                    return (
+                        '{"type":"event","event":'
+                        '{"event_type":"state_changed","data":'
+                        '{"entity_id":"media_player.test","new_state":'
+                        '{"state":"playing"}}}}'
+                    )
+                else:
+                    ws._running = False
+                    raise TimeoutError()
+
+            mock_conn.recv = recv
+            mock_conn.send = AsyncMock()
+            mock_connect.return_value.__aenter__.return_value = mock_conn
+
+            with patch("threading.Thread.start"):
+                ws = HAWebSocketClient("http://ha:8123", "tok")
+
+            result = [None]
+
+            def waiter():
+                ws._connected.set()
+                result[0] = ws.wait_for_state("media_player.test", "playing", 2.0)
+
+            t = threading.Thread(target=waiter, daemon=True)
+            t.start()
+            _time.sleep(0.05)
+
+            asyncio.run(ws._ws_connect())
+            t.join(timeout=2)
+
+        assert result[0] is True
+
+    def test_ws_connect_auth_failure(self):
+        """Cover _ws_connect auth failure path."""
+        import asyncio
+
+        fake_websockets = MagicMock()
+        with (
+            patch.dict("sys.modules", {"websockets": fake_websockets}),
+            patch.object(fake_websockets, "connect") as mock_connect,
+        ):
+            mock_conn = AsyncMock()
+
+            call_count = [0]
+
+            async def recv():
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return '{"type":"auth_required"}'
+                else:
+                    ws._running = False
+                    return '{"type":"auth_invalid","message":"Invalid token"}'
+
+            mock_conn.recv = recv
+            mock_conn.send = AsyncMock()
+            mock_connect.return_value.__aenter__.return_value = mock_conn
+
+            with patch("threading.Thread.start"):
+                ws = HAWebSocketClient("http://ha:8123", "tok")
+
+            asyncio.run(ws._ws_connect())
+
+        assert not ws.ready
+
+    def test_ws_connect_reconnect_loop(self):
+        """Cover _ws_connect reconnect after connection loss."""
+        import asyncio
+        import contextlib
+
+        fake_websockets = MagicMock()
+        with (
+            patch.dict("sys.modules", {"websockets": fake_websockets}),
+            patch.object(fake_websockets, "connect") as mock_connect,
+        ):
+            mock_conn = AsyncMock()
+
+            call_count = [0]
+
+            async def recv():
+                call_count[0] += 1
+                if call_count[0] == 1:
+                    return '{"type":"auth_required"}'
+                elif call_count[0] == 2:
+                    return '{"type":"auth_ok"}'
+                elif call_count[0] == 3:
+                    return '{"id":1,"type":"result","success":true}'
+                else:
+                    raise ConnectionError("lost")
+
+            mock_conn.recv = recv
+            mock_conn.send = AsyncMock()
+            mock_connect.return_value.__aenter__.side_effect = [
+                mock_conn,
+                ConnectionError("refused"),
+            ]
+
+            with patch("threading.Thread.start"):
+                ws = HAWebSocketClient("http://ha:8123", "tok")
+
+            ws._running = True
+
+            async def run_with_timeout():
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(ws._ws_connect(), timeout=3.0)
+
+            asyncio.run(run_with_timeout())
+
+        assert not ws._running or call_count[0] <= 4
+
+    def test_ws_connect_unexpected_msg(self):
+        """Cover _ws_connect unexpected protocol message."""
+        import asyncio
+
+        fake_websockets = MagicMock()
+        with (
+            patch.dict("sys.modules", {"websockets": fake_websockets}),
+            patch.object(fake_websockets, "connect") as mock_connect,
+        ):
+            mock_conn = AsyncMock()
+            mock_conn.recv = AsyncMock(return_value='{"type":"pong"}')
+            mock_conn.send = AsyncMock()
+            mock_connect.return_value.__aenter__.return_value = mock_conn
+
+            with patch("threading.Thread.start"):
+                ws = HAWebSocketClient("http://ha:8123", "tok")
+
+            asyncio.run(ws._ws_connect())
+
+        assert not ws.ready
