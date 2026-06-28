@@ -15,6 +15,7 @@ app = Flask(__name__)
 HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
 
 
 def _parse_pause_buffer() -> float:
@@ -213,7 +214,6 @@ def record():
     if len(data) < WAV_HEADER_SIZE:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
-    os.makedirs(AUDIO_DIR, exist_ok=True)
     filename = f"intercom_{target}.wav"
     filepath = os.path.join(AUDIO_DIR, filename)
 

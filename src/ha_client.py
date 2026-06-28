@@ -187,8 +187,8 @@ class HAWebSocketClient:
                             elif state == expected:
                                 self._waiter.set()
 
-            except Exception:
-                pass  # connection lost, will reconnect
+            except Exception as e:
+                print(f"[intercom] WebSocket connection lost: {type(e).__name__}, reconnecting...")
 
             self._connected.clear()
             await asyncio.sleep(2)  # reconnect delay
