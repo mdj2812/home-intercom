@@ -306,9 +306,7 @@ class TestAutoPauseBg:
             client._auto_pause_bg("media_player.test", 3.0)
 
         # WS wait_for_state was called for playing confirm
-        mock_ws.wait_for_state.assert_any_call(
-            "media_player.test", "playing", WS_PLAYING_TIMEOUT
-        )
+        mock_ws.wait_for_state.assert_any_call("media_player.test", "playing", WS_PLAYING_TIMEOUT)
         # Pause was called
         assert "media_player/media_pause" in call_args
 
@@ -379,10 +377,7 @@ class TestAutoPauseBg:
 
         # WS wait_for_state was NOT called for playing (skipped)
         # But pause confirm still uses WS
-        pause_calls = [
-            c for c in mock_ws.wait_for_state.call_args_list
-            if c.args[1] == "playing"
-        ]
+        pause_calls = [c for c in mock_ws.wait_for_state.call_args_list if c.args[1] == "playing"]
         assert len(pause_calls) == 0  # no "playing" wait
         assert "media_player/media_pause" in call_args
 
@@ -575,7 +570,7 @@ class TestHAWebSocketClient:
         # Simulate receiving a state_changed event with state="paused"
         with ws._lock:
             if ws._waiter and ws._entity_id == "media_player.test" and "paused" != "playing":
-                    ws._waiter.set()
+                ws._waiter.set()
 
         assert event.is_set()
         # Cleanup
