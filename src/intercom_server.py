@@ -4,7 +4,6 @@
 import json
 import os
 import sys
-import uuid
 import wave
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -20,9 +19,10 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 
 haclient = HAClient(HA_URL, HA_TOKEN)
 
-PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
-PCM_BPS = 2       # 16-bit audio = 2 bytes per sample
+PCM_RATE = 16000       # target sample rate (Hz) for Xiaomi speaker WAV output
+PCM_BPS = 2            # 16-bit audio = 2 bytes per sample
 WAV_MAGIC = b"RIFF"
+WAV_HEADER_SIZE = 44   # minimum valid WAV header size in bytes
 
 # ——— Version ———
 try:
@@ -129,10 +129,10 @@ def record():
         targets = [(target, room)]
 
     data = request.get_data()
-    if len(data) < 44:
+    if len(data) < WAV_HEADER_SIZE:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
-    filename = f"{uuid.uuid4().hex}.wav"
+    filename = f"intercom_{target}.wav"
     filepath = os.path.join(AUDIO_DIR, filename)
 
     if data[:len(WAV_MAGIC)] == WAV_MAGIC:
