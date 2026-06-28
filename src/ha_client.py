@@ -161,7 +161,7 @@ class HAWebSocketClient:
                             msg = json.loads(
                                 await asyncio.wait_for(ws.recv(), timeout=5.0)
                             )
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             continue
 
                         if msg.get("type") != "event":
