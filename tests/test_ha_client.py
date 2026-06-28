@@ -10,6 +10,7 @@ from ha_client import (
     SUPPORT_PLAY_MEDIA,
     SUPPORT_REPEAT_SET,
     HAClient,
+    HAWebSocketClient,
 )
 
 
@@ -226,7 +227,9 @@ class TestHAClientQueryStatuses:
 
 class TestHAClientPlayAndAutoPause:
     def test_calls_play_service_and_spawns_thread(self):
-        client = HAClient("http://ha:8123", "tok")
+        with patch("ha_client.HAWebSocketClient") as mock_ws:
+            mock_ws.return_value.ready = False
+            client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = json.dumps(
@@ -242,12 +245,15 @@ class TestHAClientPlayAndAutoPause:
         mock_start.assert_called_once()
 
     def test_play_failure_does_not_spawn_thread(self):
-        client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = json.dumps(
             {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
         ).encode()
+
+        with patch("ha_client.HAWebSocketClient") as mock_ws:
+            mock_ws.return_value.ready = False
+            client = HAClient("http://ha:8123", "tok")
 
         with (
             patch.object(client, "call", return_value=False),
