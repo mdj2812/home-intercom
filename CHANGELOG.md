@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.6.0 (2026-06-28)
+
+- **去掉 ffmpeg** — Docker 镜像 579→131MB，纯 Python PCM→WAV，无外部依赖
+- **PCM 录音** — MediaRecorder opus 采集 → decodeAudioData 解码 → OfflineAudioContext 重采样 16kHz
+- **`/record` 端点** — 替代 `/convert`，支持裸 PCM（PWA）和完整 WAV（ESP32 按键）双输入
+- **PUBLIC_URL** — 反代场景（Caddy）支持，HA 通过域名获取音频
+- **setPointerCapture** — PPT 按键可靠性修复，避免手指晃动导致录音截断
+- **review** — 常量化（WAV_MAGIC/PCM_BPS/WAV_HEADER_SIZE），函数封装，ruff 格式化
+- **测试** — 59 个 pytest 测试，93% 覆盖率
+
 ## v1.5.2 (2026-06-15)
 
 - **i18n** — PWA 中英文切换（zh-CN / en），右上角按钮，localStorage 持久化
