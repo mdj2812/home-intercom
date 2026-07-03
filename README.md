@@ -4,6 +4,8 @@ Push-to-talk PWA → Home Assistant → smart speakers. Hold a button, say somet
 
 No ffmpeg needed — browser-native recording + pure Python PCM→WAV keeps the Docker image at 131MB.
 
+![Screenshot](assets/screenshot.png)
+
 ## How it works
 
 ```
