@@ -2,18 +2,18 @@
 
 手机 PWA 卡片式界面，按住房间卡片录音 → 松开后在小爱音箱播放。支持单房间和全部广播，实时显示音箱在线状态。
 
-URL: `https://broadcast.home.mdj2812.top/`（Caddy 反代 → Flask :8764）
+URL: `https://broadcast.example.com/`（Caddy 反代 → Flask :8764）
 部署: NAS（Celeron N5095, Docker）
 
 ## 架构
 
 ```
-PWA → Flask :8764 /convert → ffmpeg → 本地 /audio/ 目录
+PWA → Flask :8764 /record → PCM→WAV → 本地 /audio/ 目录
         ↑ 动态加载 rooms.json       ↓ HA API play_media
         ↕ /rooms/status → HA API    ↓ 小爱直接 HTTP 拉 Flask 音频
 ```
 
-- **Flask** 负责一切：音频接收、转码、本地 serve、音箱状态查询、调 HA API 播放
+- **Flask** 负责一切：音频接收、PCM→WAV、本地 serve、音箱状态查询、调 HA API 播放
 - **HA 直接从 Flask HTTP 拉音频**
 - **无需 n8n、无需 SSH** —— Flask 拿到 HA_TOKEN 直接调 REST API
 
@@ -67,7 +67,7 @@ cd /path/to/home-intercom
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-镜像：`registry.home.mdj2812.top/home-lab/home-intercom:latest`
+镜像：`registry.example.com/your-project/home-intercom:latest`
 
 版本号由 `docker/.docker-image` 维护（单一真相源），`docker/.env` 供 compose 使用。升级时：
 
@@ -92,7 +92,7 @@ Celeron N5095 实测 10s 音频转码 < 10ms，绰绰有余。
 NAS 上 Caddy：
 
 ```Caddyfile
-broadcast.home.mdj2812.top {
+broadcast.example.com {
     reverse_proxy 127.0.0.1:8764
 }
 ```
@@ -107,12 +107,12 @@ pip install -r requirements.txt
 python3 intercom_server.py  # HTTP :8764
 ```
 
-依赖：`flask`、`ffmpeg`。
+依赖：`flask`、`waitress`。
 
 ## 全部广播 vs 单房间
 
 | | 单房间 | 全部广播 |
-|------|--------|------|
-| 触发 | `target=<room>` | `target=all` |
-| Flask | 转码一次，调 HA API 一次 | 转码一次，调 HA API N 次（并行 fire-and-forget） |
-| 播放 | HA play_media → 小爱 | 各房间独立 HA play_media |
+||------|--------|------|
+|| 触发 | `target=<room>` | `target=all` |
+|| Flask | PCM→WAV 一次，调 HA API 一次 | PCM→WAV 一次，调 HA API N 次 |
+|| 播放 | HA play_media → 音箱 | 各房间独立 HA play_media |

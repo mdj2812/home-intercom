@@ -21,7 +21,7 @@ class HAClient:
     """Home Assistant REST API client."""
 
     def __init__(self, ha_url: str, token: str):
-        """ha_url: full HA URL like http://192.168.99.4:8123 or https://ha.example.com"""
+        """ha_url: full HA URL like http://homeassistant.local:8123 or https://ha.example.com"""
         parsed = urllib.parse.urlparse(ha_url)
         self._base = f"{parsed.scheme}://{parsed.netloc}/api"
         self._token = token
