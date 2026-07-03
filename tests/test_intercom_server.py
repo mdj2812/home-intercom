@@ -31,7 +31,7 @@ class TestStaticRoutes:
         data = resp.json
         assert data is not None
         assert "living" in data
-        assert data["living"]["name"] == "\u5ba2\u5385"
+        assert data["living"]["name"] == "Living Room"
 
     def test_static_icon_192(self, client):
         """icon-192.png exists in src/static/."""
