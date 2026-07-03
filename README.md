@@ -51,8 +51,8 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 ```json
 {
-  "living":  {"name": "客厅", "entity": "media_player.living_room_speaker"},
-  "bedroom": {"name": "主卧", "entity": "media_player.bedroom_speaker"}
+  "living":  {"name": "Living Room", "entity": "media_player.living_room_speaker"},
+  "bedroom": {"name": "Bedroom",    "entity": "media_player.bedroom_speaker"}
 }
 ```
 
