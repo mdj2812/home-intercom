@@ -64,20 +64,20 @@ PWA → Flask :8764 /record → PCM→WAV → 本地 /audio/ 目录
 
 ```bash
 cd /path/to/home-intercom
-# Build locally
-docker build -f docker/Dockerfile -t home-intercom:latest .
-# Or use a pre-built image
-export IMAGE=your-registry/home-intercom:latest
+# Use pre-built image from GitHub Container Registry
+export IMAGE=ghcr.io/mdj2812/home-intercom:latest
 docker compose -f docker/docker-compose.example.yml up -d
+# Or build locally
+docker build -f docker/Dockerfile -t home-intercom:latest .
 ```
 
-镜像：本地构建或从私有 registry 拉取。
+镜像：`ghcr.io/mdj2812/home-intercom:latest`（GitHub Actions 自动构建）
 
 版本号由 `docker/.docker-image` 维护（单一真相源）。升级时：
 
 ```bash
 git pull
-docker build -f docker/Dockerfile -t home-intercom:latest .
+docker compose -f docker/docker-compose.example.yml pull
 docker compose -f docker/docker-compose.example.yml up -d
 ```
 
