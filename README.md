@@ -64,17 +64,21 @@ PWA → Flask :8764 /record → PCM→WAV → 本地 /audio/ 目录
 
 ```bash
 cd /path/to/home-intercom
-docker compose -f docker/docker-compose.yml up -d
+# Build locally
+docker build -f docker/Dockerfile -t home-intercom:latest .
+# Or use a pre-built image
+export IMAGE=your-registry/home-intercom:latest
+docker compose -f docker/docker-compose.example.yml up -d
 ```
 
-镜像：`registry.example.com/your-project/home-intercom:latest`
+镜像：本地构建或从私有 registry 拉取。
 
-版本号由 `docker/.docker-image` 维护（单一真相源），`docker/.env` 供 compose 使用。升级时：
+版本号由 `docker/.docker-image` 维护（单一真相源）。升级时：
 
 ```bash
 git pull
-docker compose -f docker/docker-compose.yml pull
-docker compose -f docker/docker-compose.yml up -d
+docker build -f docker/Dockerfile -t home-intercom:latest .
+docker compose -f docker/docker-compose.example.yml up -d
 ```
 
 **前置条件**：Flask 直接调 HA API，确保 `HA_TOKEN` 配置正确。HA 通过 HTTP 拉音频，URL 由 Flask 自动检测。**无需 SSH key、无需 n8n**。
