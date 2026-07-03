@@ -15,7 +15,6 @@ app = Flask(__name__)
 HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
-os.makedirs(AUDIO_DIR, exist_ok=True)
 
 haclient = HAClient(HA_URL, HA_TOKEN)
 
@@ -118,6 +117,7 @@ def record():
     - Raw PCM (PWA): body is 16-bit mono PCM, wrapped into WAV
     - WAV passthrough (ESP32): body is a complete WAV file, written as-is
     """
+    os.makedirs(AUDIO_DIR, exist_ok=True)
     target = request.args.get("target", "")
     if not target:
         return jsonify({"ok": False, "error": "missing target"}), 400
