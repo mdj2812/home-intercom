@@ -1,34 +1,34 @@
-# Home Intercom 家庭广播
+# Home Intercom
 
-手机 PWA 界面，按住说话 → 松开后通过 Home Assistant 在小爱音箱播放。
+Push-to-talk PWA → Home Assistant → smart speakers. Hold a button, say something, it plays on your Xiaomi speakers.
 
-因为用浏览器原生录音 + PCM→WAV 纯 Python 处理，所以不依赖 ffmpeg，Docker 镜像只有 131MB。
+No ffmpeg needed — browser-native recording + pure Python PCM→WAV keeps the Docker image at 131MB.
 
-## 架构
+## How it works
 
 ```
-手机 PWA → Flask :8764 → Home Assistant API → 小爱音箱播放
+Phone PWA → Flask :8764 → Home Assistant API → Xiaomi speakers
                 ↕
-           rooms.json（房间配置）
+           rooms.json (config)
 ```
 
-Flask 负责全部：收音频、转 WAV、调 HA 播放。不做流式推送，因为小爱只支持完整文件下载后播放。
+Flask handles everything: receive audio, wrap PCM as WAV, call HA play_media. No streaming — Xiaomi speakers only play complete files.
 
-## 部署
+## Deploy
 
 ```bash
 git clone https://github.com/mdj2812/home-intercom.git
 cd home-intercom
 
-# 用预构建镜像
+# Pre-built image from ghcr.io
 export IMAGE=ghcr.io/mdj2812/home-intercom:latest
 docker compose -f docker/docker-compose.example.yml up -d
 
-# 或者本地构建
+# Or build locally
 docker build -f docker/Dockerfile -t home-intercom:latest .
 ```
 
-镜像由 GitHub Actions 自动构建推到 ghcr.io。升级：
+Images are built and pushed to ghcr.io by GitHub Actions. To upgrade:
 
 ```bash
 git pull
@@ -36,16 +36,16 @@ docker compose -f docker/docker-compose.example.yml pull
 docker compose -f docker/docker-compose.example.yml up -d
 ```
 
-## 配置
+## Configuration
 
-### 环境变量
+### Environment variables
 
-| 变量 | 说明 |
-|------|------|
-| `HA_URL` | Home Assistant 地址，如 `http://192.168.1.10:8123` |
-| `HA_TOKEN` | HA 长期访问令牌 |
-| `PUBLIC_URL` | （可选）反代域名，HA 通过这个 URL 拉音频 |
-| `AUDIO_DIR` | 音频存储目录，默认 `/data/audio` |
+| Variable | Description |
+|----------|-------------|
+| `HA_URL` | Home Assistant URL, e.g. `http://192.168.1.10:8123` |
+| `HA_TOKEN` | HA long-lived access token |
+| `PUBLIC_URL` | (Optional) Reverse proxy domain for HA to fetch audio |
+| `AUDIO_DIR` | Audio storage path, defaults to `/data/audio` |
 
 ### rooms.json
 
@@ -56,11 +56,11 @@ docker compose -f docker/docker-compose.example.yml up -d
 }
 ```
 
-`entity` 填 HA 中音箱的 entity_id。改完无需重启，PWA 会自动加载。
+`entity` is the HA entity_id of your speaker. Changes take effect immediately — no restart needed.
 
 ## HTTPS
 
-PWA 录音需要 HTTPS。推荐 Caddy 反代：
+PWA recording requires HTTPS. Recommended: Caddy reverse proxy.
 
 ```Caddyfile
 broadcast.your-domain.com {
