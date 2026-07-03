@@ -4,6 +4,8 @@
 
 因为用浏览器原生录音 + PCM→WAV 纯 Python 处理，所以不依赖 ffmpeg，Docker 镜像只有 131MB。
 
+![截图](assets/screenshot.png)
+
 ## 架构
 
 ```
