@@ -1,18 +1,18 @@
 # Home Intercom
 
-Push-to-talk PWA → Home Assistant → smart speakers. Hold a button, say something, it plays on your Xiaomi speakers.
+Push-to-talk PWA → Home Assistant → smart speakers. Hold a button, say something, it plays on your speakers.
 
 No ffmpeg needed — browser-native recording + pure Python PCM→WAV keeps the Docker image at 131MB.
 
 ## How it works
 
 ```
-Phone PWA → Flask :8764 → Home Assistant API → Xiaomi speakers
+Phone PWA → Flask :8764 → Home Assistant API → speakers
                 ↕
            rooms.json (config)
 ```
 
-Flask handles everything: receive audio, wrap PCM as WAV, call HA play_media. No streaming — Xiaomi speakers only play complete files.
+Flask handles everything: receive audio, wrap PCM as WAV, call HA play_media. No streaming — most smart speakers require complete files to play.
 
 ## Deploy
 
