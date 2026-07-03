@@ -117,7 +117,6 @@ def record():
     - Raw PCM (PWA): body is 16-bit mono PCM, wrapped into WAV
     - WAV passthrough (ESP32): body is a complete WAV file, written as-is
     """
-    os.makedirs(AUDIO_DIR, exist_ok=True)
     target = request.args.get("target", "")
     if not target:
         return jsonify({"ok": False, "error": "missing target"}), 400
@@ -136,6 +135,7 @@ def record():
     if len(data) < WAV_HEADER_SIZE:
         return jsonify({"ok": False, "error": "no audio data"}), 400
 
+    os.makedirs(AUDIO_DIR, exist_ok=True)
     filename = f"intercom_{target}.wav"
     filepath = os.path.join(AUDIO_DIR, filename)
 
