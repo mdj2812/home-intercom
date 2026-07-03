@@ -22,8 +22,10 @@ jobs:
 
       - name: Build image
         run: |
-          IMAGE=$(cat docker/.docker-image)
+          VERSION=$(cat docker/.docker-image)
+          IMAGE="${{ vars.DOCKER_REGISTRY }}/${{ vars.DOCKER_IMAGE }}:${VERSION}"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Building $IMAGE"
           docker build --network host \
             -f docker/Dockerfile \
@@ -36,11 +38,10 @@ jobs:
 
       - name: Tag and push :latest (stable only)
         run: |
-          VERSION="${IMAGE##*:}"
           if echo "$VERSION" | grep -q 'rc'; then
             echo "Skip :latest — $VERSION is pre-release"
           else
-            LATEST="${IMAGE%:*}:latest"
+            LATEST="${{ vars.DOCKER_REGISTRY }}/${{ vars.DOCKER_IMAGE }}:latest"
             echo "Tagging $LATEST"
             docker tag "$IMAGE" "$LATEST"
             docker push "$LATEST"
