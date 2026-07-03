@@ -87,7 +87,7 @@
 ## v1.2.0 (2026-06-14)
 
 - **PWA 图标** — 广播主题图标（SVG + 4 尺寸 PNG），支持添加到主屏幕
-- **Caddy 反向代理** — `https://broadcast.home.mdj2812.top/` HTTPS 访问，满足 PWA getUserMedia 要求
+- **Caddy 反向代理** — `https://broadcast.example.com/` HTTPS 访问，满足 PWA getUserMedia 要求
 - **项目目录整理** — `src/` 源码、`docker/` 容器配置、`assets/` 素材、`n8n/` workflow 备份
 - **静态文件路由** — `/static/<path>` catch-all 替代 5 个独立路由
 - **镜像版本管理** — `docker/.docker-image` 单一真相源
