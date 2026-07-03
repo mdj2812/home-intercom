@@ -1,79 +1,34 @@
-# Home Intercom 家庭广播系统
+# Home Intercom 家庭广播
 
-手机 PWA 卡片式界面，按住房间卡片录音 → 松开后在小爱音箱播放。支持单房间和全部广播，实时显示音箱在线状态。
+手机 PWA 界面，按住说话 → 松开后通过 Home Assistant 在小爱音箱播放。
 
-URL: `https://broadcast.example.com/`（Caddy 反代 → Flask :8764）
-部署: NAS（Celeron N5095, Docker）
+因为用浏览器原生录音 + PCM→WAV 纯 Python 处理，所以不依赖 ffmpeg，Docker 镜像只有 131MB。
 
 ## 架构
 
 ```
-PWA → Flask :8764 /record → PCM→WAV → 本地 /audio/ 目录
-        ↑ 动态加载 rooms.json       ↓ HA API play_media
-        ↕ /rooms/status → HA API    ↓ 小爱直接 HTTP 拉 Flask 音频
+手机 PWA → Flask :8764 → Home Assistant API → 小爱音箱播放
+                ↕
+           rooms.json（房间配置）
 ```
 
-- **Flask** 负责一切：音频接收、PCM→WAV、本地 serve、音箱状态查询、调 HA API 播放
-- **HA 直接从 Flask HTTP 拉音频**
-- **无需 n8n、无需 SSH** —— Flask 拿到 HA_TOKEN 直接调 REST API
-
-## UI 特性
-
-- 卡片网格布局，每房间独立圆形按压说话按钮
-- 录音：波纹扩散 + 声波跳动，按钮变绿
-- 发送中：绿色光环绕按钮旋转
-- 已发送：绿色大对勾
-- 房间名右侧指示灯：🟢 音箱在线 / ⚫ 离线（HA API 每 30s 轮询）
-
-## 环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `HA_URL` | Home Assistant API 地址（含协议端口） | — |
-| `HA_TOKEN` | HA 长期访问令牌 | — |
-| `AUDIO_DIR` | 音频文件存储目录 | `/data/audio` |
-
-## 目录结构
-
-```
-├── docker/
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   ├── .docker-image       # 单一版本真相源
-│   └── .env.example
-├── src/
-│   ├── intercom_server.py    # Flask 后端
-│   ├── ha_client.py          # HA API 客户端
-│   ├── intercom.html         # PWA 前端
-│   ├── rooms.json            # 房间配置
-│   ├── requirements.txt      # Python 依赖
-│   └── static/               # PWA 图标 + manifest
-├── assets/
-│   └── icon.svg              # 图标源文件
-├── scripts/
-│   └── bench_ffmpeg.sh       # NAS 性能测试
-├── .gitea/workflows/
-│   └── build-docker.yml      # CI：.docker-image 变更 → 自动 build & push
-├── CHANGELOG.md
-└── README.md
-```
+Flask 负责全部：收音频、转 WAV、调 HA 播放。不做流式推送，因为小爱只支持完整文件下载后播放。
 
 ## 部署
 
-### Docker（推荐，运行在 NAS）
-
 ```bash
-cd /path/to/home-intercom
-# Use pre-built image from GitHub Container Registry
+git clone https://github.com/mdj2812/home-intercom.git
+cd home-intercom
+
+# 用预构建镜像
 export IMAGE=ghcr.io/mdj2812/home-intercom:latest
 docker compose -f docker/docker-compose.example.yml up -d
-# Or build locally
+
+# 或者本地构建
 docker build -f docker/Dockerfile -t home-intercom:latest .
 ```
 
-镜像：`ghcr.io/mdj2812/home-intercom:latest`（GitHub Actions 自动构建）
-
-版本号由 `docker/.docker-image` 维护（单一真相源）。升级时：
+镜像由 GitHub Actions 自动构建推到 ghcr.io。升级：
 
 ```bash
 git pull
@@ -81,42 +36,34 @@ docker compose -f docker/docker-compose.example.yml pull
 docker compose -f docker/docker-compose.example.yml up -d
 ```
 
-**前置条件**：Flask 直接调 HA API，确保 `HA_TOKEN` 配置正确。HA 通过 HTTP 拉音频，URL 由 Flask 自动检测。**无需 SSH key、无需 n8n**。
+## 配置
 
-### 性能验证
+### 环境变量
 
-```bash
-bash scripts/bench_ffmpeg.sh
-```
+| 变量 | 说明 |
+|------|------|
+| `HA_URL` | Home Assistant 地址，如 `http://192.168.1.10:8123` |
+| `HA_TOKEN` | HA 长期访问令牌 |
+| `PUBLIC_URL` | （可选）反代域名，HA 通过这个 URL 拉音频 |
+| `AUDIO_DIR` | 音频存储目录，默认 `/data/audio` |
 
-Celeron N5095 实测 10s 音频转码 < 10ms，绰绰有余。
+### rooms.json
 
-### Caddy 反代
-
-NAS 上 Caddy：
-
-```Caddyfile
-broadcast.example.com {
-    reverse_proxy 127.0.0.1:8764
+```json
+{
+  "living":  {"name": "客厅", "entity": "media_player.living_room_speaker"},
+  "bedroom": {"name": "主卧", "entity": "media_player.bedroom_speaker"}
 }
 ```
 
-HTTPS 是 PWA 录音（getUserMedia）的浏览器强制要求。
+`entity` 填 HA 中音箱的 entity_id。改完无需重启，PWA 会自动加载。
 
-### 裸机
+## HTTPS
 
-```bash
-cd src
-pip install -r requirements.txt
-python3 intercom_server.py  # HTTP :8764
+PWA 录音需要 HTTPS。推荐 Caddy 反代：
+
+```Caddyfile
+broadcast.your-domain.com {
+    reverse_proxy 127.0.0.1:8764
+}
 ```
-
-依赖：`flask`、`waitress`。
-
-## 全部广播 vs 单房间
-
-| | 单房间 | 全部广播 |
-|------|--------|------|
-| 触发 | `target=<room>` | `target=all` |
-| Flask | PCM→WAV 一次，调 HA API 一次 | PCM→WAV 一次，调 HA API N 次 |
-| 播放 | HA play_media → 音箱 | 各房间独立 HA play_media |
