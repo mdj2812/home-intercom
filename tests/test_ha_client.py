@@ -1,5 +1,6 @@
 """Unit tests for HAClient — mock HA REST API responses."""
 
+import json
 import urllib.error
 import urllib.request
 from unittest.mock import MagicMock, patch
@@ -7,6 +8,7 @@ from unittest.mock import MagicMock, patch
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
 from ha_client import (
     HAClient,
+    SUPPORT_REPEAT_SET,
 )
 
 
@@ -327,3 +329,64 @@ class TestAutoPauseBg:
 
         assert result is False
         mock_start.assert_not_called()
+
+    def test_repeat_set_path_skips_auto_pause(self):
+        """When repeat_set is supported, no background thread is spawned."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b"{}"
+
+        with (
+            patch.object(client, "supports_repeat_set", return_value=True),
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.test", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result is True
+        mock_start.assert_not_called()
+
+
+class TestSupportsRepeatSet:
+    def test_returns_true_when_bit_set(self):
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {
+                "state": "idle",
+                "attributes": {"supported_features": SUPPORT_REPEAT_SET},
+            }
+        ).encode()
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            assert client.supports_repeat_set("media_player.test") is True
+
+    def test_returns_false_when_bit_not_set(self):
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {
+                "state": "idle",
+                "attributes": {"supported_features": 0},
+            }
+        ).encode()
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            assert client.supports_repeat_set("media_player.test") is False
+
+    def test_returns_false_without_token(self):
+        client = HAClient("http://ha:8123", "")
+        assert client.supports_repeat_set("media_player.test") is False
+
+    def test_returns_false_on_api_error(self):
+        client = HAClient("http://ha:8123", "tok")
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
+        ):
+            assert client.supports_repeat_set("media_player.test") is False
