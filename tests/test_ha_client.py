@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
 from ha_client import (
-    HAClient,
     SUPPORT_REPEAT_SET,
+    HAClient,
 )
 
 
