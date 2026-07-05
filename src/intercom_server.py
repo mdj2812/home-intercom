@@ -15,8 +15,9 @@ app = Flask(__name__)
 HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
+PAUSE_BUFFER = float(os.environ.get("PAUSE_BUFFER", "0"))
 
-haclient = HAClient(HA_URL, HA_TOKEN)
+haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER)
 
 PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
 PCM_BPS = 2  # 16-bit audio = 2 bytes per sample

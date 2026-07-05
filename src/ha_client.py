@@ -20,12 +20,17 @@ PAUSE_RETRIES = 5  # pause retry count
 class HAClient:
     """Home Assistant REST API client."""
 
-    def __init__(self, ha_url: str, token: str):
-        """ha_url: full HA URL like http://homeassistant.local:8123 or https://ha.example.com"""
+    def __init__(self, ha_url: str, token: str, pause_buffer: float = 0.0):
+        """ha_url: full HA URL like http://homeassistant.local:8123 or https://ha.example.com
+
+        pause_buffer: extra seconds to wait before pausing (accounts for speaker
+            buffering/startup latency — HomePod + Music Assistant needs ~1s).
+        """
         parsed = urllib.parse.urlparse(ha_url)
         self._base = f"{parsed.scheme}://{parsed.netloc}/api"
         self._token = token
         self._ctx = ssl._create_unverified_context()
+        self._pause_buffer = pause_buffer
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
@@ -65,11 +70,12 @@ class HAClient:
             print(f"[intercom] HA call failed ({service}): {_}")
         return ok
 
-    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float):
+    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Background: play audio → confirm playing → wait duration → pause + retry.
 
         Equivalent to the n8n pipeline: play → poll state → wait → pause → verify.
         duration is audio length in seconds.
+        Returns True if play_media succeeded (auto-pause runs in background thread).
         """
         ok = self.call(
             "media_player/play_media",
@@ -81,7 +87,7 @@ class HAClient:
         )
         if not ok:
             print(f"[intercom] HA play failed for {entity_id}")
-            return
+            return False
 
         # Spawn background thread for auto-pause
         threading.Thread(
@@ -89,6 +95,7 @@ class HAClient:
             args=(entity_id, duration),
             daemon=True,
         ).start()
+        return True
 
     def _auto_pause_bg(self, entity_id: str, wait_sec: float):
         """Background thread: confirm playback → wait → pause + verify."""
@@ -104,11 +111,13 @@ class HAClient:
         else:
             print(f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing")
 
-        # 2) Wait for remaining duration
+        # 2) Wait for remaining duration + buffer
         elapsed = time.monotonic() - t0
-        remaining = max(0, wait_sec - elapsed)
+        remaining = max(0, wait_sec - elapsed + self._pause_buffer)
         if remaining > 0:
-            print(f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s")
+            print(
+                f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s (buffer +{self._pause_buffer:.1f}s)"
+            )
             time.sleep(remaining)
 
         # 3) Pause + confirm stopped
