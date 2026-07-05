@@ -15,7 +15,9 @@ import urllib.request
 STATE_POLL_INTERVAL = 0.5  # poll interval for state checks (seconds)
 PLAYING_CONFIRM_RETRIES = 10  # max attempts to confirm "playing" (10 × 0.5s = 5s)
 PAUSE_RETRIES = 5  # pause retry count
-SUPPORT_REPEAT_SET = 1 << 18  # media_player supported_features bit 18
+# MediaPlayerEntityFeature.REPEAT_SET from HA core:
+#   homeassistant/components/media_player/const.py
+SUPPORT_REPEAT_SET = 1 << 18  # = 262144
 
 
 class HAClient:
@@ -70,16 +72,31 @@ class HAClient:
             print(f"[intercom] HA call failed ({service}): {_}")
         return ok
 
-    def supports_repeat_set(self, entity_id: str) -> bool:
-        """Check if entity supports repeat_set (bit 18 of supported_features)."""
+    def _entity_attrs(self, entity_id: str) -> tuple[str, dict]:
+        """Query entity state + attributes. Returns (state, attrs), empty on failure."""
         if not self._token:
-            return False
+            return "", {}
         code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
         if code == 200 and isinstance(result, dict):
-            attrs = result.get("attributes", {})
-            supported = attrs.get("supported_features", 0)
-            return bool(supported & SUPPORT_REPEAT_SET)
-        return False
+            return result.get("state", ""), result.get("attributes", {})
+        return "", {}
+
+    def _play_media(self, entity_id: str, audio_url: str) -> bool:
+        """Call media_player.play_media with common params."""
+        return self.call(
+            "media_player/play_media",
+            {
+                "entity_id": entity_id,
+                "media_content_id": audio_url,
+                "media_content_type": "music",
+            },
+        )
+
+    def supports_repeat_set(self, entity_id: str) -> bool:
+        """Check if entity supports repeat_set (bit 18 of supported_features)."""
+        _, attrs = self._entity_attrs(entity_id)
+        supported = attrs.get("supported_features", 0)
+        return bool(supported & SUPPORT_REPEAT_SET)
 
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Play audio — auto-stop via repeat_set or pause depending on speaker support.
@@ -98,14 +115,7 @@ class HAClient:
                     "repeat": "off",
                 },
             )
-            ok = self.call(
-                "media_player/play_media",
-                {
-                    "entity_id": entity_id,
-                    "media_content_id": audio_url,
-                    "media_content_type": "music",
-                },
-            )
+            ok = self._play_media(entity_id, audio_url)
             if ok:
                 print(f"[intercom] {entity_id} repeat=off, playing (self-stopping)")
             else:
@@ -113,14 +123,7 @@ class HAClient:
             return ok
 
         # Fallback: play + background auto-pause timer
-        ok = self.call(
-            "media_player/play_media",
-            {
-                "entity_id": entity_id,
-                "media_content_id": audio_url,
-                "media_content_type": "music",
-            },
-        )
+        ok = self._play_media(entity_id, audio_url)
         if not ok:
             print(f"[intercom] HA play failed for {entity_id}")
             return False
