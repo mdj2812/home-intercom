@@ -266,3 +266,64 @@ class TestAutoPauseBg:
 
         # Should still try to pause even if playing was never detected
         assert "media_player/media_pause" in call_args
+
+    def test_pause_buffer_added_to_sleep(self):
+        """pause_buffer=1.5 adds 1.5s to the remaining sleep time."""
+        client = HAClient("http://ha:8123", "tok", pause_buffer=1.5)
+
+        def fake_state(entity_id):
+            return "playing"  # immediately confirmed
+
+        def fake_call(service, data):
+            pass
+
+        sleep_calls = []
+
+        def fake_sleep(sec):
+            sleep_calls.append(sec)
+
+        with (
+            patch.object(client, "state", side_effect=fake_state),
+            patch.object(client, "call", side_effect=fake_call),
+            patch("time.sleep", side_effect=fake_sleep),
+        ):
+            client._auto_pause_bg("media_player.test", 3.0)
+
+        # elapsed ≈ 0, so remaining = 3.0 + 1.5 = 4.5
+        assert sleep_calls, "sleep should be called"
+        assert sleep_calls[0] >= 4.0, f"expected >=4.0, got {sleep_calls[0]}"
+
+    def test_play_and_auto_pause_returns_true_on_success(self):
+        """play_and_auto_pause should return True when play_media succeeds."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b"{}"
+
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("threading.Thread.start"),
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.test", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result is True
+
+    def test_play_and_auto_pause_returns_false_on_failure(self):
+        """play_and_auto_pause should return False when play_media fails."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with (
+            patch(
+                "urllib.request.urlopen",
+                side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
+            ),
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.test", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result is False
+        mock_start.assert_not_called()
