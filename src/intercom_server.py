@@ -15,7 +15,18 @@ app = Flask(__name__)
 HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
-PAUSE_BUFFER = float(os.environ.get("PAUSE_BUFFER", "0"))
+
+
+def _parse_pause_buffer() -> float:
+    raw = os.environ.get("PAUSE_BUFFER", "0")
+    try:
+        return float(raw)
+    except ValueError:
+        print(f"[intercom] invalid PAUSE_BUFFER '{raw}', using 0")
+        return 0.0
+
+
+PAUSE_BUFFER = _parse_pause_buffer()
 
 haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER)
 

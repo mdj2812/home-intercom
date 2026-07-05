@@ -205,3 +205,35 @@ class TestRecordWavPassthroughBranch:
         wav_path = os.path.join(str(tmp_path), "intercom_living.wav")
         assert os.path.exists(wav_path)
         assert os.path.getsize(wav_path) == len(wav_data)
+
+
+class TestParsePauseBuffer:
+    def test_default_zero(self):
+        from intercom_server import _parse_pause_buffer
+
+        with patch.dict(os.environ, {}, clear=True):
+            assert _parse_pause_buffer() == 0.0
+
+    def test_valid_float(self):
+        from intercom_server import _parse_pause_buffer
+
+        with patch.dict(os.environ, {"PAUSE_BUFFER": "1.5"}):
+            assert _parse_pause_buffer() == 1.5
+
+    def test_valid_int_string(self):
+        from intercom_server import _parse_pause_buffer
+
+        with patch.dict(os.environ, {"PAUSE_BUFFER": "2"}):
+            assert _parse_pause_buffer() == 2.0
+
+    def test_invalid_returns_zero(self):
+        from intercom_server import _parse_pause_buffer
+
+        with patch.dict(os.environ, {"PAUSE_BUFFER": "abc"}):
+            assert _parse_pause_buffer() == 0.0
+
+    def test_empty_string_returns_zero(self):
+        from intercom_server import _parse_pause_buffer
+
+        with patch.dict(os.environ, {"PAUSE_BUFFER": ""}):
+            assert _parse_pause_buffer() == 0.0
