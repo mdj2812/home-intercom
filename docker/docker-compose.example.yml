@@ -12,4 +12,5 @@ services:
       - HA_URL=http://<YOUR_HA_IP>:8123
       - HA_TOKEN=<YOUR_HA_LONG_LIVED_TOKEN>
       # - TRUSTED_PROXY=<your caddy/nginx ip>  # restrict forwarded headers for security
+      # - PAUSE_BUFFER=1.0  # extra seconds before auto-pause (for speakers with buffering delay)
     network_mode: host
