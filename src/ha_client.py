@@ -23,8 +23,7 @@ class HAClient:
     def __init__(self, ha_url: str, token: str, pause_buffer: float = 0.0):
         """ha_url: full HA URL like http://homeassistant.local:8123 or https://ha.example.com
 
-        pause_buffer: extra seconds to wait before pausing (accounts for speaker
-            buffering/startup latency — HomePod + Music Assistant needs ~1s).
+        pause_buffer: extra seconds to wait before pausing (default 0).
         """
         parsed = urllib.parse.urlparse(ha_url)
         self._base = f"{parsed.scheme}://{parsed.netloc}/api"

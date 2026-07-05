@@ -48,6 +48,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `HA_TOKEN` | HA long-lived access token |
 | `PUBLIC_URL` | (Optional) Reverse proxy domain for HA to fetch audio |
 | `AUDIO_DIR` | Audio storage path, defaults to `/data/audio` |
+| `PAUSE_BUFFER` | (Optional) Extra seconds before auto-pause, defaults to `0` |
 
 ### rooms.json
 
