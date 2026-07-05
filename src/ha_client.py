@@ -55,12 +55,8 @@ class HAClient:
 
     def state(self, entity_id: str) -> str:
         """Query entity state, returns empty string on failure."""
-        if not self._token:
-            return ""
-        code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
-        if code == 200 and isinstance(result, dict):
-            return result.get("state", "")
-        return ""
+        s, _ = self._entity_attrs(entity_id)
+        return s
 
     def call(self, service: str, data: dict) -> bool:
         """Call HA service, returns success/failure."""
