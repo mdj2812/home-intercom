@@ -53,10 +53,20 @@ class HAClient:
         except Exception as e:
             return 0, str(e)
 
-    def state(self, entity_id: str) -> str:
-        """Query entity state, returns empty string on failure."""
-        s, _ = self._entity_attrs(entity_id)
-        return s
+    def state(self, entity_id: str, with_attrs: bool = False):
+        """Query entity state. Returns str normally, or (state, attrs) if with_attrs=True.
+
+        Returns empty string / ({},) on failure.
+        """
+        if not self._token:
+            return ("", {}) if with_attrs else ""
+        code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
+        if code == 200 and isinstance(result, dict):
+            s = result.get("state", "")
+            if with_attrs:
+                return s, result.get("attributes", {})
+            return s
+        return ("", {}) if with_attrs else ""
 
     def call(self, service: str, data: dict) -> bool:
         """Call HA service, returns success/failure."""
@@ -68,14 +78,11 @@ class HAClient:
             print(f"[intercom] HA call failed ({service}): {_}")
         return ok
 
-    def _entity_attrs(self, entity_id: str) -> tuple[str, dict]:
-        """Query entity state + attributes. Returns (state, attrs), empty on failure."""
-        if not self._token:
-            return "", {}
-        code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
-        if code == 200 and isinstance(result, dict):
-            return result.get("state", ""), result.get("attributes", {})
-        return "", {}
+    def supports_repeat_set(self, entity_id: str) -> bool:
+        """Check if entity supports repeat_set (bit 18 of supported_features)."""
+        _, attrs = self.state(entity_id, with_attrs=True)
+        supported = attrs.get("supported_features", 0)
+        return bool(supported & SUPPORT_REPEAT_SET)
 
     def _play_media(self, entity_id: str, audio_url: str) -> bool:
         """Call media_player.play_media with common params."""
@@ -87,12 +94,6 @@ class HAClient:
                 "media_content_type": "music",
             },
         )
-
-    def supports_repeat_set(self, entity_id: str) -> bool:
-        """Check if entity supports repeat_set (bit 18 of supported_features)."""
-        _, attrs = self._entity_attrs(entity_id)
-        supported = attrs.get("supported_features", 0)
-        return bool(supported & SUPPORT_REPEAT_SET)
 
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Play audio — auto-stop via repeat_set or pause depending on speaker support.
