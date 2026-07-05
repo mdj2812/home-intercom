@@ -16,6 +16,8 @@ Phone PWA → Flask :8764 → Home Assistant API → speakers
 
 Flask handles everything: receive audio, wrap PCM as WAV, call HA play_media. No streaming — most smart speakers require complete files to play.
 
+Auto-stop: sets `repeat=off` so speakers with repeat control stop naturally. Falls back to timer-based pause for speakers without it (`PAUSE_BUFFER` env).
+
 ## Deploy
 
 ```bash
@@ -48,7 +50,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `HA_TOKEN` | HA long-lived access token |
 | `PUBLIC_URL` | (Optional) Reverse proxy domain for HA to fetch audio |
 | `AUDIO_DIR` | Audio storage path, defaults to `/data/audio` |
-| `PAUSE_BUFFER` | (Optional) Extra seconds before auto-pause, defaults to `0` |
+| `PAUSE_BUFFER` | (Optional) Fallback extra seconds before auto-pause, defaults to `0` |
 | `TRUSTED_PROXY` | (Optional) Reverse proxy IP, defaults to `*` (any) |
 
 ### rooms.json
