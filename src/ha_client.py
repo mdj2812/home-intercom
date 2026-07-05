@@ -15,6 +15,7 @@ import urllib.request
 STATE_POLL_INTERVAL = 0.5  # poll interval for state checks (seconds)
 PLAYING_CONFIRM_RETRIES = 10  # max attempts to confirm "playing" (10 × 0.5s = 5s)
 PAUSE_RETRIES = 5  # pause retry count
+SUPPORT_REPEAT_SET = 1 << 18  # media_player supported_features bit 18
 
 
 class HAClient:
@@ -69,13 +70,49 @@ class HAClient:
             print(f"[intercom] HA call failed ({service}): {_}")
         return ok
 
-    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
-        """Background: play audio → confirm playing → wait duration → pause + retry.
+    def supports_repeat_set(self, entity_id: str) -> bool:
+        """Check if entity supports repeat_set (bit 18 of supported_features)."""
+        if not self._token:
+            return False
+        code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
+        if code == 200 and isinstance(result, dict):
+            attrs = result.get("attributes", {})
+            supported = attrs.get("supported_features", 0)
+            return bool(supported & SUPPORT_REPEAT_SET)
+        return False
 
-        Equivalent to the n8n pipeline: play → poll state → wait → pause → verify.
-        duration is audio length in seconds.
-        Returns True if play_media succeeded (auto-pause runs in background thread).
+    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
+        """Play audio — auto-stop via repeat_set or pause depending on speaker support.
+
+        If speaker supports repeat_set: set repeat=off → play (speaker stops
+        naturally, no timing issue). Otherwise fall back to play → sleep(duration)
+        → pause + retry.
+
+        Returns True if play_media succeeded.
         """
+        if self.supports_repeat_set(entity_id):
+            self.call(
+                "media_player/repeat_set",
+                {
+                    "entity_id": entity_id,
+                    "repeat": "off",
+                },
+            )
+            ok = self.call(
+                "media_player/play_media",
+                {
+                    "entity_id": entity_id,
+                    "media_content_id": audio_url,
+                    "media_content_type": "music",
+                },
+            )
+            if ok:
+                print(f"[intercom] {entity_id} repeat=off, playing (self-stopping)")
+            else:
+                print(f"[intercom] HA play failed for {entity_id}")
+            return ok
+
+        # Fallback: play + background auto-pause timer
         ok = self.call(
             "media_player/play_media",
             {
