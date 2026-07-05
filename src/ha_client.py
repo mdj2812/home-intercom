@@ -53,7 +53,7 @@ class HAClient:
         except Exception as e:
             return 0, str(e)
 
-    def state(self, entity_id: str, with_attrs: bool = False):
+    def state(self, entity_id: str, with_attrs: bool = False) -> str | tuple[str, dict]:
         """Query entity state. Returns str normally, or (state, attrs) if with_attrs=True.
 
         Returns empty string / ({},) on failure.
