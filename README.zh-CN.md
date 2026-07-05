@@ -48,6 +48,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `HA_TOKEN` | HA 长期访问令牌 |
 | `PUBLIC_URL` | （可选）反代域名，HA 通过这个 URL 拉音频 |
 | `AUDIO_DIR` | 音频存储目录，默认 `/data/audio` |
+| `PAUSE_BUFFER` | （可选）自动暂停前的额外等待秒数，默认 `0` |
 
 ### rooms.json
 
