@@ -35,6 +35,7 @@ class HAClient:
         self._token = token
         self._ctx = ssl._create_unverified_context()
         self._pause_buffer = pause_buffer
+        self._entity_cache: dict[str, dict] = {}  # entity_id → {app_id, supported_features}
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
@@ -86,9 +87,9 @@ class HAClient:
         Players with repeat_set (MA/HomePod/Chromecast) likely implement
         announce correctly and don't need a pause timer.
         """
-        _, attrs = self.state(entity_id, with_attrs=True)
-        supported = attrs.get("supported_features", 0)
-        return bool(supported & SUPPORT_REPEAT_SET)
+        return bool(
+            self._get_entity_info(entity_id)["supported_features"] & SUPPORT_REPEAT_SET
+        )
 
     def _play_media(self, entity_id: str, audio_url: str) -> bool:
         """Call media_player.play_media with announce=True.
@@ -106,6 +107,19 @@ class HAClient:
             },
         )
 
+    def _get_entity_info(self, entity_id: str) -> dict:
+        """Fetch entity attrs once, cache {app_id, supported_features} per entity.
+
+        These are static hardware capabilities — safe to cache indefinitely.
+        """
+        if entity_id not in self._entity_cache:
+            _, attrs = self.state(entity_id, with_attrs=True)
+            self._entity_cache[entity_id] = {
+                "app_id": attrs.get("app_id", ""),
+                "supported_features": attrs.get("supported_features", 0),
+            }
+        return self._entity_cache[entity_id]
+
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
 
@@ -115,11 +129,17 @@ class HAClient:
 
         Returns True if play_media succeeded.
         """
-        # Fetch attrs once — used for MA check and repeat_set check below
-        _, attrs = self.state(entity_id, with_attrs=True)
+        info = self._get_entity_info(entity_id)
+        app_id = info["app_id"]
+        modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
+
+        print(
+            f"[intercom] {entity_id} app_id={app_id!r}, "
+            f"modern={modern} (features=0x{info['supported_features']:x})"
+        )
 
         # Tier 1: Music Assistant native announcement
-        if attrs.get("app_id") == "music_assistant":
+        if app_id == "music_assistant":
             ok = self.call(
                 "music_assistant/play_announcement",
                 {"entity_id": entity_id, "url": audio_url},
@@ -131,8 +151,6 @@ class HAClient:
             return ok
 
         # Tier 2/3: standard media_player path
-        modern = bool(attrs.get("supported_features", 0) & SUPPORT_REPEAT_SET)
-
         ok = self._play_media(entity_id, audio_url)
         if not ok:
             print(f"[intercom] HA play failed for {entity_id}")
