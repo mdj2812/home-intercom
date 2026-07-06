@@ -360,6 +360,7 @@ class TestAutoPauseBg:
         ).encode()
 
         call_args = []
+
         def fake_call(service, data):
             call_args.append(service)
             return True
@@ -385,6 +386,7 @@ class TestAutoPauseBg:
         mock_resp.read.return_value = b"{}"
 
         call_data = {}
+
         def fake_call(service, data):
             if service == "media_player/play_media":
                 call_data.update(data)
@@ -394,9 +396,7 @@ class TestAutoPauseBg:
             patch.object(client, "call", side_effect=fake_call),
             patch("threading.Thread.start"),
         ):
-            client.play_and_auto_pause(
-                "media_player.test", "http://ha/audio/test.wav", 2.0
-            )
+            client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         assert call_data.get("announce") is True
 

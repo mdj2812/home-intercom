@@ -87,9 +87,7 @@ class HAClient:
         Players with repeat_set (MA/HomePod/Chromecast) likely implement
         announce correctly and don't need a pause timer.
         """
-        return bool(
-            self._get_entity_info(entity_id)["supported_features"] & SUPPORT_REPEAT_SET
-        )
+        return bool(self._get_entity_info(entity_id)["supported_features"] & SUPPORT_REPEAT_SET)
 
     def _play_media(self, entity_id: str, audio_url: str) -> bool:
         """Call media_player.play_media with announce=True.
@@ -147,10 +145,7 @@ class HAClient:
 
         # Tier 2/3: standard media_player path
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
-        print(
-            f"[intercom] {entity_id} modern={modern} "
-            f"(features=0x{info['supported_features']:x})"
-        )
+        print(f"[intercom] {entity_id} modern={modern} (features=0x{info['supported_features']:x})")
 
         ok = self._play_media(entity_id, audio_url)
         if not ok:
