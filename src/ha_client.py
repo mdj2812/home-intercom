@@ -23,6 +23,10 @@ PAUSE_RETRIES = 5  # pause retry count
 # Used as modernity proxy: players that support repeat_set likely
 # implement announce correctly (MA/HomePod/Chromecast).
 SUPPORT_REPEAT_SET = 1 << 18  # = 262144
+# MediaPlayerEntityFeature.PLAY_MEDIA from HA core (same file as above).
+# Entities without this bit (e.g. Xiaomi official integration's WifiSpeaker)
+# cannot call play_media at all and should be skipped early.
+SUPPORT_PLAY_MEDIA = 1 << 9  # = 512
 
 
 class HAClient:
@@ -156,6 +160,15 @@ class HAClient:
             else:
                 _logger.info(f"[intercom] {entity_id} MA announcement failed")
             return ok
+
+        # Guard: non-MA entities must support play_media at all
+        # (e.g. Xiaomi official integration's WifiSpeaker has no play_media impl)
+        if not (info["supported_features"] & SUPPORT_PLAY_MEDIA):
+            _logger.info(
+                f"[intercom] {entity_id} does not support play_media "
+                f"(features=0x{info['supported_features']:x}) — skip"
+            )
+            return False
 
         # Tier 2/3: standard media_player path
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)

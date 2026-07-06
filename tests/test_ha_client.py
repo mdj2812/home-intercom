@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
 from ha_client import (
+    SUPPORT_PLAY_MEDIA,
     SUPPORT_REPEAT_SET,
     HAClient,
 )
@@ -212,6 +213,29 @@ class TestHAClientPlayAndAutoPause:
         ):
             client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
 
+        mock_start.assert_not_called()
+
+    def test_skips_entity_without_play_media(self):
+        """Entity without SUPPORT_PLAY_MEDIA (e.g. Xiaomi official) is skipped."""
+        client = HAClient("http://ha:8123", "tok")
+        # Xiaomi WifiSpeaker: has PLAY/PAUSE/STOP/etc but NOT PLAY_MEDIA (bit 9)
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": 0x1543D}}
+        ).encode()
+
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch.object(client, "call") as mock_call,
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.xiaomi", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result is False
+        mock_call.assert_not_called()
         mock_start.assert_not_called()
 
 
