@@ -4,12 +4,15 @@ Encapsulates all HA interactions: state queries, service calls, play + auto-paus
 """
 
 import json
+import logging
 import ssl
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+_logger = logging.getLogger(__name__)
 
 # ——— Retry constants ———
 STATE_POLL_INTERVAL = 0.5  # poll interval for state checks (seconds)
@@ -36,6 +39,7 @@ class HAClient:
         self._ctx = ssl._create_unverified_context()
         self._pause_buffer = pause_buffer
         self._entity_cache: dict[str, dict] = {}  # entity_id → {app_id, supported_features}
+        self._cache_lock = threading.Lock()
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
@@ -78,7 +82,7 @@ class HAClient:
         code, _ = self._request("POST", f"/services/{service}", data=data, timeout=10)
         ok = code == 200
         if not ok:
-            print(f"[intercom] HA call failed ({service}): {_}")
+            _logger.info(f"[intercom] HA call failed ({service}): {_}")
         return ok
 
     def supports_repeat_set(self, entity_id: str) -> bool:
@@ -92,8 +96,9 @@ class HAClient:
     def _play_media(self, entity_id: str, audio_url: str) -> bool:
         """Call media_player.play_media with announce=True.
 
-        announce=True tells the player this is an intercom announcement —
-        it should resume/stop naturally after the audio finishes.
+        announce=True signals an intercom announcement. Modern players
+        (MA/HomePod/Chromecast) respect it and stop naturally; basic
+        players (Xiaomi) ignore it and rely on the pause timer instead.
         """
         return self.call(
             "media_player/play_media",
@@ -110,13 +115,14 @@ class HAClient:
 
         These are static hardware capabilities — safe to cache indefinitely.
         """
-        if entity_id not in self._entity_cache:
-            _, attrs = self.state(entity_id, with_attrs=True)
-            self._entity_cache[entity_id] = {
-                "app_id": attrs.get("app_id", ""),
-                "supported_features": attrs.get("supported_features", 0),
-            }
-        return self._entity_cache[entity_id]
+        with self._cache_lock:
+            if entity_id not in self._entity_cache:
+                _, attrs = self.state(entity_id, with_attrs=True)
+                self._entity_cache[entity_id] = {
+                    "app_id": attrs.get("app_id", ""),
+                    "supported_features": attrs.get("supported_features", 0),
+                }
+            return self._entity_cache[entity_id]
 
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
@@ -132,28 +138,30 @@ class HAClient:
 
         # Tier 1: Music Assistant native announcement
         if app_id == "music_assistant":
-            print(f"[intercom] {entity_id} MA player — using play_announcement")
+            _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
             ok = self.call(
                 "music_assistant/play_announcement",
                 {"entity_id": entity_id, "url": audio_url},
             )
             if ok:
-                print(f"[intercom] {entity_id} MA announcement (self-stopping)")
+                _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
             else:
-                print(f"[intercom] {entity_id} MA announcement failed")
+                _logger.info(f"[intercom] {entity_id} MA announcement failed")
             return ok
 
         # Tier 2/3: standard media_player path
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
-        print(f"[intercom] {entity_id} modern={modern} (features=0x{info['supported_features']:x})")
+        _logger.info(
+            f"[intercom] {entity_id} modern={modern} (features=0x{info['supported_features']:x})"
+        )
 
         ok = self._play_media(entity_id, audio_url)
         if not ok:
-            print(f"[intercom] HA play failed for {entity_id}")
+            _logger.info(f"[intercom] HA play failed for {entity_id}")
             return False
 
         if modern:
-            print(f"[intercom] {entity_id} modern player — announce mode (self-stopping)")
+            _logger.info(f"[intercom] {entity_id} modern player — announce mode (self-stopping)")
             return True
 
         # Basic player: pause timer stops any looping
@@ -172,17 +180,17 @@ class HAClient:
         for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
             state = self.state(entity_id)
             if state == "playing":
-                print(f"[intercom] {entity_id} playing confirmed (attempt {attempt})")
+                _logger.info(f"[intercom] {entity_id} playing confirmed (attempt {attempt})")
                 break
             time.sleep(STATE_POLL_INTERVAL)
         else:
-            print(f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing")
+            _logger.info(f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing")
 
         # 2) Wait for remaining duration + buffer
         elapsed = time.monotonic() - t0
         remaining = max(0, wait_sec - elapsed + self._pause_buffer)
         if remaining > 0:
-            print(
+            _logger.info(
                 f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s (buffer +{self._pause_buffer:.1f}s)"
             )
             time.sleep(remaining)
@@ -193,10 +201,14 @@ class HAClient:
             time.sleep(STATE_POLL_INTERVAL)
             state = self.state(entity_id)
             if state != "playing":
-                print(f"[intercom] {entity_id} paused (attempt {attempt})")
+                _logger.info(f"[intercom] {entity_id} paused (attempt {attempt})")
                 return
-            print(f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})")
-        print(f"[intercom] WARNING: {entity_id} may still be playing after {PAUSE_RETRIES} retries")
+            _logger.info(
+                f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})"
+            )
+        _logger.info(
+            f"[intercom] WARNING: {entity_id} may still be playing after {PAUSE_RETRIES} retries"
+        )
 
     def query_statuses(self, room_map: dict) -> dict[str, bool]:
         """Batch query speaker online status for all rooms."""
