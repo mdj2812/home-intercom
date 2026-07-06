@@ -331,7 +331,7 @@ class TestAutoPauseBg:
         mock_start.assert_not_called()
 
     def test_repeat_set_path_skips_auto_pause(self):
-        """When repeat_set is supported, no background thread is spawned."""
+        """When idle + repeat_set supported: set repeat=off, play, no thread."""
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -348,6 +348,64 @@ class TestAutoPauseBg:
 
         assert result is True
         mock_start.assert_not_called()
+
+    def test_was_playing_skips_repeat_set(self):
+        """When already playing + repeat_set: no repeat_set call, announce mode."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_state_resp = MagicMock()
+        mock_state_resp.status = 200
+        mock_state_resp.read.return_value = json.dumps(
+            {"state": "playing", "attributes": {"supported_features": SUPPORT_REPEAT_SET}}
+        ).encode()
+
+        call_args = []
+        def fake_call(service, data):
+            call_args.append((service, data))
+            return True
+
+        with (
+            patch.object(client, "call", side_effect=fake_call),
+            patch.object(client, "supports_repeat_set", return_value=True),
+            patch("urllib.request.urlopen", return_value=mock_state_resp),
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.test", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result is True
+        # Should NOT call repeat_set when was_playing=True
+        repeat_calls = [s for s, _ in call_args if "repeat_set" in s]
+        assert len(repeat_calls) == 0
+        # Should call play_media with announce=True
+        play_calls = [d for s, d in call_args if s == "media_player/play_media"]
+        assert len(play_calls) == 1
+        assert play_calls[0].get("announce") is True
+        # No background thread needed (announce handles resume)
+        mock_start.assert_not_called()
+
+    def test_play_media_includes_announce(self):
+        """play_media always includes announce=True for intercom behavior."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b"{}"
+
+        call_data = {}
+        def fake_call(service, data):
+            if service == "media_player/play_media":
+                call_data.update(data)
+            return True
+
+        with (
+            patch.object(client, "call", side_effect=fake_call),
+            patch("threading.Thread.start"),
+        ):
+            client.play_and_auto_pause(
+                "media_player.test", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert call_data.get("announce") is True
 
 
 class TestSupportsRepeatSet:
