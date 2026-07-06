@@ -85,26 +85,36 @@ class HAClient:
         return bool(supported & SUPPORT_REPEAT_SET)
 
     def _play_media(self, entity_id: str, audio_url: str) -> bool:
-        """Call media_player.play_media with common params."""
+        """Call media_player.play_media with announce=enqueue.
+
+        announce=True tells the player this is an intercom announcement —
+        Music Assistant handles resume/stop naturally.
+        """
         return self.call(
             "media_player/play_media",
             {
                 "entity_id": entity_id,
                 "media_content_id": audio_url,
                 "media_content_type": "music",
+                "announce": True,
             },
         )
 
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Play audio — auto-stop via repeat_set or pause depending on speaker support.
 
-        If speaker supports repeat_set: set repeat=off → play (speaker stops
-        naturally, no timing issue). Otherwise fall back to play → sleep(duration)
-        → pause + retry.
+        Strategy:
+        - Save pre-play state. If entity was already playing music, leave repeat
+          alone so the player resumes after the announcement.
+        - If NOT playing and speaker supports repeat_set: set repeat=off → play
+          with announce=True (speaker stops naturally after announcement).
+        - Otherwise fall back to play → sleep(duration) → pause + retry.
 
         Returns True if play_media succeeded.
         """
-        if self.supports_repeat_set(entity_id):
+        was_playing = self.state(entity_id) == "playing"
+
+        if not was_playing and self.supports_repeat_set(entity_id):
             self.call(
                 "media_player/repeat_set",
                 {
@@ -119,13 +129,22 @@ class HAClient:
                 print(f"[intercom] HA play failed for {entity_id}")
             return ok
 
-        # Fallback: play + background auto-pause timer
+        # Already was playing (or no repeat_set support):
+        # let announce=True in _play_media handle resume naturally.
+        if was_playing:
+            print(f"[intercom] {entity_id} was already playing — announce mode (will resume)")
+
         ok = self._play_media(entity_id, audio_url)
         if not ok:
             print(f"[intercom] HA play failed for {entity_id}")
             return False
 
-        # Spawn background thread for auto-pause
+        # If was playing, trust announce=True to handle resume — no pause needed.
+        if was_playing:
+            print(f"[intercom] {entity_id} announced (resume handled by player)")
+            return True
+
+        # Fallback: play + background auto-pause timer
         threading.Thread(
             target=self._auto_pause_bg,
             args=(entity_id, duration),
