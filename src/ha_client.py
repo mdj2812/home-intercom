@@ -131,15 +131,10 @@ class HAClient:
         """
         info = self._get_entity_info(entity_id)
         app_id = info["app_id"]
-        modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
-
-        print(
-            f"[intercom] {entity_id} app_id={app_id!r}, "
-            f"modern={modern} (features=0x{info['supported_features']:x})"
-        )
 
         # Tier 1: Music Assistant native announcement
         if app_id == "music_assistant":
+            print(f"[intercom] {entity_id} MA player — using play_announcement")
             ok = self.call(
                 "music_assistant/play_announcement",
                 {"entity_id": entity_id, "url": audio_url},
@@ -151,6 +146,12 @@ class HAClient:
             return ok
 
         # Tier 2/3: standard media_player path
+        modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
+        print(
+            f"[intercom] {entity_id} modern={modern} "
+            f"(features=0x{info['supported_features']:x})"
+        )
+
         ok = self._play_media(entity_id, audio_url)
         if not ok:
             print(f"[intercom] HA play failed for {entity_id}")
