@@ -342,6 +342,10 @@ body {
 </div>
 
 <script>
+// --- Shared with ha_client.py EntityStatus / PlayError ---
+const EntityStatus = { ONLINE: "online", UNAVAILABLE: "unavailable", NO_PLAY_MEDIA: "no_play_media" };
+const PlayError   = { PLAY_FAILED: "play_failed", MA_FAILED: "ma_failed" };
+
 const GRID = document.getElementById('grid');
 const RECORD_URL = '/record';
 // PCM target rate fetched from /version on startup

@@ -42,6 +42,17 @@ class EntityStatus(StrEnum):
     NO_PLAY_MEDIA = "no_play_media"
 
 
+class PlayError(StrEnum):
+    """Play-operation errors — distinct from EntityStatus (query/state).
+
+    These are returned in play_and_auto_pause's {"ok": False, "error": ...}
+    and surfaced to the frontend via the errors array in the response JSON.
+    """
+
+    PLAY_FAILED = "play_failed"
+    MA_FAILED = "ma_failed"
+
+
 class HAClient:
     """Home Assistant REST API client."""
 
@@ -181,7 +192,7 @@ class HAClient:
             _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
             return {"ok": True}
         _logger.info(f"[intercom] {entity_id} MA announcement failed")
-        return {"ok": False, "error": "ma_failed"}
+        return {"ok": False, "error": PlayError.MA_FAILED}
 
     def _has_play_media(self, info: dict) -> bool:
         """Check if entity supports media_player.play_media (bit 9)."""
