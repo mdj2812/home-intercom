@@ -16,6 +16,12 @@
 
 Flask 负责全部：收音频、转 WAV、调 HA 播放。不做流式推送，因为大多数智能音箱只支持完整文件下载后播放。
 
+自动停止分三层，根据音箱能力自动选择：
+
+1. **Music Assistant 播放器** — 原生 `play_announcement`（最快最可靠）
+2. **现代播放器** — `play_media(announce=True)` + `repeat=off`（HomePod/Chromecast）
+3. **普通播放器** — 播放后定时暂停（`PAUSE_BUFFER` 环境变量调整缓冲秒数）
+
 ## 部署
 
 ```bash
@@ -48,6 +54,8 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `HA_TOKEN` | HA 长期访问令牌 |
 | `PUBLIC_URL` | （可选）反代域名，HA 通过这个 URL 拉音频 |
 | `AUDIO_DIR` | 音频存储目录，默认 `/data/audio` |
+| `PAUSE_BUFFER` | （可选）后备自动暂停额外等待秒数，默认 `0` |
+| `TRUSTED_PROXY` | （可选）反代 IP，默认 `*`（允许所有） |
 
 ### rooms.json
 

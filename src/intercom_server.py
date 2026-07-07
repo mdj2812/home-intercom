@@ -16,7 +16,19 @@ HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 
-haclient = HAClient(HA_URL, HA_TOKEN)
+
+def _parse_pause_buffer() -> float:
+    raw = os.environ.get("PAUSE_BUFFER", "0")
+    try:
+        return float(raw)
+    except ValueError:
+        print(f"[intercom] invalid PAUSE_BUFFER '{raw}', using 0")
+        return 0.0
+
+
+PAUSE_BUFFER = _parse_pause_buffer()
+
+haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER)
 
 PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
 PCM_BPS = 2  # 16-bit audio = 2 bytes per sample

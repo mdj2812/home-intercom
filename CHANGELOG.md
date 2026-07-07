@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.6.1 (2026-07-07)
+
+- **Chinese README** — added `README.zh-CN.md` with localized UI screenshot
+- **English README** — switched primary language to English, de-branded (generic `media_player`, not Xiaomi-specific)
+- **Public release cleanup** — sanitized internal IPs, domains, and device IDs
+- **AUDIO_DIR fix** — moved `os.makedirs()` after config validation to avoid empty directory residue
+- **GitHub Actions CI** — quality (lint + test + coverage≥85%) and build-docker workflows
+- **Docker image** — split `docker/.docker-image` into version-only, CI variables managed separately
+- **Three-tier auto-stop** — MA `play_announcement` → modern `repeat_set(off)` → basic timer fallback
+- **repeat_set smart stop** — HomePod/Chromecast players stop naturally via `SUPPORT_REPEAT_SET`, no timer needed
+- **PAUSE_BUFFER configurable** — env var to adjust timer buffer duration, fixes Xiaomi early cutoff
+- **Entity attribute caching** — `_get_entity_info()` with double-checked locking + success-only cache, prevents transient errors from permanently downgrading speaker capabilities
+- **Refactor** — `state()` as single entry point, `_play_media()` and `_entity_attrs()` extracted, eliminates duplicate API calls
+- **Music Assistant guide** — README section recommending MA players for native `play_announcement` (no timer needed)
+- **Tests** — 74 pytest tests, 94% coverage
+
 ## v1.6.0 (2026-06-28)
 
 - **去掉 ffmpeg** — Docker 镜像 579→131MB，纯 Python PCM→WAV，无外部依赖
