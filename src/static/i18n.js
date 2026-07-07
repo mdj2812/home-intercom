@@ -9,7 +9,7 @@ const I18N = (() => {
       appTitle: "📢 家庭广播",
       appHint: "按住录音 · 松开发送",
       broadcastAll: "全部广播",
-      statusReady: "准备好",
+      statusReady: "就绪",
       statusRecording: "录音中…",
       statusSending: "发送中…",
       statusSent: "已发送",

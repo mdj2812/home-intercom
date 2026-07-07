@@ -8,6 +8,7 @@ import logging
 import ssl
 import threading
 import time
+from enum import StrEnum
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -27,6 +28,18 @@ SUPPORT_REPEAT_SET = 1 << 18  # = 262144
 # Entities without this bit (e.g. Xiaomi official integration's WifiSpeaker)
 # cannot call play_media at all and should be skipped early.
 SUPPORT_PLAY_MEDIA = 1 << 9  # = 512
+
+
+class EntityStatus(StrEnum):
+    """Shared entity status constants — used by both backend and frontend.
+
+    Frontend equivalent: pollSpeakerStatus() in intercom.html maps these to
+    green/red dot + i18n text (statusReady / statusSkipped / statusUnavailable).
+    """
+
+    ONLINE = "online"
+    UNAVAILABLE = "unavailable"
+    NO_PLAY_MEDIA = "no_play_media"
 
 
 class HAClient:
@@ -150,7 +163,7 @@ class HAClient:
         # which would otherwise be misidentified as no_play_media
         state = self.state(entity_id)
         if not state or state == "unavailable":
-            return {"ok": False, "error": "unavailable"}
+            return {"ok": False, "error": EntityStatus.UNAVAILABLE}
 
         info = self._get_entity_info(entity_id)
         if info["app_id"] == "music_assistant":
@@ -183,7 +196,7 @@ class HAClient:
                 f"[intercom] {entity_id} does not support play_media "
                 f"(features=0x{info['supported_features']:x}) — skip"
             )
-            return {"ok": False, "error": "no_play_media"}
+            return {"ok": False, "error": EntityStatus.NO_PLAY_MEDIA}
 
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
         _logger.info(
@@ -248,7 +261,7 @@ class HAClient:
     def query_statuses(self, room_map: dict) -> dict[str, str]:
         """Batch query speaker online status for all rooms.
 
-        Returns one of: "online", "unavailable", "no_play_media".
+        Returns EntityStatus values: "online", "unavailable", "no_play_media".
         Only "online" rooms can receive broadcasts. The frontend uses
         this to show green/grey/red indicators and status text.
         """
@@ -256,13 +269,13 @@ class HAClient:
         for key, room in room_map.items():
             entity = room.get("entity", "")
             if not entity:
-                status[key] = "online"
+                status[key] = EntityStatus.ONLINE
                 continue
             state = self.state(entity)
             if not state or state == "unavailable":
-                status[key] = "unavailable"
+                status[key] = EntityStatus.UNAVAILABLE
                 continue
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
-            status[key] = "online" if self._has_play_media(info) else "no_play_media"
+            status[key] = EntityStatus.ONLINE if self._has_play_media(info) else EntityStatus.NO_PLAY_MEDIA
         return status
