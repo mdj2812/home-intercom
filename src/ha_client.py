@@ -136,14 +136,15 @@ class HAClient:
                 }
             return self._entity_cache.get(entity_id, {"app_id": "", "supported_features": 0})
 
-    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
+    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> dict:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
 
         1. Music Assistant (app_id == "music_assistant"): play_announcement
         2. Modern player (supports repeat_set): play_media(announce=True)
         3. Basic player (Xiaomi): play_media(announce=True) + pause timer
 
-        Returns True if play_media succeeded.
+        Returns {"ok": True} on success,
+        {"ok": False, "error": "reason"} on failure.
         """
         info = self._get_entity_info(entity_id)
         app_id = info["app_id"]
@@ -157,18 +158,18 @@ class HAClient:
             )
             if ok:
                 _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
-            else:
-                _logger.info(f"[intercom] {entity_id} MA announcement failed")
-            return ok
+                return {"ok": True}
+            _logger.info(f"[intercom] {entity_id} MA announcement failed")
+            return {"ok": False, "error": "ma_failed"}
 
         # Guard: non-MA entities must support play_media at all
         # (e.g. Xiaomi official integration's WifiSpeaker has no play_media impl)
         if not (info["supported_features"] & SUPPORT_PLAY_MEDIA):
-            _logger.info(
+            _logger.warning(
                 f"[intercom] {entity_id} does not support play_media "
                 f"(features=0x{info['supported_features']:x}) — skip"
             )
-            return False
+            return {"ok": False, "error": "no_play_media"}
 
         # Tier 2/3: standard media_player path
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
@@ -179,11 +180,11 @@ class HAClient:
         ok = self._play_media(entity_id, audio_url)
         if not ok:
             _logger.info(f"[intercom] HA play failed for {entity_id}")
-            return False
+            return {"ok": False, "error": "play_failed"}
 
         if modern:
             _logger.info(f"[intercom] {entity_id} modern player — announce mode (self-stopping)")
-            return True
+            return {"ok": True}
 
         # Basic player: pause timer stops any looping
         threading.Thread(
@@ -191,7 +192,7 @@ class HAClient:
             args=(entity_id, duration),
             daemon=True,
         ).start()
-        return True
+        return {"ok": True}
 
     def _auto_pause_bg(self, entity_id: str, wait_sec: float):
         """Background thread: confirm playback → wait → pause + verify."""

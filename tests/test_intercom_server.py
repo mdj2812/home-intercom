@@ -159,7 +159,9 @@ class TestRecordPcmBranch:
 
         monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
 
-        with patch.object(intercom_server.haclient, "play_and_auto_pause", return_value=True):
+        with patch.object(
+            intercom_server.haclient, "play_and_auto_pause", return_value={"ok": True}
+        ):
             resp = client.post("/record?target=living&rate=16000", data=pcm)
 
         assert resp.status_code == 200
@@ -195,7 +197,9 @@ class TestRecordWavPassthroughBranch:
 
         monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
 
-        with patch.object(intercom_server.haclient, "play_and_auto_pause", return_value=True):
+        with patch.object(
+            intercom_server.haclient, "play_and_auto_pause", return_value={"ok": True}
+        ):
             resp = client.post("/record?target=living", data=wav_data)
 
         assert resp.status_code == 200

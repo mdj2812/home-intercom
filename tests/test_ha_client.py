@@ -240,7 +240,7 @@ class TestHAClientPlayAndAutoPause:
                 "media_player.xiaomi", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is False
+        assert result == {"ok": False, "error": "no_play_media"}
         mock_call.assert_not_called()
         mock_start.assert_not_called()
 
@@ -342,10 +342,10 @@ class TestAutoPauseBg:
                 "media_player.test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is True
+        assert result == {"ok": True}
 
     def test_play_and_auto_pause_returns_false_on_failure(self):
-        """play_and_auto_pause should return False when play_media fails."""
+        """play_and_auto_pause should return {"ok": False, "error": "play_failed"} when play_media fails."""
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -362,7 +362,7 @@ class TestAutoPauseBg:
                 "media_player.test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is False
+        assert result == {"ok": False, "error": "play_failed"}
         mock_start.assert_not_called()
 
     def test_modern_player_skips_timer(self):
@@ -385,7 +385,7 @@ class TestAutoPauseBg:
                 "media_player.test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is True
+        assert result == {"ok": True}
         mock_start.assert_not_called()
 
     def test_ma_player_uses_announcement(self):
@@ -412,7 +412,7 @@ class TestAutoPauseBg:
                 "media_player.ma_test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is True
+        assert result == {"ok": True}
         assert "music_assistant/play_announcement" in call_args
         mock_start.assert_not_called()
 
