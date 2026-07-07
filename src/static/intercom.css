@@ -289,9 +289,9 @@ body {
 .room-card.recording .status { color: #33d17a; }
 
 .room-card.recording .bars span {
-      background: #33d17a;
-      animation: bounce .6s ease-in-out infinite alternate;
-    }
+  background: #33d17a;
+  animation: bounce .6s ease-in-out infinite alternate;
+}
 
 /* wave animation */
 .room-card.recording .waves::before {
