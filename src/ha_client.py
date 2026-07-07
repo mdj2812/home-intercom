@@ -8,10 +8,10 @@ import logging
 import ssl
 import threading
 import time
-from enum import StrEnum
 import urllib.error
 import urllib.parse
 import urllib.request
+from enum import StrEnum
 
 _logger = logging.getLogger(__name__)
 

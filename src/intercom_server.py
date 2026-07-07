@@ -8,7 +8,7 @@ import wave
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from ha_client import EntityStatus, HAClient
+from ha_client import HAClient
 
 app = Flask(__name__)
 
