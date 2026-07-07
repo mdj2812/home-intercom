@@ -103,10 +103,19 @@ class TestHtmlStructure:
             pytest.skip("npx not available — skipping stylelint check")
 
         result = subprocess.run(
-            ["npx", "stylelint", self.CSS_PATH],
+            [
+                "npx",
+                "--yes",
+                "-p",
+                "stylelint@17",
+                "-p",
+                "stylelint-config-standard@40",
+                "stylelint",
+                self.CSS_PATH,
+            ],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=120,
         )
         assert result.returncode == 0, f"stylelint failed:\n{result.stdout}{result.stderr}"
 
