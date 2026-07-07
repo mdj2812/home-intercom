@@ -191,7 +191,9 @@ class TestHAClientPlayAndAutoPause:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b"{}"
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
             patch("urllib.request.urlopen", return_value=mock_resp),
@@ -203,12 +205,15 @@ class TestHAClientPlayAndAutoPause:
 
     def test_play_failure_does_not_spawn_thread(self):
         client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
-            patch(
-                "urllib.request.urlopen",
-                side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
-            ),
+            patch.object(client, "call", return_value=False),
+            patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
             client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
@@ -218,11 +223,12 @@ class TestHAClientPlayAndAutoPause:
     def test_skips_entity_without_play_media(self):
         """Entity without SUPPORT_PLAY_MEDIA (e.g. Xiaomi official) is skipped."""
         client = HAClient("http://ha:8123", "tok")
-        # Xiaomi WifiSpeaker: has PLAY/PAUSE/STOP/etc but NOT PLAY_MEDIA (bit 9)
+        # has REPEAT_SET but NOT PLAY_MEDIA — guard should catch it before modern check
+        assert not (SUPPORT_REPEAT_SET & SUPPORT_PLAY_MEDIA)
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = json.dumps(
-            {"state": "idle", "attributes": {"supported_features": 0x1543D}}
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_REPEAT_SET}}
         ).encode()
 
         with (
@@ -324,7 +330,9 @@ class TestAutoPauseBg:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b"{}"
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
             patch("urllib.request.urlopen", return_value=mock_resp),
@@ -339,12 +347,15 @@ class TestAutoPauseBg:
     def test_play_and_auto_pause_returns_false_on_failure(self):
         """play_and_auto_pause should return False when play_media fails."""
         client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
-            patch(
-                "urllib.request.urlopen",
-                side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
-            ),
+            patch.object(client, "call", return_value=False),
+            patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
             result = client.play_and_auto_pause(
@@ -360,7 +371,10 @@ class TestAutoPauseBg:
         mock_state_resp = MagicMock()
         mock_state_resp.status = 200
         mock_state_resp.read.return_value = json.dumps(
-            {"state": "idle", "attributes": {"supported_features": SUPPORT_REPEAT_SET}}
+            {
+                "state": "idle",
+                "attributes": {"supported_features": SUPPORT_PLAY_MEDIA | SUPPORT_REPEAT_SET},
+            }
         ).encode()
 
         with (
@@ -407,7 +421,9 @@ class TestAutoPauseBg:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b"{}"
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         call_data = {}
 
@@ -418,6 +434,7 @@ class TestAutoPauseBg:
 
         with (
             patch.object(client, "call", side_effect=fake_call),
+            patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start"),
         ):
             client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
