@@ -147,22 +147,26 @@ class HAClient:
         {"ok": False, "error": "reason"} on failure.
         """
         info = self._get_entity_info(entity_id)
-        app_id = info["app_id"]
+        if info["app_id"] == "music_assistant":
+            return self._play_ma_announcement(entity_id, audio_url)
+        return self._play_standard(entity_id, audio_url, duration, info)
 
-        # Tier 1: Music Assistant native announcement
-        if app_id == "music_assistant":
-            _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
-            ok = self.call(
-                "music_assistant/play_announcement",
-                {"entity_id": entity_id, "url": audio_url},
-            )
-            if ok:
-                _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
-                return {"ok": True}
-            _logger.info(f"[intercom] {entity_id} MA announcement failed")
-            return {"ok": False, "error": "ma_failed"}
+    def _play_ma_announcement(self, entity_id: str, audio_url: str) -> dict:
+        """Tier 1: Music Assistant play_announcement (self-stopping)."""
+        _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
+        ok = self.call(
+            "music_assistant/play_announcement",
+            {"entity_id": entity_id, "url": audio_url},
+        )
+        if ok:
+            _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
+            return {"ok": True}
+        _logger.info(f"[intercom] {entity_id} MA announcement failed")
+        return {"ok": False, "error": "ma_failed"}
 
-        # Guard: non-MA entities must support play_media at all
+    def _play_standard(self, entity_id: str, audio_url: str, duration: float, info: dict) -> dict:
+        """Tier 2/3: standard media_player — guard, play, optional timer."""
+        # Guard: entity must support play_media at all
         # (e.g. Xiaomi official integration's WifiSpeaker has no play_media impl)
         if not (info["supported_features"] & SUPPORT_PLAY_MEDIA):
             _logger.warning(
@@ -171,7 +175,6 @@ class HAClient:
             )
             return {"ok": False, "error": "no_play_media"}
 
-        # Tier 2/3: standard media_player path
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
         _logger.info(
             f"[intercom] {entity_id} modern={modern} (features=0x{info['supported_features']:x})"
@@ -233,7 +236,13 @@ class HAClient:
         )
 
     def query_statuses(self, room_map: dict) -> dict[str, bool]:
-        """Batch query speaker online status for all rooms."""
+        """Batch query speaker online status for all rooms.
+
+        A room is considered available only if its entity is online AND
+        supports play_media. Entities without play_media (e.g. Xiaomi
+        official integration) show as unavailable so the frontend can
+        display a red indicator.
+        """
         status = {}
         for key, room in room_map.items():
             entity = room.get("entity", "")
@@ -241,5 +250,10 @@ class HAClient:
                 status[key] = True
                 continue
             state = self.state(entity)
-            status[key] = state != "unavailable" if state else False
+            if not state or state == "unavailable":
+                status[key] = False
+                continue
+            # Entity is online — still unavailable if it can't play_media
+            info = self._get_entity_info(entity)
+            status[key] = bool(info["supported_features"] & SUPPORT_PLAY_MEDIA)
         return status

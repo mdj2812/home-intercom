@@ -137,7 +137,9 @@ class TestHAClientQueryStatuses:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b'{"state": "playing"}'
+        mock_resp.read.return_value = json.dumps(
+            {"state": "playing", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         room_map = {
             "living": {"entity": "media_player.living"},
@@ -177,6 +179,22 @@ class TestHAClientQueryStatuses:
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = b'{"state": ""}'
+
+        room_map = {"living": {"entity": "media_player.living"}}
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = client.query_statuses(room_map)
+
+        assert result == {"living": False}
+
+    def test_no_play_media_treated_as_unavailable(self):
+        """Entity online but without PLAY_MEDIA — shows unavailable (red indicator)."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": 0}}
+        ).encode()
 
         room_map = {"living": {"entity": "media_player.living"}}
 
