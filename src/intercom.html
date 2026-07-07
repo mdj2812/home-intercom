@@ -520,7 +520,10 @@ async function processAndSend() {
             dot.style.background = '#c0392b';
             dot.style.boxShadow = '0 0 4px #c0392b';
           }
-          setCardState(card, '', I18N.t('statusSkipped'));
+          const msg = (e.error === 'unavailable' || e.error === 'play_failed' || e.error === 'ma_failed')
+            ? I18N.t('statusUnavailable')
+            : I18N.t('statusSkipped');
+          setCardState(card, '', msg);
         }
       }
       if (sentCurrent) setCardState(currentCard, 'sent', I18N.t('statusSent'));
