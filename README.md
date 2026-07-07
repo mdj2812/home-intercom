@@ -67,12 +67,14 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 ```json
 {
-  "living":  {"name": "Living Room", "entity": "media_player.living_room_speaker"},
+  "living":  {"name": "Living Room", "entity": "media_player.living_room_speaker", "announce_volume": 50},
   "bedroom": {"name": "Bedroom",    "entity": "media_player.bedroom_speaker"}
 }
 ```
 
 `entity` is the HA entity_id of your speaker. Changes take effect immediately — no restart needed.
+
+`announce_volume` (optional, 0-100) overrides the announcement volume for Music Assistant players only. When set, MA will play a chime then announce at the specified volume. Omit the field to use the player's current volume.
 
 ## HTTPS
 

@@ -159,9 +159,7 @@ class TestRecordPcmBranch:
 
         monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
 
-        with patch.object(
-            intercom_server.haclient, "play_and_auto_pause", return_value={"ok": True}
-        ):
+        with patch.object(intercom_server.haclient, "play_announcement", return_value={"ok": True}):
             resp = client.post("/record?target=living&rate=16000", data=pcm)
 
         assert resp.status_code == 200
@@ -197,9 +195,7 @@ class TestRecordWavPassthroughBranch:
 
         monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
 
-        with patch.object(
-            intercom_server.haclient, "play_and_auto_pause", return_value={"ok": True}
-        ):
+        with patch.object(intercom_server.haclient, "play_announcement", return_value={"ok": True}):
             resp = client.post("/record?target=living", data=wav_data)
 
         assert resp.status_code == 200
@@ -209,6 +205,55 @@ class TestRecordWavPassthroughBranch:
         wav_path = os.path.join(str(tmp_path), "intercom_living.wav")
         assert os.path.exists(wav_path)
         assert os.path.getsize(wav_path) == len(wav_data)
+
+
+class TestRecordAnnounceVolume:
+    """Verify announce_volume from room config is passed through to play_announcement."""
+
+    def test_ma_announce_volume_passed(self, client, monkeypatch, tmp_path):
+        """Room with announce_volume → passed to play_announcement."""
+        import intercom_server
+
+        # 0.1s of 16-bit mono 16000 Hz PCM
+        pcm = b"\x00\x00" * 1600
+
+        room_with_volume = {
+            "living": {"name": "Living", "entity": "media_player.living", "announce_volume": 50},
+        }
+
+        monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
+        monkeypatch.setattr(intercom_server, "ROOM_MAP", room_with_volume)
+
+        with patch.object(
+            intercom_server.haclient, "play_announcement", return_value={"ok": True}
+        ) as mock_play:
+            resp = client.post("/record?target=living&rate=16000", data=pcm)
+
+        assert resp.status_code == 200
+        _, kwargs = mock_play.call_args
+        assert kwargs.get("announce_volume") == 50
+
+    def test_ma_no_announce_volume_passed(self, client, monkeypatch, tmp_path):
+        """Room without announce_volume → volume not passed."""
+        import intercom_server
+
+        pcm = b"\x00\x00" * 1600
+
+        room_no_volume = {
+            "living": {"name": "Living", "entity": "media_player.living"},
+        }
+
+        monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
+        monkeypatch.setattr(intercom_server, "ROOM_MAP", room_no_volume)
+
+        with patch.object(
+            intercom_server.haclient, "play_announcement", return_value={"ok": True}
+        ) as mock_play:
+            resp = client.post("/record?target=living&rate=16000", data=pcm)
+
+        assert resp.status_code == 200
+        _, kwargs = mock_play.call_args
+        assert kwargs.get("announce_volume") is None
 
 
 class TestParsePauseBuffer:

@@ -45,7 +45,7 @@ class EntityStatus(StrEnum):
 class PlayError(StrEnum):
     """Play-operation errors — distinct from EntityStatus (query/state).
 
-    These are returned in play_and_auto_pause's {"ok": False, "error": ...}
+    These are returned in play_announcement's {"ok": False, "error": ...}
     and surfaced to the frontend via the errors array in the response JSON.
     """
 
@@ -160,12 +160,21 @@ class HAClient:
                 }
             return self._entity_cache.get(entity_id, {"app_id": "", "supported_features": 0})
 
-    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> dict:
+    def play_announcement(
+        self,
+        entity_id: str,
+        audio_url: str,
+        duration: float,
+        announce_volume: int | None = None,
+    ) -> dict:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
 
         1. Music Assistant (app_id == "music_assistant"): play_announcement
         2. Modern player (supports repeat_set): play_media(announce=True)
         3. Basic player (Xiaomi): play_media(announce=True) + pause timer
+
+        announce_volume: optional volume override (0-100) for MA players only.
+        None (default) means use the player's current volume. Ignored for non-MA players.
 
         Returns {"ok": True} on success,
         {"ok": False, "error": "reason"} on failure.
@@ -178,16 +187,32 @@ class HAClient:
 
         info = self._get_entity_info(entity_id)
         if info["app_id"] == "music_assistant":
-            return self._play_ma_announcement(entity_id, audio_url)
+            return self._play_ma_announcement(entity_id, audio_url, volume=announce_volume)
         return self._play_standard(entity_id, audio_url, duration, info)
 
-    def _play_ma_announcement(self, entity_id: str, audio_url: str) -> dict:
-        """Tier 1: Music Assistant play_announcement (self-stopping)."""
-        _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
-        ok = self.call(
-            "music_assistant/play_announcement",
-            {"entity_id": entity_id, "url": audio_url},
-        )
+    def _play_ma_announcement(
+        self,
+        entity_id: str,
+        audio_url: str,
+        volume: int | None = None,
+    ) -> dict:
+        """Tier 1: Music Assistant play_announcement (self-stopping).
+
+        volume: optional volume override (0-100). None = use player's current volume.
+        """
+        data: dict = {
+            "entity_id": entity_id,
+            "url": audio_url,
+            "use_pre_announce": True,
+        }
+        if volume is not None:
+            data["announce_volume"] = volume
+            _logger.info(
+                f"[intercom] {entity_id} MA player — using play_announcement (volume={volume})"
+            )
+        else:
+            _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
+        ok = self.call("music_assistant/play_announcement", data)
         if ok:
             _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
             return {"ok": True}

@@ -167,7 +167,10 @@ def record():
     ok_count = 0
     errors = []
     for _tgt_key, tgt_room in targets:
-        result = haclient.play_and_auto_pause(tgt_room["entity"], audio_url, duration)
+        announce_volume = tgt_room.get("announce_volume")
+        result = haclient.play_announcement(
+            tgt_room["entity"], audio_url, duration, announce_volume=announce_volume
+        )
         if result["ok"]:
             ok_count += 1
         else:
