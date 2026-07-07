@@ -288,5 +288,7 @@ class HAClient:
                 continue
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
-            status[key] = EntityStatus.ONLINE if self._has_play_media(info) else EntityStatus.NO_PLAY_MEDIA
+            status[key] = (
+                EntityStatus.ONLINE if self._has_play_media(info) else EntityStatus.NO_PLAY_MEDIA
+            )
         return status
