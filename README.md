@@ -16,7 +16,11 @@ Phone PWA → Flask :8764 → Home Assistant API → speakers
 
 Flask handles everything: receive audio, wrap PCM as WAV, call HA play_media. No streaming — most smart speakers require complete files to play.
 
-Auto-stop: sets `repeat=off` so speakers with repeat control stop naturally. Falls back to timer-based pause for speakers without it (`PAUSE_BUFFER` env).
+Auto-stop is tiered to match your speakers' capabilities:
+
+1. **Music Assistant players** — native `play_announcement` (fastest, most reliable)
+2. **Modern players** — `play_media(announce=True)` with `repeat=off` (HomePod/Chromecast)
+3. **Basic players** — timer-based pause after playback (`PAUSE_BUFFER` env)
 
 ## Recommended: Use Music Assistant Players
 

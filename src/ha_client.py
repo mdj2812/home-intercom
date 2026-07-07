@@ -115,14 +115,24 @@ class HAClient:
 
         These are static hardware capabilities — safe to cache indefinitely.
         """
+        # Fast path: already cached (lock-free)
+        if entity_id in self._entity_cache:
+            return self._entity_cache[entity_id]
+
         with self._cache_lock:
-            if entity_id not in self._entity_cache:
-                _, attrs = self.state(entity_id, with_attrs=True)
+            # Double-check inside lock
+            if entity_id in self._entity_cache:
+                return self._entity_cache[entity_id]
+
+            _, attrs = self.state(entity_id, with_attrs=True)
+            if attrs:
                 self._entity_cache[entity_id] = {
                     "app_id": attrs.get("app_id", ""),
                     "supported_features": attrs.get("supported_features", 0),
                 }
-            return self._entity_cache[entity_id]
+            return self._entity_cache.get(
+                entity_id, {"app_id": "", "supported_features": 0}
+            )
 
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
@@ -206,8 +216,8 @@ class HAClient:
             _logger.info(
                 f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})"
             )
-        _logger.info(
-            f"[intercom] WARNING: {entity_id} may still be playing after {PAUSE_RETRIES} retries"
+        _logger.warning(
+            f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
         )
 
     def query_statuses(self, room_map: dict) -> dict[str, bool]:
