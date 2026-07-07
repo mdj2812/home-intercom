@@ -239,25 +239,24 @@ class HAClient:
             f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
         )
 
-    def query_statuses(self, room_map: dict) -> dict[str, bool]:
+    def query_statuses(self, room_map: dict) -> dict[str, str]:
         """Batch query speaker online status for all rooms.
 
-        A room is considered available only if its entity is online AND
-        supports play_media. Entities without play_media (e.g. Xiaomi
-        official integration) show as unavailable so the frontend can
-        display a red indicator.
+        Returns one of: "online", "unavailable", "no_play_media".
+        Only "online" rooms can receive broadcasts. The frontend uses
+        this to show green/grey/red indicators and status text.
         """
         status = {}
         for key, room in room_map.items():
             entity = room.get("entity", "")
             if not entity:
-                status[key] = True
+                status[key] = "online"
                 continue
             state = self.state(entity)
             if not state or state == "unavailable":
-                status[key] = False
+                status[key] = "unavailable"
                 continue
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
-            status[key] = self._has_play_media(info)
+            status[key] = "online" if self._has_play_media(info) else "no_play_media"
         return status

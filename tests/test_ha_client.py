@@ -149,7 +149,7 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": True, "bedroom": True}
+        assert result == {"living": "online", "bedroom": "online"}
 
     def test_unavailable(self):
         client = HAClient("http://ha:8123", "tok")
@@ -162,7 +162,7 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": False}
+        assert result == {"living": "unavailable"}
 
     def test_no_entity_defaults_available(self):
         client = HAClient("http://ha:8123", "tok")
@@ -171,7 +171,7 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen") as mock_open:
             result = client.query_statuses(room_map)
 
-        assert result == {"broadcast": True}
+        assert result == {"broadcast": "online"}
         mock_open.assert_not_called()
 
     def test_empty_state_treated_as_false(self):
@@ -185,10 +185,10 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": False}
+        assert result == {"living": "unavailable"}
 
     def test_no_play_media_treated_as_unavailable(self):
-        """Entity online but without PLAY_MEDIA — shows unavailable (red indicator)."""
+        """Entity online but without PLAY_MEDIA — shows no_play_media status."""
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -201,7 +201,7 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": False}
+        assert result == {"living": "no_play_media"}
 
 
 class TestHAClientPlayAndAutoPause:
