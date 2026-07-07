@@ -85,8 +85,10 @@ const I18N = (() => {
     // Page title
     document.title = t("appTitle").replace(/^📢 /, "");
 
-    // All status elements — reset to ready
+    // All status elements — reset to ready (skip unavailable cards)
     document.querySelectorAll(".room-card .status").forEach((el) => {
+      const card = el.closest(".room-card");
+      if (card && card.classList.contains("unavailable")) return;
       // Only reset if currently showing a translatable state
       const val = el.textContent;
       if (val === DATA["zh-CN"].statusReady || val === DATA["en"].statusReady ||
