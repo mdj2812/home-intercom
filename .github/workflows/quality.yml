@@ -27,6 +27,9 @@ jobs:
           ruff check src/ tests/
           ruff format --check src/ tests/
 
+      - name: Stylelint CSS
+        run: npx stylelint src/static/*.css
+
       - name: Pytest with coverage
         run: |
           python -m pytest tests/ -v --tb=short \

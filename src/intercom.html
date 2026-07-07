@@ -12,6 +12,14 @@
 <meta name="theme-color" content="#0f0f0f">
 
 <title>家庭广播</title>
+<script>
+// Set initial title from saved language before i18n.js loads
+(function(){
+  var lang = localStorage.getItem("intercom-lang") || "";
+  var isEn = lang === "en" || (!lang && (navigator.language || "zh-CN").split("-")[0] !== "zh");
+  document.title = isEn ? "Home Intercom" : "家庭广播";
+})();
+</script>
 <script src="/static/i18n.js"></script>
 <link rel="stylesheet" href="/static/intercom.css">
 </head>

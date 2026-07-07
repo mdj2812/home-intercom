@@ -46,13 +46,21 @@ def html_content():
 
 
 def _extract_inline_js(html):
-    """Extract the inline <script> block (not the i18n.js external load)."""
-    matches = list(re.finditer(r"<script>(.*?)</script>", html, re.DOTALL))
-    for m in matches:
-        inner = m.group(1).strip()
-        if len(inner) > 100:  # inline JS, not the empty external script tag
-            return inner
-    return ""
+    """Extract all inline <script> blocks (no src= attribute)."""
+    # Find all script tags
+    parts = []
+    pos = 0
+    while True:
+        start = html.find("<script>", pos)
+        if start == -1:
+            break
+        start += len("<script>")
+        end = html.find("</script>", start)
+        if end == -1:
+            break
+        parts.append(html[start:end].strip())
+        pos = end + len("</script>")
+    return "\n".join(p for p in parts if len(p) > 10)
 
 
 class TestHtmlStructure:
@@ -75,9 +83,9 @@ class TestHtmlStructure:
         assert "debugger" not in html_content
 
     def test_script_tags(self, html_content):
-        """One external i18n.js + one inline script."""
-        assert html_content.count("<script") == 2
-        assert html_content.count("</script>") == 2
+        """External i18n.js + title init + main inline script."""
+        assert html_content.count("<script") == 3
+        assert html_content.count("</script>") == 3
 
     def test_css_is_external(self, html_content):
         """CSS must be in separate file, linked via <link>."""
@@ -86,6 +94,21 @@ class TestHtmlStructure:
     def test_css_file_exists(self):
         assert os.path.exists(self.CSS_PATH), "intercom.css is missing"
         assert os.path.getsize(self.CSS_PATH) > 100, "intercom.css is empty"
+
+    def test_css_passes_stylelint(self):
+        """intercom.css must pass stylelint (skipped if stylelint not installed)."""
+        try:
+            subprocess.run(["npx", "--version"], capture_output=True, timeout=5, check=True)
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            pytest.skip("npx not available — skipping stylelint check")
+
+        result = subprocess.run(
+            ["npx", "stylelint", self.CSS_PATH],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, f"stylelint failed:\n{result.stdout}{result.stderr}"
 
     def test_body_tag_closed(self, html_content):
         assert html_content.count("<body>") == 1

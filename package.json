@@ -1,0 +1,28 @@
+{
+  "name": "home-intercom",
+  "version": "1.0.0",
+  "description": "手机 PWA 界面，按住说话 → 松开后通过 Home Assistant 在音箱播放。",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mdj2812/home-intercom.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mdj2812/home-intercom/issues"
+  },
+  "homepage": "https://github.com/mdj2812/home-intercom#readme",
+  "devDependencies": {
+    "stylelint": "^17.14.0",
+    "stylelint-config-standard": "^40.0.0"
+  }
+}
