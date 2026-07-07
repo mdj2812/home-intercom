@@ -130,9 +130,7 @@ class HAClient:
                     "app_id": attrs.get("app_id", ""),
                     "supported_features": attrs.get("supported_features", 0),
                 }
-            return self._entity_cache.get(
-                entity_id, {"app_id": "", "supported_features": 0}
-            )
+            return self._entity_cache.get(entity_id, {"app_id": "", "supported_features": 0})
 
     def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.

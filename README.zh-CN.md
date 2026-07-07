@@ -16,7 +16,11 @@
 
 Flask 负责全部：收音频、转 WAV、调 HA 播放。不做流式推送，因为大多数智能音箱只支持完整文件下载后播放。
 
-自动停止：设置 `repeat=off`，支持循环控制的音箱播完自动停。不支持的回退到定时暂停（`PAUSE_BUFFER` 环境变量）。
+自动停止分三层，根据音箱能力自动选择：
+
+1. **Music Assistant 播放器** — 原生 `play_announcement`（最快最可靠）
+2. **现代播放器** — `play_media(announce=True)` + `repeat=off`（HomePod/Chromecast）
+3. **普通播放器** — 播放后定时暂停（`PAUSE_BUFFER` 环境变量调整缓冲秒数）
 
 ## 部署
 
