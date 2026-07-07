@@ -262,6 +262,24 @@ class TestHAClientPlayAndAutoPause:
         mock_call.assert_not_called()
         mock_start.assert_not_called()
 
+    def test_play_unavailable_entity_returns_unavailable(self):
+        """Offline entity: play_and_auto_pause returns unavailable immediately."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b'{"state": "unavailable"}'
+
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.test", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result == {"ok": False, "error": "unavailable"}
+        mock_start.assert_not_called()
+
 
 class TestAutoPauseBg:
     def test_confirms_playing_then_pauses(self):

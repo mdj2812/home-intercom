@@ -146,6 +146,12 @@ class HAClient:
         Returns {"ok": True} on success,
         {"ok": False, "error": "reason"} on failure.
         """
+        # Check online state FIRST — avoid caching empty attrs for unavailable entities
+        # which would otherwise be misidentified as no_play_media
+        state = self.state(entity_id)
+        if not state or state == "unavailable":
+            return {"ok": False, "error": "unavailable"}
+
         info = self._get_entity_info(entity_id)
         if info["app_id"] == "music_assistant":
             return self._play_ma_announcement(entity_id, audio_url)
