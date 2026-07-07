@@ -173,7 +173,7 @@ class HAClient:
         # Check online state FIRST — avoid caching empty attrs for unavailable entities
         # which would otherwise be misidentified as no_play_media
         state = self.state(entity_id)
-        if not state or state == "unavailable":
+        if not state or state == EntityStatus.UNAVAILABLE:
             return {"ok": False, "error": EntityStatus.UNAVAILABLE}
 
         info = self._get_entity_info(entity_id)
@@ -217,7 +217,7 @@ class HAClient:
         ok = self._play_media(entity_id, audio_url)
         if not ok:
             _logger.info(f"[intercom] HA play failed for {entity_id}")
-            return {"ok": False, "error": "play_failed"}
+            return {"ok": False, "error": PlayError.PLAY_FAILED}
 
         if modern:
             _logger.info(f"[intercom] {entity_id} modern player — announce mode (self-stopping)")
@@ -283,7 +283,7 @@ class HAClient:
                 status[key] = EntityStatus.ONLINE
                 continue
             state = self.state(entity)
-            if not state or state == "unavailable":
+            if not state or state == EntityStatus.UNAVAILABLE:
                 status[key] = EntityStatus.UNAVAILABLE
                 continue
             # Entity is online — still unavailable if it can't play_media

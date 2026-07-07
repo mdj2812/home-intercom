@@ -524,7 +524,7 @@ async function processAndSend() {
           // Turn dot red
           const dot = card.querySelector('.dot');
           if (dot) dot.className = 'dot dot-error';
-          const msg = (e.error === 'unavailable' || e.error === 'play_failed' || e.error === 'ma_failed')
+          const msg = (e.error === EntityStatus.UNAVAILABLE || e.error === PlayError.PLAY_FAILED || e.error === PlayError.MA_FAILED)
             ? I18N.t('statusUnavailable')
             : I18N.t('statusSkipped');
           setCardState(card, '', msg);
@@ -552,9 +552,9 @@ async function pollSpeakerStatus() {
       const card = document.getElementById('card-' + key);
       if (!card) continue;
       const dot = card.querySelector('.dot');
-      if (state === 'online') {
+      if (state === EntityStatus.ONLINE) {
         if (dot) dot.className = 'dot dot-online';
-      } else if (state === 'no_play_media') {
+      } else if (state === EntityStatus.NO_PLAY_MEDIA) {
         if (dot) dot.className = 'dot dot-error';
         card.querySelector('.status').textContent = I18N.t('statusSkipped');
       } else {
