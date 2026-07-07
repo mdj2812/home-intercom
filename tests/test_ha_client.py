@@ -174,7 +174,7 @@ class TestHAClientQueryStatuses:
         assert result == {"broadcast": "online"}
         mock_open.assert_not_called()
 
-    def test_empty_state_treated_as_false(self):
+    def test_empty_state_treated_as_unavailable(self):
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200

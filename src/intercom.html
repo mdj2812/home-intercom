@@ -556,11 +556,13 @@ async function pollSpeakerStatus() {
         if (dot) dot.className = 'dot dot-online';
       } else if (state === EntityStatus.NO_PLAY_MEDIA) {
         if (dot) dot.className = 'dot dot-error';
-        card.querySelector('.status').textContent = I18N.t('statusSkipped');
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusSkipped');
       } else {
         // unavailable — same persistent error as no_play_media
         if (dot) dot.className = 'dot dot-error';
-        card.querySelector('.status').textContent = I18N.t('statusUnavailable');
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusUnavailable');
       }
     }
   } catch (e) { /* ignore */ }
