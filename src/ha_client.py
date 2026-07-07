@@ -164,11 +164,15 @@ class HAClient:
         _logger.info(f"[intercom] {entity_id} MA announcement failed")
         return {"ok": False, "error": "ma_failed"}
 
+    def _has_play_media(self, info: dict) -> bool:
+        """Check if entity supports media_player.play_media (bit 9)."""
+        return bool(info["supported_features"] & SUPPORT_PLAY_MEDIA)
+
     def _play_standard(self, entity_id: str, audio_url: str, duration: float, info: dict) -> dict:
         """Tier 2/3: standard media_player — guard, play, optional timer."""
         # Guard: entity must support play_media at all
         # (e.g. Xiaomi official integration's WifiSpeaker has no play_media impl)
-        if not (info["supported_features"] & SUPPORT_PLAY_MEDIA):
+        if not self._has_play_media(info):
             _logger.warning(
                 f"[intercom] {entity_id} does not support play_media "
                 f"(features=0x{info['supported_features']:x}) — skip"
@@ -255,5 +259,5 @@ class HAClient:
                 continue
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
-            status[key] = bool(info["supported_features"] & SUPPORT_PLAY_MEDIA)
+            status[key] = self._has_play_media(info)
         return status

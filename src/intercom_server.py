@@ -22,7 +22,7 @@ def _parse_pause_buffer() -> float:
     try:
         return float(raw)
     except ValueError:
-        print(f"[intercom] invalid PAUSE_BUFFER '{raw}', using 0")
+        app.logger.info(f"[intercom] invalid PAUSE_BUFFER '{raw}', using 0")
         return 0.0
 
 
@@ -95,7 +95,7 @@ def _handle_wav_passthrough(data, filepath):
         rate = wf.getframerate()
         nframes = wf.getnframes()
         duration = nframes / rate
-    print(
+    app.logger.info(
         f"[intercom] WAV passthrough {len(data)}B, "
         f"{rate}Hz, {wf.getnchannels()}ch, {wf.getsampwidth() * 8}bit, {duration:.1f}s"
     )
@@ -114,7 +114,7 @@ def _handle_pcm_to_wav(data, rate, filepath):
         wf.writeframes(data)
     duration = len(data) / (rate * PCM_BPS)
     file_size = os.path.getsize(filepath)
-    print(
+    app.logger.info(
         f"[intercom] WAV written: {os.path.basename(filepath)} "
         f"({file_size}B, {duration:.1f}s, {rate}Hz)"
     )
@@ -174,7 +174,7 @@ def record():
             errors.append({"entity": tgt_room["entity"], "error": result.get("error", "unknown")})
 
     name = ROOM_MAP[target]["name"] if target != "all" else "全部"
-    print(f"[intercom] played on {ok_count}/{len(targets)} rooms for {name}")
+    app.logger.info(f"[intercom] played on {ok_count}/{len(targets)} rooms for {name}")
     return jsonify(
         {
             "ok": True,
