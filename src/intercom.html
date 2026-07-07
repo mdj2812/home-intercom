@@ -11,318 +11,17 @@
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#0f0f0f">
 
-<title>家庭广播</title>
+<title>home-intercom</title>
+<script>
+// Set initial title from saved language before i18n.js loads
+(function(){
+  var lang = localStorage.getItem("intercom-lang") || "";
+  var isEn = lang === "en" || (!lang && (navigator.language || "zh-CN").split("-")[0] !== "zh");
+  document.title = isEn ? "Home Intercom" : "家庭广播";
+})();
+</script>
 <script src="/static/i18n.js"></script>
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-html, body { height:100%; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #0f0f0f;
-  color: #fff;
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* ──── Layout ──── */
-.container {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 16px;
-}
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 8px 0 12px;
-}
-.header-right {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-.header h1 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #ccc;
-  letter-spacing: 0.02em;
-}
-.header .ver {
-  font-size: 0.7rem;
-  color: #444;
-}
-.header .hint {
-  font-size: 0.8rem;
-  color: #555;
-  margin-top: 4px;
-}
-#lang-toggle {
-  background: none;
-  border: 1px solid #444;
-  border-radius: 4px;
-  color: #888;
-  font-size: 0.65rem;
-  padding: 2px 6px;
-  cursor: pointer;
-  transition: color .2s, border-color .2s;
-}
-#lang-toggle:hover { color: #ccc; border-color: #666; }
-
-/* ──── Grid ──── */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
-/* ──── Broadcast card (全部) ──── */
-.broadcast-card {
-  grid-column: 1 / -1;
-  margin-bottom: 6px;
-  display: grid !important;
-  grid-template-columns: auto auto;
-  grid-template-rows: auto auto;
-  justify-content: space-around;
-  align-items: center;
-  gap: 4px 16px;
-  padding: 12px 16px;
-}
-.broadcast-card .room-header {
-  grid-column: 1;
-  grid-row: 1;
-  font-size: 1rem;
-}
-.broadcast-card .ptt-wrap {
-  grid-column: 2;
-  grid-row: 1;
-  width: 70px; height: 70px;
-}
-.broadcast-card .ptt-btn {
-  width: 100%; height: 100%;
-}
-.broadcast-card .status {
-  grid-column: 2;
-  grid-row: 2;
-  text-align: center;
-  margin-top: 4px;
-}
-
-/* ──── Room card ──── */
-.room-card {
-  background: #1a1a1a;
-  border-radius: 20px;
-  padding: 16px 12px 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  position: relative;
-  overflow: hidden;
-  transition: background .3s, box-shadow .3s;
-  border: 1px solid #2a2a2a;
-}
-
-/* ──── Room header ──── */
-.room-header {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #999;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.room-icon {
-  font-size: 1.1rem;
-}
-.room-header .dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: #444;
-  transition: background .3s;
-}
-/* Dot state classes — used by pollSpeakerStatus + processAndSend */
-.dot-online  { background: #33d17a !important; box-shadow: 0 0 4px #33d17a; }
-.dot-error   { background: #c0392b !important; box-shadow: 0 0 4px #c0392b; }
-
-/* ──── PTT Button ──── */
-.ptt-wrap {
-  position: relative;
-  width: 120px; height: 120px;
-}
-.ptt-btn {
-  width: 100%; height: 100%;
-  border-radius: 50%;
-  border: none;
-  background: #252525;
-  box-shadow: 0 6px 16px rgba(0,0,0,.3), inset 0 1px 2px rgba(255,255,255,.06);
-  cursor: pointer;
-  position: relative;
-  z-index: 2;
-  transition: transform .15s ease, background .3s, box-shadow .3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.ptt-btn:active {
-  transform: scale(0.96);
-}
-
-/* ──── Ripple waves ──── */
-.waves {
-  position: absolute;
-  inset: -16px;
-  z-index: 1;
-}
-.waves::before,
-.waves::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid #33d17a;
-  opacity: 0;
-}
-
-/* ──── Sound bars icon ──── */
-.bars {
-  display: flex;
-  gap: 4px;
-  align-items: flex-end;
-  justify-content: center;
-  height: 36px;
-  transition: opacity .25s, transform .25s;
-}
-.bars span {
-  width: 5px;
-  background: #666;
-  border-radius: 10px;
-  transition: background .3s, height .2s;
-}
-.bars span:nth-child(1) { height: 14px; }
-.bars span:nth-child(2) { height: 28px; }
-.bars span:nth-child(3) { height: 20px; }
-.bars span:nth-child(4) { height: 10px; }
-
-/* ──── Big checkmark (sent state) ──── */
-.checkmark {
-  display: none;
-  position: absolute;
-  inset: 0;
-  align-items: center;
-  justify-content: center;
-  font-size: 3.4rem;
-  font-weight: 700;
-  color: #fff;
-  animation: popIn .4s cubic-bezier(0.34,1.56,0.64,1);
-}
-.sent .checkmark {
-  display: flex;
-}
-.sent .bars {
-  opacity: 0;
-}
-@keyframes popIn {
-  0%   { transform: scale(0); opacity: 0; }
-  60%  { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-/* ──── Status text ──── */
-.status {
-  font-size: 0.75rem;
-  color: #555;
-  height: 1.4em;
-  line-height: 1.4em;
-  text-align: center;
-  transition: color .3s;
-}
-
-/* ══════════════════════════════════════
-   STATES
-   ══════════════════════════════════════ */
-
-/* recording */
-.room-card.recording {
-  border-color: rgba(51,209,122,.4);
-  box-shadow: 0 0 24px rgba(51,209,122,.08);
-}
-.room-card.recording .ptt-btn {
-  background: #2a5038;
-  transform: scale(0.95);
-  box-shadow: inset 0 4px 14px rgba(0,0,0,.35);
-}
-.room-card.recording .status { color: #33d17a; }
-.room-card.recording .bars span { background: #33d17a; }
-
-/* wave animation */
-.room-card.recording .waves::before {
-  animation: ripple 2s ease-out infinite;
-}
-.room-card.recording .waves::after {
-  animation: ripple 2s ease-out infinite 1s;
-}
-@keyframes ripple {
-  0%   { transform: scale(1); opacity: .5; }
-  100% { transform: scale(1.4); opacity: 0; }
-}
-
-/* bar bounce */
-.room-card.recording .bars span {
-  animation: bounce .6s ease-in-out infinite alternate;
-}
-.room-card.recording .bars span:nth-child(2) { animation-delay: .1s; }
-.room-card.recording .bars span:nth-child(3) { animation-delay: .2s; }
-.room-card.recording .bars span:nth-child(4) { animation-delay: .3s; }
-@keyframes bounce {
-  from { transform: scaleY(.6); }
-  to   { transform: scaleY(1.3); }
-}
-
-/* sending */
-.room-card.sending {
-  border-color: rgba(51,209,122,.35);
-  box-shadow: 0 0 24px rgba(51,209,122,.08);
-}
-.room-card.sending .ptt-btn {
-  background: #2a5038;
-}
-.room-card.sending .bars { opacity: 0; }
-.room-card.sending .checkmark { display: none; }
-.room-card.sending .ptt-btn::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border: 3px solid rgba(51,209,122,.2);
-  border-top-color: #33d17a;
-  border-radius: 50%;
-  animation: spin .8s linear infinite;
-}
-.room-card.sending .status { color: #f0a030; }
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* sent */
-.room-card.sent {
-  border-color: rgba(51,209,122,.35);
-}
-.room-card.sent .ptt-btn {
-  background: #2a5038;
-}
-.room-card.sent .status { color: #33d17a; }
-
-/* broadcast card accent */
-.broadcast-card .room-header { color: #f0a030; font-weight: 600; }
-.broadcast-card .dot { display: none; }
-.broadcast-card.recording .status { color: #f0a030; }
-.broadcast-card.recording .ptt-btn { background: #503a20; }
-.broadcast-card.sent .ptt-btn { background: #503a20; }
-.broadcast-card .waves::before,
-.broadcast-card .waves::after { border-color: #f0a030; }
-</style>
+<link rel="stylesheet" href="/static/intercom.css">
 </head>
 <body>
 
@@ -345,6 +44,7 @@ body {
 // --- Shared with ha_client.py EntityStatus / PlayError ---
 const EntityStatus = { ONLINE: "online", UNAVAILABLE: "unavailable", NO_PLAY_MEDIA: "no_play_media" };
 const PlayError   = { PLAY_FAILED: "play_failed", MA_FAILED: "ma_failed" };
+const UNAVAILABLE_CLASS = "unavailable";
 
 const GRID = document.getElementById('grid');
 const RECORD_URL = '/record';
@@ -443,6 +143,8 @@ async function startRecording(target, card) {
   currentTarget = target;
   currentCard = card;
   audioChunks = [];
+
+  if (card.classList.contains(UNAVAILABLE_CLASS)) return;
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -554,13 +256,16 @@ async function pollSpeakerStatus() {
       const dot = card.querySelector('.dot');
       if (state === EntityStatus.ONLINE) {
         if (dot) dot.className = 'dot dot-online';
+        card.classList.remove(UNAVAILABLE_CLASS);
       } else if (state === EntityStatus.NO_PLAY_MEDIA) {
         if (dot) dot.className = 'dot dot-error';
+        card.classList.add(UNAVAILABLE_CLASS);
         const st = card.querySelector('.status');
         if (st) st.textContent = I18N.t('statusSkipped');
       } else {
         // unavailable — same persistent error as no_play_media
         if (dot) dot.className = 'dot dot-error';
+        card.classList.add(UNAVAILABLE_CLASS);
         const st = card.querySelector('.status');
         if (st) st.textContent = I18N.t('statusUnavailable');
       }

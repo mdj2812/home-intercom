@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -46,16 +47,26 @@ def html_content():
 
 
 def _extract_inline_js(html):
-    """Extract the inline <script> block (not the i18n.js external load)."""
-    matches = list(re.finditer(r"<script>(.*?)</script>", html, re.DOTALL))
-    for m in matches:
-        inner = m.group(1).strip()
-        if len(inner) > 100:  # inline JS, not the empty external script tag
-            return inner
-    return ""
+    """Extract all inline <script> blocks (no src= attribute)."""
+    # Find all script tags
+    parts = []
+    pos = 0
+    while True:
+        start = html.find("<script>", pos)
+        if start == -1:
+            break
+        start += len("<script>")
+        end = html.find("</script>", start)
+        if end == -1:
+            break
+        parts.append(html[start:end].strip())
+        pos = end + len("</script>")
+    return "\n".join(p for p in parts if len(p) > 10)
 
 
 class TestHtmlStructure:
+    CSS_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "static", "intercom.css")
+
     def test_has_doctype(self, html_content):
         assert html_content.strip().startswith("<!DOCTYPE html>")
 
@@ -73,13 +84,33 @@ class TestHtmlStructure:
         assert "debugger" not in html_content
 
     def test_script_tags(self, html_content):
-        """One external i18n.js + one inline script."""
-        assert html_content.count("<script") == 2
-        assert html_content.count("</script>") == 2
+        """External i18n.js + title init + main inline script."""
+        assert html_content.count("<script") == 3
+        assert html_content.count("</script>") == 3
 
-    def test_style_tag_closed(self, html_content):
-        assert html_content.count("<style>") == 1
-        assert html_content.count("</style>") == 1
+    def test_css_is_external(self, html_content):
+        """CSS must be in separate file, linked via <link>."""
+        assert 'href="/static/intercom.css"' in html_content
+
+    def test_css_file_exists(self):
+        assert os.path.exists(self.CSS_PATH), "intercom.css is missing"
+        assert os.path.getsize(self.CSS_PATH) > 100, "intercom.css is empty"
+
+    def test_css_passes_stylelint(self):
+        """intercom.css must pass stylelint (skipped if stylelint not installed)."""
+        # Try globally installed stylelint first, then npx
+        stylelint_bin = shutil.which("stylelint")
+        if stylelint_bin:
+            cmd = [stylelint_bin, self.CSS_PATH]
+        else:
+            try:
+                subprocess.run(["npx", "--version"], capture_output=True, timeout=5, check=True)
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                pytest.skip("stylelint/npx not available — skipping")
+            cmd = ["npx", "--yes", "stylelint@17", self.CSS_PATH]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        assert result.returncode == 0, f"stylelint failed:\n{result.stdout}{result.stderr}"
 
     def test_body_tag_closed(self, html_content):
         assert html_content.count("<body>") == 1
@@ -170,6 +201,29 @@ class TestDomConsistency:
         assert "card-' + target" in html_content or 'card-" + target' in html_content
         assert "card-" in html_content
 
+    def test_unavailable_state_disables_button(self, html_content):
+        """pollSpeakerStatus must add 'unavailable' class when entity is offline."""
+        js = _extract_inline_js(html_content)
+        assert "card.classList.add(UNAVAILABLE_CLASS)" in js, (
+            "pollSpeakerStatus should add 'unavailable' class for offline entities"
+        )
+        assert "card.classList.remove(UNAVAILABLE_CLASS)" in js, (
+            "pollSpeakerStatus should remove 'unavailable' class when online"
+        )
+
+    def test_unavailable_guard_in_start_recording(self, html_content):
+        """startRecording must bail early if card is unavailable."""
+        js = _extract_inline_js(html_content)
+        assert "classList.contains(UNAVAILABLE_CLASS)" in js
+
+    def test_unavailable_css_exists(self):
+        """CSS must have .room-card.unavailable with pointer-events: none."""
+        css_path = os.path.join(os.path.dirname(__file__), "..", "src", "static", "intercom.css")
+        with open(css_path) as f:
+            css = f.read()
+        assert ".room-card.unavailable" in css
+        assert "pointer-events: none" in css
+
 
 class TestI18N:
     """Translation module quality checks."""
@@ -249,6 +303,7 @@ class TestManifestAndIcons:
             "favicon-32.png",
             "apple-touch-icon.png",
             "i18n.js",
+            "intercom.css",
         ]
         for fname in expected:
             path = os.path.join(static_dir, fname)

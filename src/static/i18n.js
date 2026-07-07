@@ -3,6 +3,7 @@
 
 const I18N = (() => {
   const STORAGE_KEY = "intercom-lang";
+  const UNAVAILABLE_CLASS = "unavailable";
 
   const DATA = {
     "zh-CN": {
@@ -85,21 +86,22 @@ const I18N = (() => {
     // Page title
     document.title = t("appTitle").replace(/^📢 /, "");
 
-    // All status elements — reset to ready
+    // Status text — keep state, just translate to current language
+    // Skip unavailable cards; pollSpeakerStatus owns their text
     document.querySelectorAll(".room-card .status").forEach((el) => {
-      // Only reset if currently showing a translatable state
+      const card = el.closest(".room-card");
+      if (card && card.classList.contains(UNAVAILABLE_CLASS)) return;
+
+      // Find which key the current text corresponds to (any language)
       const val = el.textContent;
-      if (val === DATA["zh-CN"].statusReady || val === DATA["en"].statusReady ||
-          val === DATA["zh-CN"].statusRecording || val === DATA["en"].statusRecording ||
-          val === DATA["zh-CN"].statusSending || val === DATA["en"].statusSending ||
-          val === DATA["zh-CN"].statusSent || val === DATA["en"].statusSent ||
-          val === DATA["zh-CN"].statusSkipped || val === DATA["en"].statusSkipped ||
-          val === DATA["zh-CN"].statusUnavailable || val === DATA["en"].statusUnavailable ||
-          val === DATA["zh-CN"].statusNetworkError || val === DATA["en"].statusNetworkError ||
-          val === DATA["zh-CN"].statusFailed || val === DATA["en"].statusFailed ||
-          val === DATA["zh-CN"].statusLoadFailed || val === DATA["en"].statusLoadFailed) {
-        el.textContent = t("statusReady");
+      let key = null;
+      for (const k of Object.keys(DATA["zh-CN"])) {
+        if (DATA["zh-CN"][k] === val || DATA["en"][k] === val) {
+          key = k;
+          break;
+        }
       }
+      if (key) el.textContent = t(key);
     });
   }
 
