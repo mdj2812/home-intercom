@@ -551,8 +551,9 @@ async function pollSpeakerStatus() {
         if (dot) { dot.style.background = '#c0392b'; dot.style.boxShadow = '0 0 4px #c0392b'; }
         card.querySelector('.status').textContent = I18N.t('statusSkipped');
       } else {
-        if (dot) { dot.style.background = '#444'; dot.style.boxShadow = 'none'; }
-        card.querySelector('.status').textContent = I18N.t('statusReady');
+        // unavailable — same persistent error as no_play_media
+        if (dot) { dot.style.background = '#c0392b'; dot.style.boxShadow = '0 0 4px #c0392b'; }
+        card.querySelector('.status').textContent = I18N.t('statusUnavailable');
       }
     }
   } catch (e) { /* ignore */ }
