@@ -18,6 +18,12 @@ Flask handles everything: receive audio, wrap PCM as WAV, call HA play_media. No
 
 Auto-stop: sets `repeat=off` so speakers with repeat control stop naturally. Falls back to timer-based pause for speakers without it (`PAUSE_BUFFER` env).
 
+## Recommended: Use Music Assistant Players
+
+If your speakers are integrated via [Music Assistant](https://music-assistant.io/), **strongly prefer** the `media_player` entities created by the MA integration over native speaker entities.
+
+MA players support the native `play_announcement` service — playback stops automatically. **No timer-based pause needed** (no `PAUSE_BUFFER` config). More reliable, lower latency.
+
 ## Deploy
 
 ```bash
