@@ -462,6 +462,7 @@ function stopRecording() {
 
 async function processAndSend() {
   const webm = new Blob(audioChunks, { type: 'audio/webm' });
+  let sentCurrent = true;
 
   try {
     // Decode webm/opus → AudioBuffer (browser's native decoder)
@@ -499,6 +500,7 @@ async function processAndSend() {
     if (resp.ok) {
       const data = await resp.json();
       const errors = data.errors || [];
+      sentCurrent = true;  // show "sent" unless current card is an error card
       if (errors.length > 0) {
         // Map entity → room key for card lookup
         const entityToKey = {};
@@ -511,6 +513,7 @@ async function processAndSend() {
           if (!key) continue;
           const card = document.getElementById('card-' + key);
           if (!card) continue;
+          if (card === currentCard) sentCurrent = false;
           // Turn dot red
           const dot = card.querySelector('.dot');
           if (dot) {
@@ -534,7 +537,7 @@ async function processAndSend() {
           pollSpeakerStatus();
         }, 3000);
       }
-      setCardState(currentCard, 'sent', I18N.t('statusSent'));
+      if (sentCurrent) setCardState(currentCard, 'sent', I18N.t('statusSent'));
     } else {
       setCardState(currentCard, '', I18N.t('statusFailed') + ' ' + resp.status);
     }
@@ -544,7 +547,7 @@ async function processAndSend() {
   }
 
   setTimeout(() => {
-    if (currentCard) setCardState(currentCard, '', I18N.t('statusReady'));
+    if (currentCard && sentCurrent) setCardState(currentCard, '', I18N.t('statusReady'));
   }, 1500);
 }
 
