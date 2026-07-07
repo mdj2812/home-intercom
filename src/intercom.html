@@ -142,6 +142,9 @@ body {
   background: #444;
   transition: background .3s;
 }
+/* Dot state classes — used by pollSpeakerStatus + processAndSend */
+.dot-online  { background: #33d17a !important; box-shadow: 0 0 4px #33d17a; }
+.dot-error   { background: #c0392b !important; box-shadow: 0 0 4px #c0392b; }
 
 /* ──── PTT Button ──── */
 .ptt-wrap {
@@ -339,6 +342,10 @@ body {
 </div>
 
 <script>
+// --- Shared with ha_client.py EntityStatus / PlayError ---
+const EntityStatus = { ONLINE: "online", UNAVAILABLE: "unavailable", NO_PLAY_MEDIA: "no_play_media" };
+const PlayError   = { PLAY_FAILED: "play_failed", MA_FAILED: "ma_failed" };
+
 const GRID = document.getElementById('grid');
 const RECORD_URL = '/record';
 // PCM target rate fetched from /version on startup
@@ -462,6 +469,7 @@ function stopRecording() {
 
 async function processAndSend() {
   const webm = new Blob(audioChunks, { type: 'audio/webm' });
+  let sentCurrent = true;
 
   try {
     // Decode webm/opus → AudioBuffer (browser's native decoder)
@@ -497,7 +505,32 @@ async function processAndSend() {
     });
 
     if (resp.ok) {
-      setCardState(currentCard, 'sent', I18N.t('statusSent'));
+      const data = await resp.json();
+      const errors = data.errors || [];
+      sentCurrent = true;  // show "sent" unless current card is an error card
+      if (errors.length > 0) {
+        // Map entity → room key for card lookup
+        const entityToKey = {};
+        for (const [key, room] of Object.entries(window._ROOM_DATA || {})) {
+          if (room.entity) entityToKey[room.entity] = key;
+        }
+        // Show error on each skipped room's card
+        for (const e of errors) {
+          const key = entityToKey[e.entity];
+          if (!key) continue;
+          const card = document.getElementById('card-' + key);
+          if (!card) continue;
+          if (card === currentCard) sentCurrent = false;
+          // Turn dot red
+          const dot = card.querySelector('.dot');
+          if (dot) dot.className = 'dot dot-error';
+          const msg = (e.error === EntityStatus.UNAVAILABLE || e.error === PlayError.PLAY_FAILED || e.error === PlayError.MA_FAILED)
+            ? I18N.t('statusUnavailable')
+            : I18N.t('statusSkipped');
+          setCardState(card, '', msg);
+        }
+      }
+      if (sentCurrent) setCardState(currentCard, 'sent', I18N.t('statusSent'));
     } else {
       setCardState(currentCard, '', I18N.t('statusFailed') + ' ' + resp.status);
     }
@@ -507,7 +540,7 @@ async function processAndSend() {
   }
 
   setTimeout(() => {
-    if (currentCard) setCardState(currentCard, '', I18N.t('statusReady'));
+    if (currentCard && sentCurrent) setCardState(currentCard, '', I18N.t('statusReady'));
   }, 1500);
 }
 
@@ -515,11 +548,22 @@ async function pollSpeakerStatus() {
   try {
     const resp = await fetch('/rooms/status');
     const status = await resp.json();
-    for (const [key, online] of Object.entries(status)) {
-      const dot = document.querySelector(`#card-${key} .dot`);
-      if (!dot) continue;
-      dot.style.background = online ? '#33d17a' : '#444';
-      dot.style.boxShadow = online ? '0 0 4px #33d17a' : 'none';
+    for (const [key, state] of Object.entries(status)) {
+      const card = document.getElementById('card-' + key);
+      if (!card) continue;
+      const dot = card.querySelector('.dot');
+      if (state === EntityStatus.ONLINE) {
+        if (dot) dot.className = 'dot dot-online';
+      } else if (state === EntityStatus.NO_PLAY_MEDIA) {
+        if (dot) dot.className = 'dot dot-error';
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusSkipped');
+      } else {
+        // unavailable — same persistent error as no_play_media
+        if (dot) dot.className = 'dot dot-error';
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusUnavailable');
+      }
     }
   } catch (e) { /* ignore */ }
 }

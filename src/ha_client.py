@@ -11,6 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from enum import StrEnum
 
 _logger = logging.getLogger(__name__)
 
@@ -23,6 +24,33 @@ PAUSE_RETRIES = 5  # pause retry count
 # Used as modernity proxy: players that support repeat_set likely
 # implement announce correctly (MA/HomePod/Chromecast).
 SUPPORT_REPEAT_SET = 1 << 18  # = 262144
+# MediaPlayerEntityFeature.PLAY_MEDIA from HA core (same file as above).
+# Entities without this bit (e.g. Xiaomi official integration's WifiSpeaker)
+# cannot call play_media at all and should be skipped early.
+SUPPORT_PLAY_MEDIA = 1 << 9  # = 512
+
+
+class EntityStatus(StrEnum):
+    """Shared entity status constants — used by both backend and frontend.
+
+    Frontend equivalent: pollSpeakerStatus() in intercom.html maps these to
+    green/red dot + i18n text (statusReady / statusSkipped / statusUnavailable).
+    """
+
+    ONLINE = "online"
+    UNAVAILABLE = "unavailable"
+    NO_PLAY_MEDIA = "no_play_media"
+
+
+class PlayError(StrEnum):
+    """Play-operation errors — distinct from EntityStatus (query/state).
+
+    These are returned in play_and_auto_pause's {"ok": False, "error": ...}
+    and surfaced to the frontend via the errors array in the response JSON.
+    """
+
+    PLAY_FAILED = "play_failed"
+    MA_FAILED = "ma_failed"
 
 
 class HAClient:
@@ -132,32 +160,55 @@ class HAClient:
                 }
             return self._entity_cache.get(entity_id, {"app_id": "", "supported_features": 0})
 
-    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> bool:
+    def play_and_auto_pause(self, entity_id: str, audio_url: str, duration: float) -> dict:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
 
         1. Music Assistant (app_id == "music_assistant"): play_announcement
         2. Modern player (supports repeat_set): play_media(announce=True)
         3. Basic player (Xiaomi): play_media(announce=True) + pause timer
 
-        Returns True if play_media succeeded.
+        Returns {"ok": True} on success,
+        {"ok": False, "error": "reason"} on failure.
         """
+        # Check online state FIRST — avoid caching empty attrs for unavailable entities
+        # which would otherwise be misidentified as no_play_media
+        state = self.state(entity_id)
+        if not state or state == EntityStatus.UNAVAILABLE:
+            return {"ok": False, "error": EntityStatus.UNAVAILABLE}
+
         info = self._get_entity_info(entity_id)
-        app_id = info["app_id"]
+        if info["app_id"] == "music_assistant":
+            return self._play_ma_announcement(entity_id, audio_url)
+        return self._play_standard(entity_id, audio_url, duration, info)
 
-        # Tier 1: Music Assistant native announcement
-        if app_id == "music_assistant":
-            _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
-            ok = self.call(
-                "music_assistant/play_announcement",
-                {"entity_id": entity_id, "url": audio_url},
+    def _play_ma_announcement(self, entity_id: str, audio_url: str) -> dict:
+        """Tier 1: Music Assistant play_announcement (self-stopping)."""
+        _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
+        ok = self.call(
+            "music_assistant/play_announcement",
+            {"entity_id": entity_id, "url": audio_url},
+        )
+        if ok:
+            _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
+            return {"ok": True}
+        _logger.info(f"[intercom] {entity_id} MA announcement failed")
+        return {"ok": False, "error": PlayError.MA_FAILED}
+
+    def _has_play_media(self, info: dict) -> bool:
+        """Check if entity supports media_player.play_media (bit 9)."""
+        return bool(info["supported_features"] & SUPPORT_PLAY_MEDIA)
+
+    def _play_standard(self, entity_id: str, audio_url: str, duration: float, info: dict) -> dict:
+        """Tier 2/3: standard media_player — guard, play, optional timer."""
+        # Guard: entity must support play_media at all
+        # (e.g. Xiaomi official integration's WifiSpeaker has no play_media impl)
+        if not self._has_play_media(info):
+            _logger.warning(
+                f"[intercom] {entity_id} does not support play_media "
+                f"(features=0x{info['supported_features']:x}) — skip"
             )
-            if ok:
-                _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
-            else:
-                _logger.info(f"[intercom] {entity_id} MA announcement failed")
-            return ok
+            return {"ok": False, "error": EntityStatus.NO_PLAY_MEDIA}
 
-        # Tier 2/3: standard media_player path
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
         _logger.info(
             f"[intercom] {entity_id} modern={modern} (features=0x{info['supported_features']:x})"
@@ -166,11 +217,11 @@ class HAClient:
         ok = self._play_media(entity_id, audio_url)
         if not ok:
             _logger.info(f"[intercom] HA play failed for {entity_id}")
-            return False
+            return {"ok": False, "error": PlayError.PLAY_FAILED}
 
         if modern:
             _logger.info(f"[intercom] {entity_id} modern player — announce mode (self-stopping)")
-            return True
+            return {"ok": True}
 
         # Basic player: pause timer stops any looping
         threading.Thread(
@@ -178,7 +229,7 @@ class HAClient:
             args=(entity_id, duration),
             daemon=True,
         ).start()
-        return True
+        return {"ok": True}
 
     def _auto_pause_bg(self, entity_id: str, wait_sec: float):
         """Background thread: confirm playback → wait → pause + verify."""
@@ -218,14 +269,26 @@ class HAClient:
             f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
         )
 
-    def query_statuses(self, room_map: dict) -> dict[str, bool]:
-        """Batch query speaker online status for all rooms."""
+    def query_statuses(self, room_map: dict) -> dict[str, str]:
+        """Batch query speaker online status for all rooms.
+
+        Returns EntityStatus values: "online", "unavailable", "no_play_media".
+        Only "online" rooms can receive broadcasts. The frontend uses
+        this to show green/grey/red indicators and status text.
+        """
         status = {}
         for key, room in room_map.items():
             entity = room.get("entity", "")
             if not entity:
-                status[key] = True
+                status[key] = EntityStatus.ONLINE
                 continue
             state = self.state(entity)
-            status[key] = state != "unavailable" if state else False
+            if not state or state == EntityStatus.UNAVAILABLE:
+                status[key] = EntityStatus.UNAVAILABLE
+                continue
+            # Entity is online — still unavailable if it can't play_media
+            info = self._get_entity_info(entity)
+            status[key] = (
+                EntityStatus.ONLINE if self._has_play_media(info) else EntityStatus.NO_PLAY_MEDIA
+            )
         return status

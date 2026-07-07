@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
 from ha_client import (
+    SUPPORT_PLAY_MEDIA,
     SUPPORT_REPEAT_SET,
     HAClient,
 )
@@ -136,7 +137,9 @@ class TestHAClientQueryStatuses:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b'{"state": "playing"}'
+        mock_resp.read.return_value = json.dumps(
+            {"state": "playing", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         room_map = {
             "living": {"entity": "media_player.living"},
@@ -146,7 +149,7 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": True, "bedroom": True}
+        assert result == {"living": "online", "bedroom": "online"}
 
     def test_unavailable(self):
         client = HAClient("http://ha:8123", "tok")
@@ -159,7 +162,7 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": False}
+        assert result == {"living": "unavailable"}
 
     def test_no_entity_defaults_available(self):
         client = HAClient("http://ha:8123", "tok")
@@ -168,10 +171,10 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen") as mock_open:
             result = client.query_statuses(room_map)
 
-        assert result == {"broadcast": True}
+        assert result == {"broadcast": "online"}
         mock_open.assert_not_called()
 
-    def test_empty_state_treated_as_false(self):
+    def test_empty_state_treated_as_unavailable(self):
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -182,7 +185,23 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": False}
+        assert result == {"living": "unavailable"}
+
+    def test_no_play_media_treated_as_unavailable(self):
+        """Entity online but without PLAY_MEDIA — shows no_play_media status."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": 0}}
+        ).encode()
+
+        room_map = {"living": {"entity": "media_player.living"}}
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = client.query_statuses(room_map)
+
+        assert result == {"living": "no_play_media"}
 
 
 class TestHAClientPlayAndAutoPause:
@@ -190,7 +209,9 @@ class TestHAClientPlayAndAutoPause:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b"{}"
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
             patch("urllib.request.urlopen", return_value=mock_resp),
@@ -202,16 +223,61 @@ class TestHAClientPlayAndAutoPause:
 
     def test_play_failure_does_not_spawn_thread(self):
         client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
-            patch(
-                "urllib.request.urlopen",
-                side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
-            ),
+            patch.object(client, "call", return_value=False),
+            patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
             client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
 
+        mock_start.assert_not_called()
+
+    def test_skips_entity_without_play_media(self):
+        """Entity without SUPPORT_PLAY_MEDIA (e.g. Xiaomi official) is skipped."""
+        client = HAClient("http://ha:8123", "tok")
+        # has REPEAT_SET but NOT PLAY_MEDIA — guard should catch it before modern check
+        assert not (SUPPORT_REPEAT_SET & SUPPORT_PLAY_MEDIA)
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_REPEAT_SET}}
+        ).encode()
+
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch.object(client, "call") as mock_call,
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.xiaomi", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result == {"ok": False, "error": "no_play_media"}
+        mock_call.assert_not_called()
+        mock_start.assert_not_called()
+
+    def test_play_unavailable_entity_returns_unavailable(self):
+        """Offline entity: play_and_auto_pause returns unavailable immediately."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = b'{"state": "unavailable"}'
+
+        with (
+            patch("urllib.request.urlopen", return_value=mock_resp),
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_and_auto_pause(
+                "media_player.test", "http://ha/audio/test.wav", 2.0
+            )
+
+        assert result == {"ok": False, "error": "unavailable"}
         mock_start.assert_not_called()
 
 
@@ -300,7 +366,9 @@ class TestAutoPauseBg:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b"{}"
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
             patch("urllib.request.urlopen", return_value=mock_resp),
@@ -310,24 +378,27 @@ class TestAutoPauseBg:
                 "media_player.test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is True
+        assert result == {"ok": True}
 
     def test_play_and_auto_pause_returns_false_on_failure(self):
-        """play_and_auto_pause should return False when play_media fails."""
+        """play_and_auto_pause should return {"ok": False, "error": "play_failed"} when play_media fails."""
         client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         with (
-            patch(
-                "urllib.request.urlopen",
-                side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
-            ),
+            patch.object(client, "call", return_value=False),
+            patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
             result = client.play_and_auto_pause(
                 "media_player.test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is False
+        assert result == {"ok": False, "error": "play_failed"}
         mock_start.assert_not_called()
 
     def test_modern_player_skips_timer(self):
@@ -336,7 +407,10 @@ class TestAutoPauseBg:
         mock_state_resp = MagicMock()
         mock_state_resp.status = 200
         mock_state_resp.read.return_value = json.dumps(
-            {"state": "idle", "attributes": {"supported_features": SUPPORT_REPEAT_SET}}
+            {
+                "state": "idle",
+                "attributes": {"supported_features": SUPPORT_PLAY_MEDIA | SUPPORT_REPEAT_SET},
+            }
         ).encode()
 
         with (
@@ -347,7 +421,7 @@ class TestAutoPauseBg:
                 "media_player.test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is True
+        assert result == {"ok": True}
         mock_start.assert_not_called()
 
     def test_ma_player_uses_announcement(self):
@@ -374,7 +448,7 @@ class TestAutoPauseBg:
                 "media_player.ma_test", "http://ha/audio/test.wav", 2.0
             )
 
-        assert result is True
+        assert result == {"ok": True}
         assert "music_assistant/play_announcement" in call_args
         mock_start.assert_not_called()
 
@@ -383,7 +457,9 @@ class TestAutoPauseBg:
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b"{}"
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
 
         call_data = {}
 
@@ -394,6 +470,7 @@ class TestAutoPauseBg:
 
         with (
             patch.object(client, "call", side_effect=fake_call),
+            patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start"),
         ):
             client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)

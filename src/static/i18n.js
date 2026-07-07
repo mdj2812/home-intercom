@@ -9,11 +9,13 @@ const I18N = (() => {
       appTitle: "📢 家庭广播",
       appHint: "按住录音 · 松开发送",
       broadcastAll: "全部广播",
-      statusReady: "准备好",
+      statusReady: "就绪",
       statusRecording: "录音中…",
       statusSending: "发送中…",
       statusSent: "已发送",
       statusFailed: "失败",
+      statusSkipped: "不支持播放",
+      statusUnavailable: "离线",
       statusNetworkError: "网络错误",
       statusLoadFailed: "加载失败",
       micError: "❌ 麦克风: ",
@@ -28,6 +30,8 @@ const I18N = (() => {
       statusSending: "Sending…",
       statusSent: "Sent",
       statusFailed: "Failed",
+      statusSkipped: "No play_media",
+      statusUnavailable: "Offline",
       statusNetworkError: "Network error",
       statusLoadFailed: "Load failed",
       micError: "❌ Mic: ",
@@ -89,6 +93,8 @@ const I18N = (() => {
           val === DATA["zh-CN"].statusRecording || val === DATA["en"].statusRecording ||
           val === DATA["zh-CN"].statusSending || val === DATA["en"].statusSending ||
           val === DATA["zh-CN"].statusSent || val === DATA["en"].statusSent ||
+          val === DATA["zh-CN"].statusSkipped || val === DATA["en"].statusSkipped ||
+          val === DATA["zh-CN"].statusUnavailable || val === DATA["en"].statusUnavailable ||
           val === DATA["zh-CN"].statusNetworkError || val === DATA["en"].statusNetworkError ||
           val === DATA["zh-CN"].statusFailed || val === DATA["en"].statusFailed ||
           val === DATA["zh-CN"].statusLoadFailed || val === DATA["en"].statusLoadFailed) {

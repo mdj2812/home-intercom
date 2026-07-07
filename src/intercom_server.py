@@ -22,7 +22,7 @@ def _parse_pause_buffer() -> float:
     try:
         return float(raw)
     except ValueError:
-        print(f"[intercom] invalid PAUSE_BUFFER '{raw}', using 0")
+        app.logger.info(f"[intercom] invalid PAUSE_BUFFER '{raw}', using 0")
         return 0.0
 
 
@@ -95,7 +95,7 @@ def _handle_wav_passthrough(data, filepath):
         rate = wf.getframerate()
         nframes = wf.getnframes()
         duration = nframes / rate
-    print(
+    app.logger.info(
         f"[intercom] WAV passthrough {len(data)}B, "
         f"{rate}Hz, {wf.getnchannels()}ch, {wf.getsampwidth() * 8}bit, {duration:.1f}s"
     )
@@ -114,7 +114,7 @@ def _handle_pcm_to_wav(data, rate, filepath):
         wf.writeframes(data)
     duration = len(data) / (rate * PCM_BPS)
     file_size = os.path.getsize(filepath)
-    print(
+    app.logger.info(
         f"[intercom] WAV written: {os.path.basename(filepath)} "
         f"({file_size}B, {duration:.1f}s, {rate}Hz)"
     )
@@ -165,13 +165,26 @@ def record():
     audio_url = f"{base}/audio/{filename}"
 
     ok_count = 0
+    errors = []
     for _tgt_key, tgt_room in targets:
-        if haclient.play_and_auto_pause(tgt_room["entity"], audio_url, duration):
+        result = haclient.play_and_auto_pause(tgt_room["entity"], audio_url, duration)
+        if result["ok"]:
             ok_count += 1
+        else:
+            errors.append({"entity": tgt_room["entity"], "error": result.get("error", "unknown")})
 
     name = ROOM_MAP[target]["name"] if target != "all" else "全部"
-    print(f"[intercom] played on {ok_count}/{len(targets)} rooms for {name}")
-    return jsonify({"ok": True, "name": name, "rooms_sent": ok_count, "url": audio_url})
+    app.logger.info(f"[intercom] played on {ok_count}/{len(targets)} rooms for {name}")
+    return jsonify(
+        {
+            "ok": True,
+            "name": name,
+            "rooms_sent": ok_count,
+            "rooms_total": len(targets),
+            "errors": errors or None,
+            "url": audio_url,
+        }
+    )
 
 
 if __name__ == "__main__":
