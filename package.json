@@ -1,8 +1,0 @@
-{
-  "name": "home-intercom",
-  "private": true,
-  "devDependencies": {
-    "stylelint": "^17.14.0",
-    "stylelint-config-standard": "^40.0.0"
-  }
-}

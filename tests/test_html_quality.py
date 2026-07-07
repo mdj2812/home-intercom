@@ -219,8 +219,8 @@ class TestDomConsistency:
         css_path = os.path.join(os.path.dirname(__file__), "..", "src", "static", "intercom.css")
         with open(css_path) as f:
             css = f.read()
-        assert '.room-card.unavailable' in css
-        assert 'pointer-events: none' in css
+        assert ".room-card.unavailable" in css
+        assert "pointer-events: none" in css
 
 
 class TestI18N:

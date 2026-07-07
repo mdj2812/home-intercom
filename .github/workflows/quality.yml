@@ -17,7 +17,11 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install deps
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Python deps
         run: |
           pip install -r src/requirements.txt
           pip install -r requirements-dev.txt
@@ -28,7 +32,7 @@ jobs:
           ruff format --check src/ tests/
 
       - name: Stylelint CSS
-        run: npx stylelint src/static/*.css
+        run: npx --yes stylelint@17 src/static/*.css
 
       - name: Pytest with coverage
         run: |
