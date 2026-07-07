@@ -3,6 +3,7 @@
 
 const I18N = (() => {
   const STORAGE_KEY = "intercom-lang";
+  const UNAVAILABLE_CLASS = "unavailable";
 
   const DATA = {
     "zh-CN": {
@@ -89,7 +90,7 @@ const I18N = (() => {
     // Skip unavailable cards; pollSpeakerStatus owns their text
     document.querySelectorAll(".room-card .status").forEach((el) => {
       const card = el.closest(".room-card");
-      if (card && card.classList.contains("unavailable")) return;
+      if (card && card.classList.contains(UNAVAILABLE_CLASS)) return;
 
       // Find which key the current text corresponds to (any language)
       const val = el.textContent;

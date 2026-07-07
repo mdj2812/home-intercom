@@ -56,6 +56,8 @@ def _extract_inline_js(html):
 
 
 class TestHtmlStructure:
+    CSS_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "static", "intercom.css")
+
     def test_has_doctype(self, html_content):
         assert html_content.strip().startswith("<!DOCTYPE html>")
 
@@ -77,9 +79,13 @@ class TestHtmlStructure:
         assert html_content.count("<script") == 2
         assert html_content.count("</script>") == 2
 
-    def test_style_tag_closed(self, html_content):
-        assert html_content.count("<style>") == 1
-        assert html_content.count("</style>") == 1
+    def test_css_is_external(self, html_content):
+        """CSS must be in separate file, linked via <link>."""
+        assert 'href="/static/intercom.css"' in html_content
+
+    def test_css_file_exists(self):
+        assert os.path.exists(self.CSS_PATH), "intercom.css is missing"
+        assert os.path.getsize(self.CSS_PATH) > 100, "intercom.css is empty"
 
     def test_body_tag_closed(self, html_content):
         assert html_content.count("<body>") == 1
@@ -173,22 +179,25 @@ class TestDomConsistency:
     def test_unavailable_state_disables_button(self, html_content):
         """pollSpeakerStatus must add 'unavailable' class when entity is offline."""
         js = _extract_inline_js(html_content)
-        assert "card.classList.add('unavailable')" in js, (
+        assert "card.classList.add(UNAVAILABLE_CLASS)" in js, (
             "pollSpeakerStatus should add 'unavailable' class for offline entities"
         )
-        assert "card.classList.remove('unavailable')" in js, (
+        assert "card.classList.remove(UNAVAILABLE_CLASS)" in js, (
             "pollSpeakerStatus should remove 'unavailable' class when online"
         )
 
     def test_unavailable_guard_in_start_recording(self, html_content):
         """startRecording must bail early if card is unavailable."""
         js = _extract_inline_js(html_content)
-        assert "classList.contains('unavailable')" in js
+        assert "classList.contains(UNAVAILABLE_CLASS)" in js
 
-    def test_unavailable_css_exists(self, html_content):
+    def test_unavailable_css_exists(self):
         """CSS must have .room-card.unavailable with pointer-events: none."""
-        assert '.room-card.unavailable' in html_content
-        assert 'pointer-events: none' in html_content
+        css_path = os.path.join(os.path.dirname(__file__), "..", "src", "static", "intercom.css")
+        with open(css_path) as f:
+            css = f.read()
+        assert '.room-card.unavailable' in css
+        assert 'pointer-events: none' in css
 
 
 class TestI18N:
@@ -269,6 +278,7 @@ class TestManifestAndIcons:
             "favicon-32.png",
             "apple-touch-icon.png",
             "i18n.js",
+            "intercom.css",
         ]
         for fname in expected:
             path = os.path.join(static_dir, fname)
