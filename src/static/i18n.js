@@ -14,6 +14,7 @@ const I18N = (() => {
       statusSending: "发送中…",
       statusSent: "已发送",
       statusFailed: "失败",
+      statusSkipped: "不支持播放",
       statusNetworkError: "网络错误",
       statusLoadFailed: "加载失败",
       micError: "❌ 麦克风: ",
@@ -28,6 +29,7 @@ const I18N = (() => {
       statusSending: "Sending…",
       statusSent: "Sent",
       statusFailed: "Failed",
+      statusSkipped: "No play_media",
       statusNetworkError: "Network error",
       statusLoadFailed: "Load failed",
       micError: "❌ Mic: ",
@@ -89,6 +91,7 @@ const I18N = (() => {
           val === DATA["zh-CN"].statusRecording || val === DATA["en"].statusRecording ||
           val === DATA["zh-CN"].statusSending || val === DATA["en"].statusSending ||
           val === DATA["zh-CN"].statusSent || val === DATA["en"].statusSent ||
+          val === DATA["zh-CN"].statusSkipped || val === DATA["en"].statusSkipped ||
           val === DATA["zh-CN"].statusNetworkError || val === DATA["en"].statusNetworkError ||
           val === DATA["zh-CN"].statusFailed || val === DATA["en"].statusFailed ||
           val === DATA["zh-CN"].statusLoadFailed || val === DATA["en"].statusLoadFailed) {
