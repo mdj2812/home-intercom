@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 
@@ -97,17 +98,18 @@ class TestHtmlStructure:
 
     def test_css_passes_stylelint(self):
         """intercom.css must pass stylelint (skipped if stylelint not installed)."""
-        try:
-            subprocess.run(["npx", "--version"], capture_output=True, timeout=5, check=True)
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            pytest.skip("npx not available — skipping stylelint check")
+        # Try globally installed stylelint first, then npx
+        stylelint_bin = shutil.which("stylelint")
+        if stylelint_bin:
+            cmd = [stylelint_bin, self.CSS_PATH]
+        else:
+            try:
+                subprocess.run(["npx", "--version"], capture_output=True, timeout=5, check=True)
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                pytest.skip("stylelint/npx not available — skipping")
+            cmd = ["npx", "--yes", "stylelint@17", self.CSS_PATH]
 
-        result = subprocess.run(
-            ["npx", "--yes", "stylelint@17", self.CSS_PATH],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, f"stylelint failed:\n{result.stdout}{result.stderr}"
 
     def test_body_tag_closed(self, html_content):

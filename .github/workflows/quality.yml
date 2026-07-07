@@ -32,7 +32,9 @@ jobs:
           ruff format --check src/ tests/
 
       - name: Stylelint CSS
-        run: npx --yes stylelint@17 src/static/*.css
+        run: |
+          npm install -g stylelint@17 stylelint-config-standard@40
+          stylelint src/static/*.css
 
       - name: Pytest with coverage
         run: |
