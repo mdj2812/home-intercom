@@ -232,6 +232,8 @@ class TestRecordAnnounceVolume:
         assert resp.status_code == 200
         _, kwargs = mock_play.call_args
         assert kwargs.get("announce_volume") == 50
+        assert kwargs.get("audio_url_with_chime") == "http://localhost/audio/intercom_living_chime.wav"
+        assert kwargs.get("duration_with_chime") is not None
 
     def test_ma_no_announce_volume_passed(self, client, monkeypatch, tmp_path):
         """Room without announce_volume → volume not passed."""
@@ -254,6 +256,7 @@ class TestRecordAnnounceVolume:
         assert resp.status_code == 200
         _, kwargs = mock_play.call_args
         assert kwargs.get("announce_volume") is None
+        assert kwargs.get("audio_url_with_chime") == "http://localhost/audio/intercom_living_chime.wav"
 
 
 class TestParsePauseBuffer:
