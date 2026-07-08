@@ -205,12 +205,10 @@ class HAClient:
         entity_id: str,
         audio_url: str,
         volume: int | None = None,
-        pre_announce_url: str | None = None,
     ) -> dict:
         """Tier 1: Music Assistant play_announcement (self-stopping).
 
-        volume: optional volume override (0-100).
-        pre_announce_url: optional chime URL for MA pre-announce flow.
+        volume: optional volume override (0-100). None = use player's current volume.
         """
         data: dict = {
             "entity_id": entity_id,
@@ -224,8 +222,6 @@ class HAClient:
             )
         else:
             _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
-        if pre_announce_url:
-            data["pre_announce_url"] = pre_announce_url
         ok = self.call("music_assistant/play_announcement", data)
         if ok:
             _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")

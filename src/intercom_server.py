@@ -147,6 +147,10 @@ def _concat_wavs(chime_path, audio_path, output_path):
             f"(chime={chime_rate}Hz/{chime_width}B/{chime_channels}ch, "
             f"audio={audio_rate}Hz/{audio_width}B/{audio_channels}ch) — skipping chime"
         )
+        # Copy original audio so output_path always exists (avoids 404)
+        import shutil
+
+        shutil.copy2(audio_path, output_path)
         return len(audio_frames) / (audio_rate * audio_width)
 
     # Write combined
