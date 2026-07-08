@@ -148,6 +148,70 @@ class TestHandlePcmToWav:
                 os.unlink(tmp_path)
 
 
+class TestConcatWavs:
+    """Test _concat_wavs — prepend chime to audio."""
+
+    def test_duration_is_sum(self, tmp_path):
+        """Concat of two waves → duration equals sum of individual durations."""
+        import wave
+
+        from intercom_server import _concat_wavs
+
+        chime_path = tmp_path / "chime.wav"
+        audio_path = tmp_path / "audio.wav"
+        output_path = tmp_path / "combined.wav"
+
+        # 0.5s chime: 8000 frames @ 16000 Hz
+        with wave.open(str(chime_path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(b"\x00\x00" * 8000)
+
+        # 1.0s audio: 16000 frames @ 16000 Hz
+        with wave.open(str(audio_path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(b"\x00\x00" * 16000)
+
+        duration = _concat_wavs(str(chime_path), str(audio_path), str(output_path))
+        assert duration == pytest.approx(1.5, rel=0.01)
+        assert os.path.exists(output_path)
+
+        # Verify combined WAV structure
+        with wave.open(str(output_path), "rb") as wf:
+            assert wf.getnchannels() == 1
+            assert wf.getsampwidth() == 2
+            assert wf.getframerate() == 16000
+            assert wf.getnframes() == 24000  # 8000 + 16000
+
+    def test_format_mismatch_skips_chime(self, tmp_path):
+        """Mismatched rates → skip chime, duration = audio only."""
+        import wave
+
+        from intercom_server import _concat_wavs
+
+        chime_path = tmp_path / "chime.wav"
+        audio_path = tmp_path / "audio.wav"
+        output_path = tmp_path / "combined.wav"
+
+        with wave.open(str(chime_path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(b"\x00\x00" * 8000)
+
+        with wave.open(str(audio_path), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(44100)  # different rate!
+            wf.writeframes(b"\x00\x00" * 44100)
+
+        duration = _concat_wavs(str(chime_path), str(audio_path), str(output_path))
+        assert duration == pytest.approx(1.0, rel=0.01)
+
+
 class TestRecordPcmBranch:
     """Test /record with raw PCM (PWA path)."""
 
@@ -232,6 +296,10 @@ class TestRecordAnnounceVolume:
         assert resp.status_code == 200
         _, kwargs = mock_play.call_args
         assert kwargs.get("announce_volume") == 50
+        assert (
+            kwargs.get("audio_url_with_chime") == "http://localhost/audio/intercom_living_chime.wav"
+        )
+        assert kwargs.get("duration_with_chime") is not None
 
     def test_ma_no_announce_volume_passed(self, client, monkeypatch, tmp_path):
         """Room without announce_volume → volume not passed."""
@@ -254,6 +322,9 @@ class TestRecordAnnounceVolume:
         assert resp.status_code == 200
         _, kwargs = mock_play.call_args
         assert kwargs.get("announce_volume") is None
+        assert (
+            kwargs.get("audio_url_with_chime") == "http://localhost/audio/intercom_living_chime.wav"
+        )
 
 
 class TestParsePauseBuffer:

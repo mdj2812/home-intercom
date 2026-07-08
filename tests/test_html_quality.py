@@ -104,10 +104,18 @@ class TestHtmlStructure:
             cmd = [stylelint_bin, self.CSS_PATH]
         else:
             try:
-                subprocess.run(["npx", "--version"], capture_output=True, timeout=5, check=True)
+                subprocess.run(["npm", "--version"], capture_output=True, timeout=5, check=True)
             except (FileNotFoundError, subprocess.CalledProcessError):
-                pytest.skip("stylelint/npx not available — skipping")
-            cmd = ["npx", "--yes", "stylelint@17", self.CSS_PATH]
+                pytest.skip("npm not available — skipping")
+            install = subprocess.run(
+                ["npm", "install", "-g", "stylelint@17", "stylelint-config-standard@40"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if install.returncode != 0:
+                pytest.skip(f"npm install failed: {install.stderr}")
+            cmd = ["stylelint", self.CSS_PATH]
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, f"stylelint failed:\n{result.stdout}{result.stderr}"

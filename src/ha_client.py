@@ -94,6 +94,7 @@ class HAClient:
         Returns empty string / ({},) on failure.
         """
         if not self._token:
+            _logger.warning("[intercom] HA_TOKEN is empty — cannot query entity state")
             return ("", {}) if with_attrs else ""
         code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
         if code == 200 and isinstance(result, dict):
@@ -101,6 +102,11 @@ class HAClient:
             if with_attrs:
                 return s, result.get("attributes", {})
             return s
+        _logger.warning(
+            f"[intercom] state query failed for {entity_id}: HTTP {code}"
+            if code
+            else f"HTTP error: {result}"
+        )
         return ("", {}) if with_attrs else ""
 
     def call(self, service: str, data: dict) -> bool:
@@ -166,6 +172,8 @@ class HAClient:
         audio_url: str,
         duration: float,
         announce_volume: int | None = None,
+        audio_url_with_chime: str | None = None,
+        duration_with_chime: float | None = None,
     ) -> dict:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
 
@@ -174,13 +182,12 @@ class HAClient:
         3. Basic player (Xiaomi): play_media(announce=True) + pause timer
 
         announce_volume: optional volume override (0-100) for MA players only.
-        None (default) means use the player's current volume. Ignored for non-MA players.
+        audio_url_with_chime: WAV with pre-announce chime prepended (for standard players).
+        duration_with_chime: total duration including chime.
 
         Returns {"ok": True} on success,
         {"ok": False, "error": "reason"} on failure.
         """
-        # Check online state FIRST — avoid caching empty attrs for unavailable entities
-        # which would otherwise be misidentified as no_play_media
         state = self.state(entity_id)
         if not state or state == EntityStatus.UNAVAILABLE:
             return {"ok": False, "error": EntityStatus.UNAVAILABLE}
@@ -188,7 +195,10 @@ class HAClient:
         info = self._get_entity_info(entity_id)
         if info["app_id"] == "music_assistant":
             return self._play_ma_announcement(entity_id, audio_url, volume=announce_volume)
-        return self._play_standard(entity_id, audio_url, duration, info)
+        # Standard player: use concatenated audio (chime + recording in one file)
+        url = audio_url_with_chime or audio_url
+        dur = duration_with_chime or duration
+        return self._play_standard(entity_id, url, dur, info)
 
     def _play_ma_announcement(
         self,
@@ -225,8 +235,6 @@ class HAClient:
 
     def _play_standard(self, entity_id: str, audio_url: str, duration: float, info: dict) -> dict:
         """Tier 2/3: standard media_player — guard, play, optional timer."""
-        # Guard: entity must support play_media at all
-        # (e.g. Xiaomi official integration's WifiSpeaker has no play_media impl)
         if not self._has_play_media(info):
             _logger.warning(
                 f"[intercom] {entity_id} does not support play_media "

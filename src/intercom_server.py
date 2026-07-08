@@ -34,6 +34,7 @@ PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
 PCM_BPS = 2  # 16-bit audio = 2 bytes per sample
 WAV_MAGIC = b"RIFF"
 WAV_HEADER_SIZE = 44  # RIFF(12) + fmt(24) + data(8) = minimum valid WAV header
+CHIME_WAV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "pre_announce.wav")
 
 # ——— Version ———
 try:
@@ -121,9 +122,54 @@ def _handle_pcm_to_wav(data, rate, filepath):
     return duration
 
 
+def _concat_wavs(chime_path, audio_path, output_path):
+    """Prepend chime WAV to audio WAV. Returns total duration (seconds).
+
+    Reads chime + audio, writes combined to output_path.
+    Both files must have the same sample rate, channels, and sample width.
+    """
+    with wave.open(chime_path, "rb") as wf_chime:
+        chime_rate = wf_chime.getframerate()
+        chime_frames = wf_chime.readframes(wf_chime.getnframes())
+        chime_width = wf_chime.getsampwidth()
+        chime_channels = wf_chime.getnchannels()
+
+    with wave.open(audio_path, "rb") as wf_audio:
+        audio_rate = wf_audio.getframerate()
+        audio_frames = wf_audio.readframes(wf_audio.getnframes())
+        audio_width = wf_audio.getsampwidth()
+        audio_channels = wf_audio.getnchannels()
+
+    # Guard: chime and audio must be compatible
+    if (chime_rate, chime_width, chime_channels) != (audio_rate, audio_width, audio_channels):
+        app.logger.warning(
+            f"[intercom] chime/audio format mismatch "
+            f"(chime={chime_rate}Hz/{chime_width}B/{chime_channels}ch, "
+            f"audio={audio_rate}Hz/{audio_width}B/{audio_channels}ch) — skipping chime"
+        )
+        # Copy original audio so output_path always exists (avoids 404)
+        import shutil
+
+        shutil.copy2(audio_path, output_path)
+        return len(audio_frames) / (audio_rate * audio_width)
+
+    # Write combined
+    total_frames = (len(chime_frames) + len(audio_frames)) // audio_width
+    duration = total_frames / audio_rate
+
+    with wave.open(output_path, "wb") as wf_out:
+        wf_out.setnchannels(audio_channels)
+        wf_out.setsampwidth(audio_width)
+        wf_out.setframerate(audio_rate)
+        wf_out.writeframes(chime_frames + audio_frames)
+
+    app.logger.info(f"[intercom] chime prepended ({duration:.1f}s total)")
+    return duration
+
+
 @app.route("/record", methods=["POST"])
 def record():
-    """Receive audio → write WAV → HA playback.
+    """Receive audio → write WAV → prepend chime → HA playback.
 
     Supports two input formats:
     - Raw PCM (PWA): body is 16-bit mono PCM, wrapped into WAV
@@ -157,19 +203,29 @@ def record():
         rate = int(request.args.get("rate", PCM_RATE))
         duration = _handle_pcm_to_wav(data, rate, filepath)
 
-    # Build public URL — PUBLIC_URL env for reverse proxy (e.g. Caddy),
-    # fall back to X-Forwarded-Proto / request.host for direct access.
+    # Prepend chime — creates a copy with chime for standard players
+    filename_chime = f"intercom_{target}_chime.wav"
+    filepath_chime = os.path.join(AUDIO_DIR, filename_chime)
+    duration_with_chime = _concat_wavs(CHIME_WAV, filepath, filepath_chime)
+
+    # Build public URLs
     public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
     scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
     base = public_base or f"{scheme}://{request.host}"
     audio_url = f"{base}/audio/{filename}"
+    audio_url_with_chime = f"{base}/audio/{filename_chime}"
 
     ok_count = 0
     errors = []
     for _tgt_key, tgt_room in targets:
         announce_volume = tgt_room.get("announce_volume")
         result = haclient.play_announcement(
-            tgt_room["entity"], audio_url, duration, announce_volume=announce_volume
+            tgt_room["entity"],
+            audio_url,
+            duration,
+            announce_volume=announce_volume,
+            audio_url_with_chime=audio_url_with_chime,
+            duration_with_chime=duration_with_chime,
         )
         if result["ok"]:
             ok_count += 1
