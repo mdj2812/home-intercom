@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.6.2 (2026-07-08)
+
+- **Pre-announce chime** — doorbell sound prepended to announcements via WAV-level concatenation
+- **Two-tier chime strategy** — MA players use native `use_pre_announce`, standard players get chime baked into audio
+- **Configurable announcement volume** — `announce_volume` per room in `rooms.json`, volume slider + mute/unmute in web UI (MA players only)
+- **Disable unavailable speakers** — greyed out button with tooltip, frontend guard on start recording
+- **`_concat_wavs()`** — WAV concatenation helper with format mismatch fallback (copies original on mismatch)
+- **Chime file** — Universfield Clear Bell Chime (2s, +12dB), served from `/static/pre_announce.wav`
+- **Stylelint** — restored `extends: stylelint-config-standard`, Python test uses `npm install -g` to match CI
+- **Tests** — 88 pytest tests, 94% coverage
+
 ## v1.6.1 (2026-07-07)
 
 - **Chinese README** — added `README.zh-CN.md` with localized UI screenshot

@@ -70,6 +70,15 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 `announce_volume`（可选，0-100）仅对 Music Assistant 播放器生效。设置后 MA 会先响提示音再按指定音量播报。不填则沿用播放器当前音量。
 
+### 前导提示音
+
+按下对讲按钮时，门铃提示音会先于播报内容播放：
+
+- **MA 播放器** — 通过 Music Assistant 的原生 pre-announce 流程处理
+- **标准播放器** — 直接拼接到 WAV 文件中（无缝衔接，无间隙）
+
+提示音文件位于 `/static/pre_announce.wav`，可替换为自定义 WAV（需 16kHz 单声道 16-bit）。
+
 ## HTTPS
 
 PWA 录音需要 HTTPS。推荐 Caddy 反代：

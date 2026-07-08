@@ -76,6 +76,15 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 `announce_volume` (optional, 0-100) overrides the announcement volume for Music Assistant players only. When set, MA will play a chime then announce at the specified volume. Omit the field to use the player's current volume.
 
+### Pre-announce chime
+
+When you press the intercom button, a doorbell chime plays before your announcement. The chime is:
+
+- **MA players** — handled natively via Music Assistant's pre-announce flow
+- **Standard players** — prepended directly into the WAV file (seamless, no gap)
+
+The chime file is served from `/static/pre_announce.wav` and can be replaced with your own WAV (16 kHz mono 16-bit required).
+
 ## HTTPS
 
 PWA recording requires HTTPS. Recommended: Caddy reverse proxy.
