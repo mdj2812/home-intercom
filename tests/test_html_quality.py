@@ -109,7 +109,9 @@ class TestHtmlStructure:
                 pytest.skip("npm not available — skipping")
             install = subprocess.run(
                 ["npm", "install", "-g", "stylelint@17", "stylelint-config-standard@40"],
-                capture_output=True, text=True, timeout=120,
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             if install.returncode != 0:
                 pytest.skip(f"npm install failed: {install.stderr}")

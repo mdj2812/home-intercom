@@ -103,8 +103,9 @@ class HAClient:
                 return s, result.get("attributes", {})
             return s
         _logger.warning(
-            f"[intercom] state query failed for {entity_id}: "
-            f"HTTP {code}" if code else f"HTTP error: {result}"
+            f"[intercom] state query failed for {entity_id}: HTTP {code}"
+            if code
+            else f"HTTP error: {result}"
         )
         return ("", {}) if with_attrs else ""
 
