@@ -217,7 +217,7 @@ class TestHAClientPlayAndAutoPause:
             patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
-            client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
+            client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         mock_start.assert_called_once()
 
@@ -234,7 +234,7 @@ class TestHAClientPlayAndAutoPause:
             patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
-            client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
+            client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         mock_start.assert_not_called()
 
@@ -254,7 +254,7 @@ class TestHAClientPlayAndAutoPause:
             patch.object(client, "call") as mock_call,
             patch("threading.Thread.start") as mock_start,
         ):
-            result = client.play_and_auto_pause(
+            result = client.play_announcement(
                 "media_player.xiaomi", "http://ha/audio/test.wav", 2.0
             )
 
@@ -263,7 +263,7 @@ class TestHAClientPlayAndAutoPause:
         mock_start.assert_not_called()
 
     def test_play_unavailable_entity_returns_unavailable(self):
-        """Offline entity: play_and_auto_pause returns unavailable immediately."""
+        """Offline entity: play_announcement returns unavailable immediately."""
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -273,9 +273,7 @@ class TestHAClientPlayAndAutoPause:
             patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
-            result = client.play_and_auto_pause(
-                "media_player.test", "http://ha/audio/test.wav", 2.0
-            )
+            result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         assert result == {"ok": False, "error": "unavailable"}
         mock_start.assert_not_called()
@@ -361,8 +359,8 @@ class TestAutoPauseBg:
         assert sleep_calls, "sleep should be called"
         assert sleep_calls[0] >= 4.0, f"expected >=4.0, got {sleep_calls[0]}"
 
-    def test_play_and_auto_pause_returns_true_on_success(self):
-        """play_and_auto_pause should return True when play_media succeeds."""
+    def test_play_announcement_returns_true_on_success(self):
+        """play_announcement should return True when play_media succeeds."""
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -374,14 +372,12 @@ class TestAutoPauseBg:
             patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start"),
         ):
-            result = client.play_and_auto_pause(
-                "media_player.test", "http://ha/audio/test.wav", 2.0
-            )
+            result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         assert result == {"ok": True}
 
-    def test_play_and_auto_pause_returns_false_on_failure(self):
-        """play_and_auto_pause should return {"ok": False, "error": "play_failed"} when play_media fails."""
+    def test_play_announcement_returns_false_on_failure(self):
+        """play_announcement should return {"ok": False, "error": "play_failed"} when play_media fails."""
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -394,9 +390,7 @@ class TestAutoPauseBg:
             patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
-            result = client.play_and_auto_pause(
-                "media_player.test", "http://ha/audio/test.wav", 2.0
-            )
+            result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         assert result == {"ok": False, "error": "play_failed"}
         mock_start.assert_not_called()
@@ -417,9 +411,7 @@ class TestAutoPauseBg:
             patch("urllib.request.urlopen", return_value=mock_state_resp),
             patch("threading.Thread.start") as mock_start,
         ):
-            result = client.play_and_auto_pause(
-                "media_player.test", "http://ha/audio/test.wav", 2.0
-            )
+            result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         assert result == {"ok": True}
         mock_start.assert_not_called()
@@ -444,12 +436,79 @@ class TestAutoPauseBg:
             patch("urllib.request.urlopen", return_value=mock_state_resp),
             patch("threading.Thread.start") as mock_start,
         ):
-            result = client.play_and_auto_pause(
+            result = client.play_announcement(
                 "media_player.ma_test", "http://ha/audio/test.wav", 2.0
             )
 
         assert result == {"ok": True}
         assert "music_assistant/play_announcement" in call_args
+        mock_start.assert_not_called()
+
+    def test_ma_announcement_with_volume(self):
+        """MA player: pass announce_volume through to play_announcement."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_state_resp = MagicMock()
+        mock_state_resp.status = 200
+        mock_state_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"app_id": "music_assistant"}}
+        ).encode()
+
+        call_data = {}
+
+        def fake_call(service, data):
+            call_data["service"] = service
+            call_data["data"] = data
+            return True
+
+        with (
+            patch.object(client, "call", side_effect=fake_call),
+            patch("urllib.request.urlopen", return_value=mock_state_resp),
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_announcement(
+                "media_player.ma_test",
+                "http://ha/audio/test.wav",
+                2.0,
+                announce_volume=50,
+            )
+
+        assert result == {"ok": True}
+        assert call_data["service"] == "music_assistant/play_announcement"
+        assert call_data["data"]["announce_volume"] == 50
+        assert call_data["data"]["entity_id"] == "media_player.ma_test"
+        assert call_data["data"]["use_pre_announce"] is True
+        mock_start.assert_not_called()
+
+    def test_ma_announcement_without_volume(self):
+        """MA player without announce_volume: no volume key in service call."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_state_resp = MagicMock()
+        mock_state_resp.status = 200
+        mock_state_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"app_id": "music_assistant"}}
+        ).encode()
+
+        call_data = {}
+
+        def fake_call(service, data):
+            call_data["service"] = service
+            call_data["data"] = data
+            return True
+
+        with (
+            patch.object(client, "call", side_effect=fake_call),
+            patch("urllib.request.urlopen", return_value=mock_state_resp),
+            patch("threading.Thread.start") as mock_start,
+        ):
+            result = client.play_announcement(
+                "media_player.ma_test",
+                "http://ha/audio/test.wav",
+                2.0,
+            )
+
+        assert result == {"ok": True}
+        assert "announce_volume" not in call_data["data"]
+        assert call_data["data"]["use_pre_announce"] is True
         mock_start.assert_not_called()
 
     def test_play_media_includes_announce(self):
@@ -473,7 +532,7 @@ class TestAutoPauseBg:
             patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start"),
         ):
-            client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
+            client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         assert call_data.get("announce") is True
 

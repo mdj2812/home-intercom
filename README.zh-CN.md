@@ -61,12 +61,14 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 ```json
 {
-  "living":  {"name": "客厅", "entity": "media_player.living_room_speaker"},
+  "living":  {"name": "客厅", "entity": "media_player.living_room_speaker", "announce_volume": 50},
   "bedroom": {"name": "主卧", "entity": "media_player.bedroom_speaker"}
 }
 ```
 
 `entity` 填 HA 中音箱的 entity_id。改完无需重启，PWA 自动加载。
+
+`announce_volume`（可选，0-100）仅对 Music Assistant 播放器生效。设置后 MA 会先响提示音再按指定音量播报。不填则沿用播放器当前音量。
 
 ## HTTPS
 
