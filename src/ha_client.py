@@ -314,8 +314,7 @@ class HAClient:
         ok = self.call("media_player/volume_set", {"entity_id": entity_id, "volume_level": level})
         if not ok:
             _logger.warning(
-                f"[intercom] {entity_id} volume_set({level:.2f}) failed — "
-                "volume may be wrong"
+                f"[intercom] {entity_id} volume_set({level:.2f}) failed — volume may be wrong"
             )
 
     def _restore_volume(self, entity_id: str, saved_volume: float | None):
