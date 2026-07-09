@@ -68,6 +68,8 @@ class HAClient:
         self._pause_buffer = pause_buffer
         self._entity_cache: dict[str, dict] = {}  # entity_id → {app_id, supported_features}
         self._cache_lock = threading.Lock()
+        self._volume_cache: dict[str, tuple[float, float]] = {}  # entity_id → (level, timestamp)
+        self._volume_cache_ttl = 5.0  # seconds
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
@@ -297,6 +299,7 @@ class HAClient:
     def _set_volume_level(self, entity_id: str, level: float):
         """Set volume_level via media_player.volume_set (0.0–1.0)."""
         self.call("media_player/volume_set", {"entity_id": entity_id, "volume_level": level})
+        # _request default timeout = 10s, plenty for a simple volume_set call.
 
     def _restore_volume(self, entity_id: str, saved_volume: float | None):
         """Restore original volume if it was changed."""
