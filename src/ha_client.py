@@ -28,6 +28,9 @@ SUPPORT_REPEAT_SET = 1 << 18  # = 262144
 # Entities without this bit (e.g. Xiaomi official integration's WifiSpeaker)
 # cannot call play_media at all and should be skipped early.
 SUPPORT_PLAY_MEDIA = 1 << 9  # = 512
+# Poll interval for speaker status (frontend setInterval, seconds).
+# Also used as volume cache TTL — see _get_volume_level / query_statuses.
+STATUS_POLL_INTERVAL = 30
 
 
 class EntityStatus(StrEnum):
@@ -68,6 +71,8 @@ class HAClient:
         self._pause_buffer = pause_buffer
         self._entity_cache: dict[str, dict] = {}  # entity_id → {app_id, supported_features}
         self._cache_lock = threading.Lock()
+        # entity_id → (attrs_dict, timestamp) — refreshed by query_statuses poll
+        self._state_cache: dict[str, tuple[dict, float]] = {}
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
@@ -198,7 +203,7 @@ class HAClient:
         # Standard player: use concatenated audio (chime + recording in one file)
         url = audio_url_with_chime or audio_url
         dur = duration_with_chime or duration
-        return self._play_standard(entity_id, url, dur, info)
+        return self._play_standard(entity_id, url, dur, info, announce_volume=announce_volume)
 
     def _play_ma_announcement(
         self,
@@ -233,8 +238,15 @@ class HAClient:
         """Check if entity supports media_player.play_media (bit 9)."""
         return bool(info["supported_features"] & SUPPORT_PLAY_MEDIA)
 
-    def _play_standard(self, entity_id: str, audio_url: str, duration: float, info: dict) -> dict:
-        """Tier 2/3: standard media_player — guard, play, optional timer."""
+    def _play_standard(
+        self,
+        entity_id: str,
+        audio_url: str,
+        duration: float,
+        info: dict,
+        announce_volume: int | None = None,
+    ) -> dict:
+        """Tier 2/3: standard media_player — guard, optional volume boost, play."""
         if not self._has_play_media(info):
             _logger.warning(
                 f"[intercom] {entity_id} does not support play_media "
@@ -247,60 +259,118 @@ class HAClient:
             f"[intercom] {entity_id} modern={modern} (features=0x{info['supported_features']:x})"
         )
 
+        # Volume boost: save current → set announce volume → restore after playback
+        saved_volume: float | None = None
+        if announce_volume is not None:
+            saved_volume = self._get_volume_level(entity_id)
+            if saved_volume is not None and saved_volume * 100 < announce_volume:
+                target = announce_volume / 100.0
+                _logger.info(
+                    f"[intercom] {entity_id} volume boost {saved_volume:.2f} → {target:.2f}"
+                )
+                self._set_volume_level(entity_id, target)
+
         ok = self._play_media(entity_id, audio_url)
         if not ok:
+            self._restore_volume(entity_id, saved_volume)
             _logger.info(f"[intercom] HA play failed for {entity_id}")
             return {"ok": False, "error": PlayError.PLAY_FAILED}
 
         if modern:
             _logger.info(f"[intercom] {entity_id} modern player — announce mode (self-stopping)")
+            if saved_volume is not None:
+                threading.Thread(
+                    target=self._volume_restore_bg,
+                    args=(entity_id, saved_volume, duration),
+                    daemon=True,
+                ).start()
             return {"ok": True}
 
-        # Basic player: pause timer stops any looping
+        # Basic player: pause timer + volume restore
         threading.Thread(
             target=self._auto_pause_bg,
-            args=(entity_id, duration),
+            args=(entity_id, duration, saved_volume),
             daemon=True,
         ).start()
         return {"ok": True}
 
-    def _auto_pause_bg(self, entity_id: str, wait_sec: float):
-        """Background thread: confirm playback → wait → pause + verify."""
+    def _get_volume_level(self, entity_id: str) -> float | None:
+        """Query current volume_level (0.0–1.0), short-TTL cached."""
+        now = time.monotonic()
+        with self._cache_lock:
+            cached = self._state_cache.get(entity_id)
+            if cached is not None and now - cached[1] < STATUS_POLL_INTERVAL:
+                return cached[0].get("volume_level")
+
+        _state, attrs = self.state(entity_id, with_attrs=True)
+        if isinstance(attrs, dict):
+            with self._cache_lock:
+                self._state_cache[entity_id] = (attrs, now)
+            return attrs.get("volume_level")
+        return None
+
+    def _set_volume_level(self, entity_id: str, level: float):
+        """Set volume_level via media_player.volume_set (0.0–1.0)."""
+        ok = self.call("media_player/volume_set", {"entity_id": entity_id, "volume_level": level})
+        if not ok:
+            _logger.warning(
+                f"[intercom] {entity_id} volume_set({level:.2f}) failed — volume may be wrong"
+            )
+
+    def _restore_volume(self, entity_id: str, saved_volume: float | None):
+        """Restore original volume if it was changed."""
+        if saved_volume is not None:
+            _logger.info(f"[intercom] {entity_id} restoring volume to {saved_volume:.2f}")
+            self._set_volume_level(entity_id, saved_volume)
+
+    def _volume_restore_bg(self, entity_id: str, saved_volume: float, wait_sec: float):
+        """Background thread: wait for modern player to finish, then restore volume."""
+        time.sleep(wait_sec + self._pause_buffer)
+        self._restore_volume(entity_id, saved_volume)
+
+    def _auto_pause_bg(self, entity_id: str, wait_sec: float, saved_volume: float | None = None):
+        """Background thread: confirm playback → wait → pause + restore volume."""
         t0 = time.monotonic()
 
-        # 1) Poll until "playing" state is confirmed
-        for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
-            state = self.state(entity_id)
-            if state == "playing":
-                _logger.info(f"[intercom] {entity_id} playing confirmed (attempt {attempt})")
-                break
-            time.sleep(STATE_POLL_INTERVAL)
-        else:
-            _logger.info(f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing")
+        try:
+            # 1) Poll until "playing" state is confirmed
+            for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
+                state = self.state(entity_id)
+                if state == "playing":
+                    _logger.info(f"[intercom] {entity_id} playing confirmed (attempt {attempt})")
+                    break
+                time.sleep(STATE_POLL_INTERVAL)
+            else:
+                _logger.info(
+                    f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing"
+                )
 
-        # 2) Wait for remaining duration + buffer
-        elapsed = time.monotonic() - t0
-        remaining = max(0, wait_sec - elapsed + self._pause_buffer)
-        if remaining > 0:
-            _logger.info(
-                f"[intercom] {entity_id} elapsed {elapsed:.1f}s, sleeping {remaining:.1f}s (buffer +{self._pause_buffer:.1f}s)"
-            )
-            time.sleep(remaining)
+            # 2) Wait for remaining duration + buffer
+            elapsed = time.monotonic() - t0
+            remaining = max(0, wait_sec - elapsed + self._pause_buffer)
+            if remaining > 0:
+                _logger.info(
+                    f"[intercom] {entity_id} elapsed {elapsed:.1f}s, "
+                    f"sleeping {remaining:.1f}s (buffer +{self._pause_buffer:.1f}s)"
+                )
+                time.sleep(remaining)
 
-        # 3) Pause + confirm stopped
-        for attempt in range(1, PAUSE_RETRIES + 1):
-            self.call("media_player/media_pause", {"entity_id": entity_id})
-            time.sleep(STATE_POLL_INTERVAL)
-            state = self.state(entity_id)
-            if state != "playing":
-                _logger.info(f"[intercom] {entity_id} paused (attempt {attempt})")
-                return
-            _logger.info(
-                f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})"
+            # 3) Pause + confirm stopped
+            for attempt in range(1, PAUSE_RETRIES + 1):
+                self.call("media_player/media_pause", {"entity_id": entity_id})
+                time.sleep(STATE_POLL_INTERVAL)
+                state = self.state(entity_id)
+                if state != "playing":
+                    _logger.info(f"[intercom] {entity_id} paused (attempt {attempt})")
+                    return
+                _logger.info(
+                    f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})"
+                )
+            _logger.warning(
+                f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
             )
-        _logger.warning(
-            f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
-        )
+        finally:
+            self._restore_volume(entity_id, saved_volume)
 
     def query_statuses(self, room_map: dict) -> dict[str, str]:
         """Batch query speaker online status for all rooms.
@@ -308,6 +378,9 @@ class HAClient:
         Returns EntityStatus values: "online", "unavailable", "no_play_media".
         Only "online" rooms can receive broadcasts. The frontend uses
         this to show green/grey/red indicators and status text.
+
+        Also refreshes state cache so _get_volume_level hits cache
+        (polled every 30s by frontend).
         """
         status = {}
         for key, room in room_map.items():
@@ -315,10 +388,14 @@ class HAClient:
             if not entity:
                 status[key] = EntityStatus.ONLINE
                 continue
-            state = self.state(entity)
+            state, attrs = self.state(entity, with_attrs=True)
             if not state or state == EntityStatus.UNAVAILABLE:
                 status[key] = EntityStatus.UNAVAILABLE
                 continue
+            # Refresh full state cache from background poll
+            if isinstance(attrs, dict):
+                with self._cache_lock:
+                    self._state_cache[entity] = (attrs, time.monotonic())
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
             status[key] = (
