@@ -69,7 +69,7 @@ class HAClient:
         self._entity_cache: dict[str, dict] = {}  # entity_id → {app_id, supported_features}
         self._cache_lock = threading.Lock()
         self._volume_cache: dict[str, tuple[float, float]] = {}  # entity_id → (level, timestamp)
-        self._volume_cache_ttl = 5.0  # seconds
+        self._volume_cache_ttl = 30.0  # aligned with frontend poll interval (30s)
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
