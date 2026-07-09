@@ -28,6 +28,9 @@ SUPPORT_REPEAT_SET = 1 << 18  # = 262144
 # Entities without this bit (e.g. Xiaomi official integration's WifiSpeaker)
 # cannot call play_media at all and should be skipped early.
 SUPPORT_PLAY_MEDIA = 1 << 9  # = 512
+# Poll interval for speaker status (frontend setInterval, seconds).
+# Also used as volume cache TTL — see _get_volume_level / query_statuses.
+STATUS_POLL_INTERVAL = 30
 
 
 class EntityStatus(StrEnum):
@@ -68,8 +71,8 @@ class HAClient:
         self._pause_buffer = pause_buffer
         self._entity_cache: dict[str, dict] = {}  # entity_id → {app_id, supported_features}
         self._cache_lock = threading.Lock()
-        self._volume_cache: dict[str, tuple[float, float]] = {}  # entity_id → (level, timestamp)
-        self._volume_cache_ttl = 30.0  # aligned with frontend poll interval (30s)
+        # entity_id → (attrs_dict, timestamp) — refreshed by query_statuses poll
+        self._state_cache: dict[str, tuple[dict, float]] = {}
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
@@ -294,17 +297,15 @@ class HAClient:
     def _get_volume_level(self, entity_id: str) -> float | None:
         """Query current volume_level (0.0–1.0), short-TTL cached."""
         now = time.monotonic()
-        cached = self._volume_cache.get(entity_id)
-        if cached is not None and now - cached[1] < self._volume_cache_ttl:
-            return cached[0]
+        cached = self._state_cache.get(entity_id)
+        if cached is not None and now - cached[1] < STATUS_POLL_INTERVAL:
+            return cached[0].get("volume_level")
 
         _state, attrs = self.state(entity_id, with_attrs=True)
-        if not isinstance(attrs, dict):
-            return None
-        level = attrs.get("volume_level")
-        if level is not None:
-            self._volume_cache[entity_id] = (level, now)
-        return level
+        if isinstance(attrs, dict):
+            self._state_cache[entity_id] = (attrs, now)
+            return attrs.get("volume_level")
+        return None
 
     def _set_volume_level(self, entity_id: str, level: float):
         """Set volume_level via media_player.volume_set (0.0–1.0)."""
@@ -373,7 +374,7 @@ class HAClient:
         Only "online" rooms can receive broadcasts. The frontend uses
         this to show green/grey/red indicators and status text.
 
-        Also refreshes volume cache so _get_volume_level hits cache
+        Also refreshes state cache so _get_volume_level hits cache
         (polled every 30s by frontend).
         """
         status = {}
@@ -386,10 +387,9 @@ class HAClient:
             if not state or state == EntityStatus.UNAVAILABLE:
                 status[key] = EntityStatus.UNAVAILABLE
                 continue
-            # Refresh volume cache from background poll
-            level = attrs.get("volume_level") if isinstance(attrs, dict) else None
-            if level is not None:
-                self._volume_cache[entity] = (level, time.monotonic())
+            # Refresh full state cache from background poll
+            if isinstance(attrs, dict):
+                self._state_cache[entity] = (attrs, time.monotonic())
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
             status[key] = (
