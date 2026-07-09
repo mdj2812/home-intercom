@@ -297,20 +297,26 @@ class HAClient:
     def _get_volume_level(self, entity_id: str) -> float | None:
         """Query current volume_level (0.0–1.0), short-TTL cached."""
         now = time.monotonic()
-        cached = self._state_cache.get(entity_id)
-        if cached is not None and now - cached[1] < STATUS_POLL_INTERVAL:
-            return cached[0].get("volume_level")
+        with self._cache_lock:
+            cached = self._state_cache.get(entity_id)
+            if cached is not None and now - cached[1] < STATUS_POLL_INTERVAL:
+                return cached[0].get("volume_level")
 
         _state, attrs = self.state(entity_id, with_attrs=True)
         if isinstance(attrs, dict):
-            self._state_cache[entity_id] = (attrs, now)
+            with self._cache_lock:
+                self._state_cache[entity_id] = (attrs, now)
             return attrs.get("volume_level")
         return None
 
     def _set_volume_level(self, entity_id: str, level: float):
         """Set volume_level via media_player.volume_set (0.0–1.0)."""
-        self.call("media_player/volume_set", {"entity_id": entity_id, "volume_level": level})
-        # _request default timeout = 10s, plenty for a simple volume_set call.
+        ok = self.call("media_player/volume_set", {"entity_id": entity_id, "volume_level": level})
+        if not ok:
+            _logger.warning(
+                f"[intercom] {entity_id} volume_set({level:.2f}) failed — "
+                "volume may be wrong"
+            )
 
     def _restore_volume(self, entity_id: str, saved_volume: float | None):
         """Restore original volume if it was changed."""
@@ -389,7 +395,8 @@ class HAClient:
                 continue
             # Refresh full state cache from background poll
             if isinstance(attrs, dict):
-                self._state_cache[entity] = (attrs, time.monotonic())
+                with self._cache_lock:
+                    self._state_cache[entity] = (attrs, time.monotonic())
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
             status[key] = (
