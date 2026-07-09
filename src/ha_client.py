@@ -292,9 +292,19 @@ class HAClient:
         return {"ok": True}
 
     def _get_volume_level(self, entity_id: str) -> float | None:
-        """Query current volume_level (0.0–1.0) from entity state. Returns None if unavailable."""
+        """Query current volume_level (0.0–1.0), short-TTL cached."""
+        now = time.monotonic()
+        cached = self._volume_cache.get(entity_id)
+        if cached is not None and now - cached[1] < self._volume_cache_ttl:
+            return cached[0]
+
         _state, attrs = self.state(entity_id, with_attrs=True)
-        return attrs.get("volume_level") if attrs else None
+        if not isinstance(attrs, dict):
+            return None
+        level = attrs.get("volume_level")
+        if level is not None:
+            self._volume_cache[entity_id] = (level, now)
+        return level
 
     def _set_volume_level(self, entity_id: str, level: float):
         """Set volume_level via media_player.volume_set (0.0–1.0)."""
