@@ -372,6 +372,9 @@ class HAClient:
         Returns EntityStatus values: "online", "unavailable", "no_play_media".
         Only "online" rooms can receive broadcasts. The frontend uses
         this to show green/grey/red indicators and status text.
+
+        Also refreshes volume cache so _get_volume_level hits cache
+        (polled every 30s by frontend).
         """
         status = {}
         for key, room in room_map.items():
@@ -379,10 +382,14 @@ class HAClient:
             if not entity:
                 status[key] = EntityStatus.ONLINE
                 continue
-            state = self.state(entity)
+            state, attrs = self.state(entity, with_attrs=True)
             if not state or state == EntityStatus.UNAVAILABLE:
                 status[key] = EntityStatus.UNAVAILABLE
                 continue
+            # Refresh volume cache from background poll
+            level = attrs.get("volume_level") if isinstance(attrs, dict) else None
+            if level is not None:
+                self._volume_cache[entity] = (level, time.monotonic())
             # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
             status[key] = (
