@@ -8,7 +8,7 @@ import wave
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from ha_client import HAClient
+from ha_client import DEFAULT_STATE_TIMEOUT, HAClient
 
 app = Flask(__name__)
 
@@ -27,8 +27,6 @@ def _parse_pause_buffer() -> float:
 
 
 PAUSE_BUFFER = _parse_pause_buffer()
-
-DEFAULT_STATE_TIMEOUT = 5
 
 
 def _parse_state_timeout() -> int:
