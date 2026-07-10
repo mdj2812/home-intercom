@@ -19,19 +19,13 @@ body {
   max-width: 500px;
   margin: 0 auto;
   padding: 16px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
   padding: 8px 0 12px;
-}
-
-.header-right {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
 }
 
 .header h1 {
@@ -41,31 +35,113 @@ body {
   letter-spacing: 0.02em;
 }
 
-.header .ver {
-  font-size: 0.7rem;
-  color: #444;
-}
-
 .header .hint {
   font-size: 0.8rem;
   color: #555;
   margin-top: 4px;
 }
 
-#lang-toggle {
-  background: none;
-  border: 1px solid #444;
-  border-radius: 4px;
-  color: #888;
-  font-size: 0.65rem;
-  padding: 2px 6px;
-  cursor: pointer;
-  transition: color .2s, border-color .2s;
+.footer {
+  margin-top: auto;
+  padding-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-#lang-toggle:hover {
+.footer .ver {
+  font-size: 0.7rem;
+  color: #444;
+  letter-spacing: 0.08em;
+}
+
+.lang-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+#lang-toggle {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: #888;
+  font-size: 0.65rem;
+  width: 64px;
+  min-width: 64px;
+  height: 28px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+
+#lang-toggle-label {
+  flex: 1;
+  text-align: center;
+}
+
+#lang-toggle:hover,
+.lang-dropdown.open #lang-toggle {
   color: #ccc;
-  border-color: #666;
+}
+
+.lang-chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.lang-dropdown.open .lang-chevron {
+  transform: rotate(-135deg) translateY(1px);
+}
+
+.lang-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 100%;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  z-index: 10;
+}
+
+.footer .lang-dropdown-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.lang-dropdown-menu[hidden] {
+  display: none;
+}
+
+.lang-option {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 0.65rem;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: background 0.2s, color 0.2s;
+}
+
+.lang-option:hover,
+.lang-option.active {
+  background: #252525;
+  color: #ccc;
 }
 
 /* ──── Grid ──── */

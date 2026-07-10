@@ -25,7 +25,6 @@ I18N_REQUIRED_KEYS = [
     "statusNetworkError",
     "statusLoadFailed",
     "micError",
-    "langLabel",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -129,7 +128,9 @@ class TestHtmlStructure:
 
     def test_has_lang_toggle(self, html_content):
         assert 'id="lang-toggle"' in html_content
-        assert "I18N.toggleLang()" in html_content
+        assert 'id="lang-dropdown"' in html_content
+        assert 'data-lang="zh-CN"' in html_content
+        assert 'data-lang="en"' in html_content
 
     def test_has_data_i18n_attributes(self, html_content):
         """Broadcast name should use data-i18n, not fragile nth-child selectors."""
