@@ -13,4 +13,5 @@ services:
       - HA_TOKEN=<YOUR_HA_LONG_LIVED_TOKEN>
       # - TRUSTED_PROXY=<your caddy/nginx ip>  # restrict forwarded headers for security
       # - PAUSE_BUFFER=1.0  # fallback: extra seconds before auto-pause (only for speakers without repeat_set)
+      # - STATE_TIMEOUT=8  # seconds to wait for entity state queries (default 5, increase for Bluetooth/MA devices)
     network_mode: host
