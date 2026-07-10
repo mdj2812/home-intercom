@@ -309,9 +309,12 @@ async function processAndSend() {
           // Turn dot red
           const dot = card.querySelector('.dot');
           if (dot) dot.className = 'dot dot-error';
-          const msg = (e.error === EntityStatus.UNAVAILABLE || e.error === PlayError.PLAY_FAILED || e.error === PlayError.MA_FAILED)
-            ? I18N.t('statusUnavailable')
-            : I18N.t('statusSkipped');
+          const ERROR_MSG = {
+            [EntityStatus.UNAVAILABLE]: I18N.t('statusUnavailable'),
+            [PlayError.PLAY_FAILED]:    I18N.t('statusPlayFailed'),
+            [PlayError.MA_FAILED]:      I18N.t('statusMAFailed'),
+          };
+          const msg = ERROR_MSG[e.error] || I18N.t('statusSkipped');
           setCardState(card, '', msg);
         }
       }

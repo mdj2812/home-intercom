@@ -597,3 +597,123 @@ class TestSupportsRepeatSet:
             side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
         ):
             assert client.supports_repeat_set("media_player.test") is False
+
+
+class TestEntityInfoTimeout:
+    """Tests for state timeout fallback and _get_entity_info success flag."""
+
+    def test_get_entity_info_returns_success_on_cache_hit(self):
+        """_get_entity_info returns (info, True) when entity info is cached."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {
+                "state": "idle",
+                "attributes": {"supported_features": SUPPORT_PLAY_MEDIA, "app_id": "test"},
+            }
+        ).encode()
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            info, ok = client._get_entity_info("media_player.test")
+
+        assert ok is True
+        assert info["supported_features"] == SUPPORT_PLAY_MEDIA
+        assert info["app_id"] == "test"
+        # Second call — cache hit, should skip HTTP
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            info2, ok2 = client._get_entity_info("media_player.test")
+        mock_urlopen.assert_not_called()
+        assert ok2 is True
+        assert info2 == info
+
+    def test_get_entity_info_returns_failure_on_timeout(self):
+        """_get_entity_info returns (default_info, False) when state query fails."""
+        client = HAClient("http://ha:8123", "tok")
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            info, ok = client._get_entity_info("media_player.test")
+
+        assert ok is False
+        assert info["app_id"] == ""
+        assert info["supported_features"] == 0
+
+    def test_play_announcement_skips_entity_info_on_state_timeout(self):
+        """When state() times out, _get_entity_info is skipped, saving 5s."""
+        client = HAClient("http://ha:8123", "tok")
+
+        # First call: state() returns empty (timeout)
+        with (
+            patch.object(client, "state", return_value=""),
+            patch.object(client, "_get_entity_info") as mock_info,
+            patch.object(client, "_play_standard", return_value={"ok": True}) as mock_play,
+        ):
+            result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
+
+        # _get_entity_info must NOT be called when state() timed out
+        mock_info.assert_not_called()
+        # _play_standard must be called with info_ok=False
+        mock_play.assert_called_once()
+        ((_eid, _url, _dur, _info), kwargs) = mock_play.call_args
+        assert kwargs["info_ok"] is False
+        assert result == {"ok": True}
+
+    def test_play_standard_timeout_falls_through(self):
+        """When info_ok=False, _play_standard tries play_media anyway."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "call", return_value=True):
+            result = client._play_standard(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+                2.0,
+                {"app_id": "", "supported_features": 0},
+                info_ok=False,
+            )
+
+        assert result == {"ok": True}
+
+    def test_play_standard_no_play_media_with_info_ok(self):
+        """When info_ok=True and features=0, still returns NO_PLAY_MEDIA."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "call") as mock_call:
+            result = client._play_standard(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+                2.0,
+                {"app_id": "", "supported_features": 0},
+                info_ok=True,
+            )
+
+        assert result == {"ok": False, "error": "no_play_media"}
+        mock_call.assert_not_called()
+
+    def test_query_statuses_treats_info_timeout_as_no_play_media(self):
+        """When _get_entity_info fails (timeout), entity is NO_PLAY_MEDIA."""
+        client = HAClient("http://ha:8123", "tok")
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.read.return_value = json.dumps(
+            {"state": "idle", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+        ).encode()
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            info, ok = client._get_entity_info("media_player.test")
+
+        assert ok is True
+
+        # Now simulate timeout on a different entity
+        with patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            info2, ok2 = client._get_entity_info("media_player.slow")
+
+        assert ok2 is False
+
+    def test_state_timeout_default_from_constructor(self):
+        """HAClient defaults to state_timeout=5."""
+        client = HAClient("http://ha:8123", "tok")
+        assert client._state_timeout == 5
+
+    def test_state_timeout_custom_value(self):
+        """Custom state_timeout is stored."""
+        client = HAClient("http://ha:8123", "tok", state_timeout=8)
+        assert client._state_timeout == 8

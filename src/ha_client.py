@@ -15,10 +15,20 @@ from enum import StrEnum
 
 _logger = logging.getLogger(__name__)
 
+
+def _truncate(s: str, max_len: int) -> str:
+    """Truncate string for logging, appending '…' if cut."""
+    if max_len <= 1:
+        return "…"
+    return s if len(s) <= max_len else s[: max_len - 1] + "…"
+
+
 # ——— Retry constants ———
 STATE_POLL_INTERVAL = 0.5  # poll interval for state checks (seconds)
 PLAYING_CONFIRM_RETRIES = 10  # max attempts to confirm "playing" (10 × 0.5s = 5s)
 PAUSE_RETRIES = 5  # pause retry count
+DEFAULT_STATE_TIMEOUT = 5  # seconds for entity state queries
+SERVICE_TIMEOUT = 10  # seconds for HA service calls
 # MediaPlayerEntityFeature.REPEAT_SET from HA core:
 #   homeassistant/components/media_player/const.py
 # Used as modernity proxy: players that support repeat_set likely
@@ -59,16 +69,25 @@ class PlayError(StrEnum):
 class HAClient:
     """Home Assistant REST API client."""
 
-    def __init__(self, ha_url: str, token: str, pause_buffer: float = 0.0):
+    def __init__(
+        self,
+        ha_url: str,
+        token: str,
+        pause_buffer: float = 0.0,
+        state_timeout: int = DEFAULT_STATE_TIMEOUT,
+    ):
         """ha_url: full HA URL like http://homeassistant.local:8123 or https://ha.example.com
 
         pause_buffer: extra seconds to wait before pausing (default 0).
+        state_timeout: seconds to wait for entity state queries (default 5).
+            Increase for slow entities (Bluetooth via MA, etc.).
         """
         parsed = urllib.parse.urlparse(ha_url)
         self._base = f"{parsed.scheme}://{parsed.netloc}/api"
         self._token = token
         self._ctx = ssl._create_unverified_context()
         self._pause_buffer = pause_buffer
+        self._state_timeout = state_timeout
         self._entity_cache: dict[str, dict] = {}  # entity_id → {app_id, supported_features}
         self._cache_lock = threading.Lock()
         # entity_id → (attrs_dict, timestamp) — refreshed by query_statuses poll
@@ -101,7 +120,7 @@ class HAClient:
         if not self._token:
             _logger.warning("[intercom] HA_TOKEN is empty — cannot query entity state")
             return ("", {}) if with_attrs else ""
-        code, result = self._request("GET", f"/states/{entity_id}", timeout=3)
+        code, result = self._request("GET", f"/states/{entity_id}", timeout=self._state_timeout)
         if code == 200 and isinstance(result, dict):
             s = result.get("state", "")
             if with_attrs:
@@ -118,10 +137,15 @@ class HAClient:
         """Call HA service, returns success/failure."""
         if not self._token:
             return False
-        code, _ = self._request("POST", f"/services/{service}", data=data, timeout=10)
+        code, body = self._request(
+            "POST", f"/services/{service}", data=data, timeout=SERVICE_TIMEOUT
+        )
         ok = code == 200
         if not ok:
-            _logger.info(f"[intercom] HA call failed ({service}): {_}")
+            _logger.info(
+                f"[intercom] HA call failed ({service}): HTTP {code}"
+                + (f" — {_truncate(str(body), 200)}" if body else "")
+            )
         return ok
 
     def supports_repeat_set(self, entity_id: str) -> bool:
@@ -130,7 +154,8 @@ class HAClient:
         Players with repeat_set (MA/HomePod/Chromecast) likely implement
         announce correctly and don't need a pause timer.
         """
-        return bool(self._get_entity_info(entity_id)["supported_features"] & SUPPORT_REPEAT_SET)
+        info, _ = self._get_entity_info(entity_id)
+        return bool(info["supported_features"] & SUPPORT_REPEAT_SET)
 
     def _play_media(self, entity_id: str, audio_url: str) -> bool:
         """Call media_player.play_media with announce=True.
@@ -149,19 +174,22 @@ class HAClient:
             },
         )
 
-    def _get_entity_info(self, entity_id: str) -> dict:
+    def _get_entity_info(self, entity_id: str) -> tuple[dict, bool]:
         """Fetch entity attrs once, cache {app_id, supported_features} per entity.
+
+        Returns (info_dict, success). success=False means the state query
+        timed out or failed — callers should use a fallback strategy.
 
         These are static hardware capabilities — safe to cache indefinitely.
         """
         # Fast path: already cached (lock-free)
         if entity_id in self._entity_cache:
-            return self._entity_cache[entity_id]
+            return self._entity_cache[entity_id], True
 
         with self._cache_lock:
             # Double-check inside lock
             if entity_id in self._entity_cache:
-                return self._entity_cache[entity_id]
+                return self._entity_cache[entity_id], True
 
             _, attrs = self.state(entity_id, with_attrs=True)
             if attrs:
@@ -169,7 +197,9 @@ class HAClient:
                     "app_id": attrs.get("app_id", ""),
                     "supported_features": attrs.get("supported_features", 0),
                 }
-            return self._entity_cache.get(entity_id, {"app_id": "", "supported_features": 0})
+                return self._entity_cache[entity_id], True
+            info = self._entity_cache.get(entity_id, {"app_id": "", "supported_features": 0})
+            return info, False
 
     def play_announcement(
         self,
@@ -189,21 +219,32 @@ class HAClient:
         announce_volume: optional volume override (0-100) for MA players only.
         audio_url_with_chime: WAV with pre-announce chime prepended (for standard players).
         duration_with_chime: total duration including chime.
-
         Returns {"ok": True} on success,
         {"ok": False, "error": "reason"} on failure.
         """
         state = self.state(entity_id)
-        if not state or state == EntityStatus.UNAVAILABLE:
+        if state == EntityStatus.UNAVAILABLE:
             return {"ok": False, "error": EntityStatus.UNAVAILABLE}
 
-        info = self._get_entity_info(entity_id)
+        info_ok = True
+        if not state:
+            _logger.warning(
+                f"[intercom] {entity_id} state query timed out, "
+                f"skipping entity info (would also time out)"
+            )
+            info: dict = {"app_id": "", "supported_features": 0}
+            info_ok = False
+        else:
+            info, info_ok = self._get_entity_info(entity_id)
+
         if info["app_id"] == "music_assistant":
             return self._play_ma_announcement(entity_id, audio_url, volume=announce_volume)
         # Standard player: use concatenated audio (chime + recording in one file)
         url = audio_url_with_chime or audio_url
         dur = duration_with_chime or duration
-        return self._play_standard(entity_id, url, dur, info, announce_volume=announce_volume)
+        return self._play_standard(
+            entity_id, url, dur, info, announce_volume=announce_volume, info_ok=info_ok
+        )
 
     def _play_ma_announcement(
         self,
@@ -223,10 +264,13 @@ class HAClient:
         if volume is not None:
             data["announce_volume"] = volume
             _logger.info(
-                f"[intercom] {entity_id} MA player — using play_announcement (volume={volume})"
+                f"[intercom] {entity_id} MA player — using play_announcement"
+                f" (volume={volume}, url={audio_url})"
             )
         else:
-            _logger.info(f"[intercom] {entity_id} MA player — using play_announcement")
+            _logger.info(
+                f"[intercom] {entity_id} MA player — using play_announcement (url={audio_url})"
+            )
         ok = self.call("music_assistant/play_announcement", data)
         if ok:
             _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
@@ -245,14 +289,20 @@ class HAClient:
         duration: float,
         info: dict,
         announce_volume: int | None = None,
+        info_ok: bool = True,
     ) -> dict:
         """Tier 2/3: standard media_player — guard, optional volume boost, play."""
         if not self._has_play_media(info):
-            _logger.warning(
-                f"[intercom] {entity_id} does not support play_media "
-                f"(features=0x{info['supported_features']:x}) — skip"
-            )
-            return {"ok": False, "error": EntityStatus.NO_PLAY_MEDIA}
+            if not info_ok:
+                _logger.warning(
+                    f"[intercom] {entity_id} features unknown (timeout), trying play_media anyway"
+                )
+            else:
+                _logger.warning(
+                    f"[intercom] {entity_id} does not support play_media "
+                    f"(features=0x{info['supported_features']:x}) — skip"
+                )
+                return {"ok": False, "error": EntityStatus.NO_PLAY_MEDIA}
 
         modern = bool(info["supported_features"] & SUPPORT_REPEAT_SET)
         _logger.info(
@@ -399,11 +449,12 @@ class HAClient:
             if isinstance(attrs, dict):
                 with self._cache_lock:
                     self._state_cache[entity] = (attrs, time.monotonic())
-            info = self._get_entity_info(entity)
+            # Entity is online — still unavailable if it can't play_media
+            info, info_ok = self._get_entity_info(entity)
             status[key] = {
                 "status": (
                     EntityStatus.ONLINE
-                    if self._has_play_media(info)
+                    if info_ok and self._has_play_media(info)
                     else EntityStatus.NO_PLAY_MEDIA
                 ),
                 "friendly_name": friendly_name,
