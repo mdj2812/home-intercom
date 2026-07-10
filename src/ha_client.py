@@ -69,7 +69,7 @@ class PlayError(StrEnum):
 
 
 # ——— WebSocket wait constants ———
-WS_PLAYING_TIMEOUT = 5.0  # max seconds to wait for "playing" via WebSocket
+WS_PLAYING_TIMEOUT = DEFAULT_STATE_TIMEOUT  # max seconds to wait for "playing" via WebSocket
 WS_PAUSE_TIMEOUT = 1.5  # max seconds to wait for non-playing state
 
 
@@ -545,7 +545,7 @@ class HAClient:
         self._restore_volume(entity_id, saved_volume)
 
     def _auto_pause_bg(self, entity_id: str, wait_sec: float, saved_volume: float | None = None):
-        """Background thread: confirm playback → wait → pause + verify.
+        """Background thread: confirm playback → wait → pause + verify, then restore volume.
 
         Uses WebSocket state_changed events when available (instant response).
         Falls back to REST polling when WebSocket is unavailable or times out.
