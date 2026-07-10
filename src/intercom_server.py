@@ -39,7 +39,7 @@ def _parse_state_timeout() -> int:
             raise ValueError
         return val
     except ValueError:
-        app.logger.info(f"[intercom] invalid STATE_TIMEOUT '{raw}', using {DEFAULT_STATE_TIMEOUT}")
+        app.logger.warning(f"[intercom] invalid STATE_TIMEOUT '{raw}', using {DEFAULT_STATE_TIMEOUT}")
         return DEFAULT_STATE_TIMEOUT
 
 

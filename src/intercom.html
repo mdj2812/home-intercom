@@ -226,14 +226,12 @@ async function processAndSend() {
           // Turn dot red
           const dot = card.querySelector('.dot');
           if (dot) dot.className = 'dot dot-error';
-          const msg = (() => {
-            switch (e.error) {
-              case EntityStatus.UNAVAILABLE: return I18N.t('statusUnavailable');
-              case PlayError.PLAY_FAILED:    return I18N.t('statusPlayFailed');
-              case PlayError.MA_FAILED:      return I18N.t('statusMAFailed');
-              default:                       return I18N.t('statusSkipped');
-            }
-          })();
+          const ERROR_MSG = {
+            [EntityStatus.UNAVAILABLE]: I18N.t('statusUnavailable'),
+            [PlayError.PLAY_FAILED]:    I18N.t('statusPlayFailed'),
+            [PlayError.MA_FAILED]:      I18N.t('statusMAFailed'),
+          };
+          const msg = ERROR_MSG[e.error] || I18N.t('statusSkipped');
           setCardState(card, '', msg);
         }
       }

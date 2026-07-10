@@ -25,6 +25,8 @@ def _truncate(s: str, max_len: int) -> str:
 STATE_POLL_INTERVAL = 0.5  # poll interval for state checks (seconds)
 PLAYING_CONFIRM_RETRIES = 10  # max attempts to confirm "playing" (10 × 0.5s = 5s)
 PAUSE_RETRIES = 5  # pause retry count
+DEFAULT_STATE_TIMEOUT = 5  # seconds for entity state queries
+SERVICE_TIMEOUT = 10  # seconds for HA service calls
 # MediaPlayerEntityFeature.REPEAT_SET from HA core:
 #   homeassistant/components/media_player/const.py
 # Used as modernity proxy: players that support repeat_set likely
@@ -65,7 +67,7 @@ class PlayError(StrEnum):
 class HAClient:
     """Home Assistant REST API client."""
 
-    def __init__(self, ha_url: str, token: str, pause_buffer: float = 0.0, state_timeout: int = 5):
+    def __init__(self, ha_url: str, token: str, pause_buffer: float = 0.0, state_timeout: int = DEFAULT_STATE_TIMEOUT):
         """ha_url: full HA URL like http://homeassistant.local:8123 or https://ha.example.com
 
         pause_buffer: extra seconds to wait before pausing (default 0).
@@ -127,7 +129,7 @@ class HAClient:
         """Call HA service, returns success/failure."""
         if not self._token:
             return False
-        code, body = self._request("POST", f"/services/{service}", data=data, timeout=10)
+        code, body = self._request("POST", f"/services/{service}", data=data, timeout=SERVICE_TIMEOUT)
         ok = code == 200
         if not ok:
             _logger.info(
