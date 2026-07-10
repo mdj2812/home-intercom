@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from ha_client import (
     PAUSE_RETRIES,
     SUPPORT_PLAY_MEDIA,
+    SUPPORT_REPEAT_SET,
     WS_PLAYING_TIMEOUT,
     EntityStatus,
     HAClient,
@@ -858,6 +859,169 @@ class TestVolume:
 
         mock_sleep.assert_called_once_with(3.0 + client._pause_buffer)
         mock_restore.assert_called_once_with("media_player.test", 0.7)
+
+
+class TestEntityInfo:
+    """Tests for _get_entity_info caching and supports_repeat_set."""
+
+    def test_get_entity_info_cache_hit(self):
+        """Cache hit returns cached info without REST call."""
+        client = HAClient("http://ha:8123", "tok")
+        client._entity_cache["media_player.test"] = {
+            "app_id": "test_app",
+            "supported_features": 256,
+        }
+
+        with patch.object(client, "state") as mock_state:
+            info, ok = client._get_entity_info("media_player.test")
+
+        assert info == {"app_id": "test_app", "supported_features": 256}
+        assert ok is True
+        mock_state.assert_not_called()
+
+    def test_get_entity_info_cache_miss_populates(self):
+        """Cache miss queries state and populates cache."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(
+            client,
+            "state",
+            return_value=(
+                "playing",
+                {"app_id": "my_app", "supported_features": 512},
+            ),
+        ):
+            info, ok = client._get_entity_info("media_player.test")
+
+        assert info == {"app_id": "my_app", "supported_features": 512}
+        assert ok is True
+        assert client._entity_cache["media_player.test"] == info
+
+    def test_get_entity_info_no_attrs(self):
+        """State query without attributes returns defaults + ok=False."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "state", return_value=("playing", None)):
+            info, ok = client._get_entity_info("media_player.test")
+
+        assert ok is False
+
+    def test_supports_repeat_set(self):
+        """supports_repeat_set delegates to _get_entity_info."""
+        client = HAClient("http://ha:8123", "tok")
+        client._entity_cache["media_player.test"] = {
+            "app_id": "",
+            "supported_features": 262144,  # SUPPORT_REPEAT_SET
+        }
+
+        result = client.supports_repeat_set("media_player.test")
+        assert result is True
+
+
+class TestPlayStandard:
+    """Tests for _play_standard — guards, volume boost, modern/basic branching."""
+
+    def test_play_standard_no_play_media(self):
+        """Entity without play_media support returns error."""
+        client = HAClient("http://ha:8123", "tok")
+        info = {"supported_features": 0}
+
+        result = client._play_standard(
+            "media_player.test",
+            "http://ha/audio/test.wav",
+            2.0,
+            info,
+        )
+        assert result == {"ok": False, "error": EntityStatus.NO_PLAY_MEDIA}
+
+    def test_play_standard_volume_boost(self):
+        """Volume boost when saved_volume < announce_volume."""
+        client = HAClient("http://ha:8123", "tok")
+        info = {"supported_features": SUPPORT_PLAY_MEDIA}
+
+        with (
+            patch.object(client, "_get_volume_level", return_value=0.3),
+            patch.object(client, "_set_volume_level") as mock_set,
+            patch.object(client, "_play_media", return_value=True),
+            patch("threading.Thread.start"),
+        ):
+            result = client._play_standard(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+                2.0,
+                info,
+                announce_volume=80,
+            )
+
+        mock_set.assert_called_once_with("media_player.test", 0.8)
+        assert result == {"ok": True}
+
+    def test_play_standard_modern_player(self):
+        """Modern player (with repeat_set) uses announce mode."""
+        client = HAClient("http://ha:8123", "tok")
+        info = {"supported_features": SUPPORT_PLAY_MEDIA | SUPPORT_REPEAT_SET}
+
+        with (
+            patch.object(client, "_play_media", return_value=True),
+            patch.object(client, "_get_volume_level", return_value=None),
+            patch("threading.Thread.start"),
+        ):
+            result = client._play_standard(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+                2.0,
+                info,
+            )
+
+        assert result == {"ok": True}
+
+    def test_set_volume_level_failure(self):
+        """_set_volume_level logs warning when HA call fails."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "call", return_value=False):
+            client._set_volume_level("media_player.test", 0.5)
+
+
+class TestPlayMA:
+    """Tests for _play_ma_announcement — Music Assistant announcement."""
+
+    def test_play_ma_success_with_volume(self):
+        """MA play_announcement with volume override."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "call", return_value=True):
+            result = client._play_ma_announcement(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+                volume=80,
+            )
+
+        assert result == {"ok": True}
+
+    def test_play_ma_success_no_volume(self):
+        """MA play_announcement without volume override."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "call", return_value=True):
+            result = client._play_ma_announcement(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+            )
+
+        assert result == {"ok": True}
+
+    def test_play_ma_failure(self):
+        """MA announcement failure returns error."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "call", return_value=False):
+            result = client._play_ma_announcement(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+            )
+
+        assert result == {"ok": False, "error": "ma_failed"}
 
     def test_ws_connect_reconnect_loop(self):
         """Cover _ws_connect reconnect after connection loss."""
