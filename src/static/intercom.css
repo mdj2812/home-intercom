@@ -135,7 +135,8 @@ body {
   color: #999;
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
 }
 
@@ -148,6 +149,21 @@ body {
   flex: 1;
 }
 
+.room-name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
 .device-name {
   font-size: 0.75rem;
   line-height: 1.2;
@@ -155,14 +171,17 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  min-width: 0;
+  flex: 1;
 }
 
 .room-icon {
+  flex-shrink: 0;
   font-size: 1.1rem;
 }
 
 .room-header .dot {
+  flex-shrink: 0;
   width: 6px; height: 6px;
   border-radius: 50%;
   background: #444;
