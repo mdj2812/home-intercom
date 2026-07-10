@@ -218,7 +218,10 @@ class TestHAClientQueryStatuses:
 
 class TestHAClientPlayAndAutoPause:
     def test_calls_play_service_and_spawns_thread(self):
-        with patch("ha_client.HAWebSocketClient") as mock_ws:
+        with (
+            patch("ha_client.HAWebSocketClient") as mock_ws,
+            patch("threading.Thread.start"),  # suppress WS bg thread
+        ):
             mock_ws.return_value.ready = False
             client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
@@ -235,7 +238,10 @@ class TestHAClientPlayAndAutoPause:
         assert result == {"ok": True}
 
     def test_play_failure_does_not_spawn_thread(self):
-        with patch("ha_client.HAWebSocketClient") as mock_ws:
+        with (
+            patch("ha_client.HAWebSocketClient") as mock_ws,
+            patch("threading.Thread.start"),  # suppress WS bg thread
+        ):
             mock_ws.return_value.ready = False
             client = HAClient("http://ha:8123", "tok")
 
