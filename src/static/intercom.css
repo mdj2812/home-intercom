@@ -98,8 +98,8 @@ body {
 .lang-chevron {
   width: 6px;
   height: 6px;
-  border-right: 1px solid currentColor;
-  border-bottom: 1px solid currentColor;
+  border-right: 1px solid currentcolor;
+  border-bottom: 1px solid currentcolor;
   transform: rotate(45deg) translateY(-2px);
   transition: transform 0.2s;
   flex-shrink: 0;
@@ -208,7 +208,7 @@ body {
   inset: -16px;
 }
 
-@media (max-width: 420px) {
+@media (width <= 420px) {
   .container {
     padding: 16px 14px;
   }
