@@ -197,19 +197,7 @@ body {
 .broadcast-card .ptt-wrap {
   width: 120px;
   height: 120px;
-  --ptt-size: 120px;
   flex-shrink: 0;
-}
-
-.broadcast-card .glyph-grid {
-  width: 34px;
-  height: 34px;
-  gap: 5px;
-}
-
-.broadcast-card .glyph-grid span {
-  width: 6px;
-  height: 6px;
 }
 
 .broadcast-card .waves {
@@ -241,18 +229,6 @@ body {
   .broadcast-card .ptt-wrap {
     width: 96px;
     height: 96px;
-    --ptt-size: 96px;
-  }
-
-  .broadcast-card .glyph-grid {
-    width: 28px;
-    height: 28px;
-    gap: 4px;
-  }
-
-  .broadcast-card .glyph-grid span {
-    width: 5px;
-    height: 5px;
   }
 
   .broadcast-card .waves {
@@ -287,18 +263,6 @@ body {
 .room-card:not(.broadcast-card) .ptt-wrap {
   width: 92px;
   height: 92px;
-  --ptt-size: 92px;
-}
-
-.room-card:not(.broadcast-card) .glyph-grid {
-  width: 28px;
-  height: 28px;
-  gap: 4px;
-}
-
-.room-card:not(.broadcast-card) .glyph-grid span {
-  width: 5px;
-  height: 5px;
 }
 
 .room-card:not(.broadcast-card) .waves {
@@ -403,7 +367,6 @@ body {
   position: relative;
   width: 120px;
   height: 120px;
-  --ptt-size: 120px;
 }
 
 .ptt-btn {
@@ -442,25 +405,26 @@ body {
   opacity: 0;
 }
 
-/* ──── Glyph dot grid ──── */
-.glyph-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 5px;
-  width: 36px;
+/* ──── Sound bars icon ──── */
+.bars {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  justify-content: center;
   height: 36px;
-  transition: opacity .25s;
+  transition: opacity .25s, transform .25s;
 }
 
-.glyph-grid span {
-  width: 6px;
-  height: 6px;
+.bars span {
+  width: 5px;
   background: #666;
-  border-radius: 50%;
-  justify-self: center;
-  align-self: center;
-  transition: background .2s, transform .2s, opacity .2s;
+  border-radius: 10px;
+  transition: background .3s, height .2s;
 }
+.bars span:nth-child(1) { height: 14px; }
+.bars span:nth-child(2) { height: 28px; }
+.bars span:nth-child(3) { height: 20px; }
+.bars span:nth-child(4) { height: 10px; }
 
 /* ──── Big checkmark (sent state) ──── */
 .checkmark {
@@ -469,8 +433,7 @@ body {
   inset: 0;
   align-items: center;
   justify-content: center;
-  font-size: calc(var(--ptt-size, 120px) * 0.32);
-  line-height: 1;
+  font-size: 3.4rem;
   font-weight: 700;
   color: #fff;
   animation: pop-in .4s cubic-bezier(0.34,1.56,0.64,1);
@@ -480,7 +443,7 @@ body {
   display: flex;
 }
 
-.sent .glyph-grid {
+.sent .bars {
   opacity: 0;
 }
 
@@ -528,31 +491,9 @@ body {
 }
 .room-card.recording .status { color: #33d17a; }
 
-.room-card.recording .glyph-grid span {
-  background: #fff;
-  animation: glyph-pulse .8s ease-in-out infinite alternate;
-}
-
-.room-card.recording .glyph-grid span:nth-child(1) { animation-delay: 0s; }
-.room-card.recording .glyph-grid span:nth-child(2) { animation-delay: .05s; }
-.room-card.recording .glyph-grid span:nth-child(3) { animation-delay: .1s; }
-.room-card.recording .glyph-grid span:nth-child(4) { animation-delay: .15s; }
-.room-card.recording .glyph-grid span:nth-child(5) { animation-delay: .2s; }
-.room-card.recording .glyph-grid span:nth-child(6) { animation-delay: .25s; }
-.room-card.recording .glyph-grid span:nth-child(7) { animation-delay: .3s; }
-.room-card.recording .glyph-grid span:nth-child(8) { animation-delay: .35s; }
-.room-card.recording .glyph-grid span:nth-child(9) { animation-delay: .4s; }
-
-@keyframes glyph-pulse {
-  from {
-    opacity: .3;
-    transform: scale(.7);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.room-card.recording .bars span {
+  background: #33d17a;
+  animation: bounce .6s ease-in-out infinite alternate;
 }
 
 /* wave animation */
@@ -576,6 +517,15 @@ body {
 }
 }
 
+.room-card.recording .bars span:nth-child(2) { animation-delay: .1s; }
+.room-card.recording .bars span:nth-child(3) { animation-delay: .2s; }
+.room-card.recording .bars span:nth-child(4) { animation-delay: .3s; }
+
+@keyframes bounce {
+  from { transform: scaleY(.6); }
+  to   { transform: scaleY(1.3); }
+}
+
 /* disabled (offline / not ready) */
 .room-card.unavailable {
   opacity: .45;
@@ -596,7 +546,7 @@ body {
 .room-card.sending .ptt-btn {
   background: #2a5038;
 }
-.room-card.sending .glyph-grid { opacity: 0; }
+.room-card.sending .bars { opacity: 0; }
 .room-card.sending .checkmark { display: none; }
 
 .room-card.sending .ptt-btn::after {
