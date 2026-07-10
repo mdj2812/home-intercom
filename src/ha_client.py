@@ -67,7 +67,13 @@ class PlayError(StrEnum):
 class HAClient:
     """Home Assistant REST API client."""
 
-    def __init__(self, ha_url: str, token: str, pause_buffer: float = 0.0, state_timeout: int = DEFAULT_STATE_TIMEOUT):
+    def __init__(
+        self,
+        ha_url: str,
+        token: str,
+        pause_buffer: float = 0.0,
+        state_timeout: int = DEFAULT_STATE_TIMEOUT,
+    ):
         """ha_url: full HA URL like http://homeassistant.local:8123 or https://ha.example.com
 
         pause_buffer: extra seconds to wait before pausing (default 0).
@@ -129,7 +135,9 @@ class HAClient:
         """Call HA service, returns success/failure."""
         if not self._token:
             return False
-        code, body = self._request("POST", f"/services/{service}", data=data, timeout=SERVICE_TIMEOUT)
+        code, body = self._request(
+            "POST", f"/services/{service}", data=data, timeout=SERVICE_TIMEOUT
+        )
         ok = code == 200
         if not ok:
             _logger.info(
