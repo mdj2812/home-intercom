@@ -318,25 +318,6 @@ body {
   flex: 1;
 }
 
-.room-header .room-icon {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #888;
-}
-
-.room-header .room-icon svg {
-  width: 24px;
-  height: 24px;
-}
-
-.room-card.unavailable .room-icon {
-  opacity: 0.35;
-}
-
 .room-icon {
   flex-shrink: 0;
   font-size: 1.1rem;
