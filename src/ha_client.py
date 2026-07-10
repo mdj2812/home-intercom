@@ -18,6 +18,8 @@ _logger = logging.getLogger(__name__)
 
 def _truncate(s: str, max_len: int) -> str:
     """Truncate string for logging, appending '…' if cut."""
+    if max_len <= 1:
+        return "…"
     return s if len(s) <= max_len else s[: max_len - 1] + "…"
 
 
