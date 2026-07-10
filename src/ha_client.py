@@ -67,9 +67,10 @@ class PlayError(StrEnum):
     PLAY_FAILED = "play_failed"
     MA_FAILED = "ma_failed"
 
+
 # ——— WebSocket wait constants ———
 WS_PLAYING_TIMEOUT = 5.0  # max seconds to wait for "playing" via WebSocket
-WS_PAUSE_TIMEOUT = 1.5    # max seconds to wait for non-playing state
+WS_PAUSE_TIMEOUT = 1.5  # max seconds to wait for non-playing state
 
 
 class HAWebSocketClient:
@@ -90,8 +91,8 @@ class HAWebSocketClient:
         self._ws_url = f"{ws_scheme}://{parsed.netloc}/api/websocket"
         self._token = token
         self._msg_id = 0
-        self._waiter = None       # threading.Event
-        self._entity_id = None    # entity_id we're waiting for
+        self._waiter = None  # threading.Event
+        self._entity_id = None  # entity_id we're waiting for
         self._expected_state = None  # state to match (None = any non-"playing")
         self._lock = threading.Lock()
         self._running = True
@@ -118,9 +119,7 @@ class HAWebSocketClient:
 
         while self._running:
             try:
-                async with websockets.connect(
-                    self._ws_url, ssl=ssl_ctx, max_size=2**20
-                ) as ws:
+                async with websockets.connect(self._ws_url, ssl=ssl_ctx, max_size=2**20) as ws:
                     # Phase 1: server sends auth_required (or auth_ok on older HA)
                     msg = json.loads(await ws.recv())
                     if msg.get("type") not in ("auth_required", "auth_ok"):
@@ -128,10 +127,14 @@ class HAWebSocketClient:
                         return  # protocol mismatch, don't retry
 
                     # Phase 2: send auth with long-lived access token
-                    await ws.send(json.dumps({
-                        "type": "auth",
-                        "access_token": self._token,
-                    }))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "type": "auth",
+                                "access_token": self._token,
+                            }
+                        )
+                    )
                     msg = json.loads(await ws.recv())
                     if msg.get("type") != "auth_ok":
                         print(f"[intercom] WebSocket auth failed: {msg}")
@@ -139,28 +142,27 @@ class HAWebSocketClient:
 
                     # Phase 3: subscribe to state_changed events
                     self._msg_id += 1
-                    await ws.send(json.dumps({
-                        "id": self._msg_id,
-                        "type": "subscribe_events",
-                        "event_type": "state_changed",
-                    }))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "id": self._msg_id,
+                                "type": "subscribe_events",
+                                "event_type": "state_changed",
+                            }
+                        )
+                    )
                     msg = json.loads(await ws.recv())
                     if not msg.get("success"):
                         print(f"[intercom] WebSocket subscribe failed: {msg}")
                         return
 
                     self._connected.set()
-                    print(
-                        "[intercom] WebSocket connected,"
-                        " subscribed to state_changed"
-                    )
+                    print("[intercom] WebSocket connected, subscribed to state_changed")
 
                     # Event loop: dispatch state_changed events to callers
                     while self._running:
                         try:
-                            msg = json.loads(
-                                await asyncio.wait_for(ws.recv(), timeout=5.0)
-                            )
+                            msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
                         except TimeoutError:
                             continue
 
@@ -193,9 +195,7 @@ class HAWebSocketClient:
             self._connected.clear()
             await asyncio.sleep(2)  # reconnect delay
 
-    def wait_for_state(
-        self, entity_id: str, expected_state: str | None, timeout: float
-    ) -> bool:
+    def wait_for_state(self, entity_id: str, expected_state: str | None, timeout: float) -> bool:
         """Wait for entity_id to reach expected_state.
 
         expected_state=None means "wait until NOT playing" (pause confirm).
@@ -254,6 +254,7 @@ class HAClient:
         if token and ha_url:
             try:
                 import websockets  # noqa: F401 — verify import works
+
                 self._ws = HAWebSocketClient(ha_url, token)
             except (ImportError, ValueError) as e:
                 print(f"[intercom] WebSocket unavailable (polling mode): {e}")
@@ -578,16 +579,14 @@ class HAClient:
                     state = self.state(entity_id)
                     if state == "playing":
                         _logger.info(
-                            f"[intercom] {entity_id} playing confirmed"
-                            f" (poll attempt {attempt})"
+                            f"[intercom] {entity_id} playing confirmed (poll attempt {attempt})"
                         )
                         playing_confirmed = True
                         break
                     time.sleep(STATE_POLL_INTERVAL)
                 if not playing_confirmed:
                     _logger.info(
-                        f"[intercom] {entity_id} short audio"
-                        " (polling missed 'playing'), pausing"
+                        f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing"
                     )
 
             # 2) Wait for remaining duration + buffer
@@ -622,13 +621,11 @@ class HAClient:
                     _logger.info(f"[intercom] {entity_id} paused (attempt {attempt})")
                     return
                 _logger.info(
-                    f"[intercom] {entity_id} still playing,"
-                    f" retry pause ({attempt}/{PAUSE_RETRIES})"
+                    f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})"
                 )
 
             _logger.warning(
-                f"[intercom] {entity_id} may still be playing"
-                f" after {PAUSE_RETRIES} retries"
+                f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
             )
         finally:
             self._restore_volume(entity_id, saved_volume)

@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
 from ha_client import (
     PAUSE_RETRIES,
+    SUPPORT_PLAY_MEDIA,
     WS_PLAYING_TIMEOUT,
+    EntityStatus,
     HAClient,
     HAWebSocketClient,
 )
@@ -137,19 +139,37 @@ class TestHAClientCall:
 class TestHAClientQueryStatuses:
     def test_all_available(self):
         client = HAClient("http://ha:8123", "tok")
-        mock_resp = MagicMock()
-        mock_resp.status = 200
-        mock_resp.read.return_value = b'{"state": "playing"}'
+
+        state_json = b'{"state": "playing", "attributes": {"friendly_name": "Living Room"}}'
 
         room_map = {
             "living": {"entity": "media_player.living"},
             "bedroom": {"entity": "media_player.bedroom"},
         }
 
-        with patch("urllib.request.urlopen", return_value=mock_resp):
-            result = client.query_statuses(room_map)
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = MagicMock()
+            mock_resp.status = 200
+            mock_resp.read.return_value = state_json
+            mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
 
-        assert result == {"living": True, "bedroom": True}
+            # Mock _get_entity_info to return valid play_media support
+            with patch.object(
+                client,
+                "_get_entity_info",
+                return_value=(
+                    {"supported_features": SUPPORT_PLAY_MEDIA},
+                    True,
+                ),
+            ):
+                result = client.query_statuses(room_map)
+
+        assert result == {
+            "living": {"status": EntityStatus.ONLINE, "friendly_name": "Living Room"},
+            "bedroom": {"status": EntityStatus.ONLINE, "friendly_name": "Living Room"},
+        }
 
     def test_unavailable(self):
         client = HAClient("http://ha:8123", "tok")
@@ -162,7 +182,9 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": False}
+        assert result == {
+            "living": {"status": EntityStatus.UNAVAILABLE, "friendly_name": "media_player.living"},
+        }
 
     def test_no_entity_defaults_available(self):
         client = HAClient("http://ha:8123", "tok")
@@ -171,7 +193,9 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen") as mock_open:
             result = client.query_statuses(room_map)
 
-        assert result == {"broadcast": True}
+        assert result == {
+            "broadcast": {"status": EntityStatus.ONLINE, "friendly_name": ""},
+        }
         mock_open.assert_not_called()
 
     def test_empty_state_treated_as_false(self):
@@ -185,7 +209,9 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": False}
+        assert result == {
+            "living": {"status": EntityStatus.UNAVAILABLE, "friendly_name": "media_player.living"},
+        }
 
 
 class TestHAClientPlayAndAutoPause:
@@ -201,9 +227,10 @@ class TestHAClientPlayAndAutoPause:
             patch("urllib.request.urlopen", return_value=mock_resp),
             patch("threading.Thread.start") as mock_start,
         ):
-            client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
+            result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         mock_start.assert_called_once()
+        assert result == {"ok": True}
 
     def test_play_failure_does_not_spawn_thread(self):
         with patch("ha_client.HAWebSocketClient") as mock_ws:
@@ -217,9 +244,10 @@ class TestHAClientPlayAndAutoPause:
             ),
             patch("threading.Thread.start") as mock_start,
         ):
-            client.play_and_auto_pause("media_player.test", "http://ha/audio/test.wav", 2.0)
+            result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
         mock_start.assert_not_called()
+        assert result == {"ok": False, "error": "play_failed"}
 
 
 class TestAutoPauseBg:
@@ -230,16 +258,16 @@ class TestAutoPauseBg:
         call_args = []
 
         def fake_state(entity_id):
-            # Return states: idle → playing (detected on 2nd poll) → idle after pause
+            # count: 1=pre-check(idle), 2-3=poll(idle,playing), 4=pre-check(playing→proceed), 5=after-pause(idle)
             if not hasattr(fake_state, "count"):
                 fake_state.count = 0
             fake_state.count += 1
             if fake_state.count <= 2:
-                return "idle"  # not yet playing
-            elif fake_state.count == 3:
-                return "playing"  # detected!
+                return "idle"
+            elif fake_state.count in (3, 4):
+                return "playing"
             else:
-                return "idle"  # after pause
+                return "idle"
 
         def fake_call(service, data):
             call_args.append(service)
@@ -259,8 +287,13 @@ class TestAutoPauseBg:
         client = HAClient("http://ha:8123", "tok")
 
         call_args = []
+        poll_count = [0]
 
         def fake_state(entity_id):
+            # Return "idle" during polling, "playing" at pre-check so pause logic runs
+            poll_count[0] += 1
+            if poll_count[0] > 6:
+                return "playing"
             return "idle"
 
         def fake_call(service, data):
@@ -291,8 +324,12 @@ class TestAutoPauseBg:
             client = HAClient("http://ha:8123", "tok")
             mock_ws.wait_for_state.reset_mock()
 
+        poll_count = [0]
+
         def fake_state(entity_id):
-            return "idle"
+            # Return idle during pre-check, playing at pause pre-check so pause runs
+            poll_count[0] += 1
+            return "playing" if poll_count[0] > 1 else "idle"
 
         call_args = []
 
