@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.3 (2026-07-10)
+
+- **Room status & friendly names** — `/rooms/status` now returns `{status, friendly_name}` per room, device names displayed on room cards
+- **Offline button disable** — PTT buttons greyed out when speaker is unavailable or lacks `play_media` support
+- **State timeout** — `STATE_TIMEOUT` env var (default 5s) for slow Bluetooth/MA entities; query timeouts are handled gracefully
+- **Preview fallback** — local dev without `HA_TOKEN` now shows mock room data instead of a blank grid
+- **i18n dropdown** — language selector moved to footer with dropdown UX, emojis removed from i18n strings
+- **Room card redesign** — room name + device name on left, icon on right; horizontal broadcast card layout
+- **PTT icon** — unified 9-cell grid structure for CSS theming flexibility
+- **Footer** — version number + language selector in footer, avoiding header layout jumps
+- **CSS refactor** — grid → flexbox, responsive sizing, stylelint compliance
+- **Tests** — 96 pytest tests, 88% coverage
+
 ## v1.6.2 (2026-07-08)
 
 - **Pre-announce chime** — doorbell sound prepended to announcements via WAV-level concatenation
