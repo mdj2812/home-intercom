@@ -34,12 +34,16 @@ body {
   font-weight: 600;
   color: #ccc;
   letter-spacing: 0.02em;
+  line-height: 1.25rem;
+  min-height: 1.25rem;
 }
 
 .header .hint {
   font-size: 0.8rem;
   color: #555;
   margin-top: 8px;
+  line-height: 1.2rem;
+  min-height: 2.4rem;
 }
 
 .footer {
