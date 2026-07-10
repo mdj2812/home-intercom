@@ -74,10 +74,14 @@ function makeCard(target, name, isBroadcast) {
   card.className = 'room-card' + (isBroadcast ? ' broadcast-card' : '');
   card.id = 'card-' + target;
 
+  const titleHtml = isBroadcast
+    ? `<span data-i18n="broadcastAll">${name}</span>`
+    : `<div class="room-info"><span data-room-name="${target}">${name}</span><span class="device-name">…</span></div>`;
+
   card.innerHTML = `
     <div class="room-header">
       <span class="room-icon">${roomIcon(target)}</span>
-      <span${isBroadcast ? ' data-i18n="broadcastAll"' : ` data-room-name="${target}"`}>${name}</span>
+      ${titleHtml}
       <span class="dot"></span>
     </div>
     <div class="ptt-wrap">
@@ -110,6 +114,59 @@ function makeCard(target, name, isBroadcast) {
   btn.addEventListener('contextmenu', e => e.preventDefault());
 
   return card;
+}
+
+// Preview-only mock data (used only before first successful HA status load)
+const PREVIEW_DEVICE_NAMES = {
+  living: 'HomePod',
+  bedroom: '小爱音响',
+};
+
+const PREVIEW_DEMO_STATUS = {
+  living: { status: EntityStatus.ONLINE, friendly_name: 'HomePod' },
+  bedroom: { status: EntityStatus.UNAVAILABLE, friendly_name: '小爱音响' },
+};
+
+let haStatusLoaded = false;
+
+function applyPreviewFallback() {
+  for (const [key, friendly_name] of Object.entries(PREVIEW_DEVICE_NAMES)) {
+    const card = document.getElementById('card-' + key);
+    const deviceEl = card?.querySelector('.device-name');
+    if (deviceEl) deviceEl.textContent = friendly_name;
+  }
+  applyRoomStatus(PREVIEW_DEMO_STATUS);
+}
+
+function applyRoomStatus(status) {
+  for (const [key, info] of Object.entries(status)) {
+    const card = document.getElementById('card-' + key);
+    if (!card) continue;
+    const roomState = typeof info === 'object' ? info.status : info;
+    const deviceEl = card.querySelector('.device-name');
+    if (deviceEl && typeof info === 'object' && info.friendly_name) {
+      deviceEl.textContent = info.friendly_name;
+    }
+    const dot = card.querySelector('.dot');
+    const btn = card.querySelector('.ptt-btn');
+    if (roomState === EntityStatus.ONLINE) {
+      if (dot) dot.className = 'dot dot-online';
+      card.classList.remove(UNAVAILABLE_CLASS);
+      if (btn) btn.disabled = false;
+    } else if (roomState === EntityStatus.NO_PLAY_MEDIA) {
+      if (dot) dot.className = 'dot dot-error';
+      card.classList.add(UNAVAILABLE_CLASS);
+      if (btn) btn.disabled = true;
+      const st = card.querySelector('.status');
+      if (st) st.textContent = I18N.t('statusSkipped');
+    } else {
+      if (dot) dot.className = 'dot dot-error';
+      card.classList.add(UNAVAILABLE_CLASS);
+      if (btn) btn.disabled = true;
+      const st = card.querySelector('.status');
+      if (st) st.textContent = I18N.t('statusUnavailable');
+    }
+  }
 }
 
 async function loadRooms() {
@@ -249,32 +306,17 @@ async function processAndSend() {
 async function pollSpeakerStatus() {
   try {
     const resp = await fetch('/rooms/status');
+    if (!resp.ok) throw new Error('status unavailable');
     const status = await resp.json();
-    for (const [key, state] of Object.entries(status)) {
-      const card = document.getElementById('card-' + key);
-      if (!card) continue;
-      const dot = card.querySelector('.dot');
-      if (state === EntityStatus.ONLINE) {
-        if (dot) dot.className = 'dot dot-online';
-        card.classList.remove(UNAVAILABLE_CLASS);
-      } else if (state === EntityStatus.NO_PLAY_MEDIA) {
-        if (dot) dot.className = 'dot dot-error';
-        card.classList.add(UNAVAILABLE_CLASS);
-        const st = card.querySelector('.status');
-        if (st) st.textContent = I18N.t('statusSkipped');
-      } else {
-        // unavailable — same persistent error as no_play_media
-        if (dot) dot.className = 'dot dot-error';
-        card.classList.add(UNAVAILABLE_CLASS);
-        const st = card.querySelector('.status');
-        if (st) st.textContent = I18N.t('statusUnavailable');
-      }
-    }
-  } catch (e) { /* ignore */ }
+    if (status.error) throw new Error(status.error);
+    applyRoomStatus(status);
+    haStatusLoaded = true;
+  } catch (e) {
+    if (!haStatusLoaded) applyPreviewFallback();
+  }
 }
 
-loadRooms();
-setTimeout(pollSpeakerStatus, 1000);
+loadRooms().then(() => pollSpeakerStatus());
 setInterval(pollSpeakerStatus, 30000);
 
 // Show version number + fetch server config

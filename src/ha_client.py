@@ -372,12 +372,11 @@ class HAClient:
         finally:
             self._restore_volume(entity_id, saved_volume)
 
-    def query_statuses(self, room_map: dict) -> dict[str, str]:
-        """Batch query speaker online status for all rooms.
+    def query_statuses(self, room_map: dict) -> dict[str, dict]:
+        """Batch query speaker status and friendly names for all rooms.
 
-        Returns EntityStatus values: "online", "unavailable", "no_play_media".
-        Only "online" rooms can receive broadcasts. The frontend uses
-        this to show green/grey/red indicators and status text.
+        Returns per-room dicts with EntityStatus values and HA friendly_name:
+        {"living": {"status": "online", "friendly_name": "Living Room Speaker"}, ...}
 
         Also refreshes state cache so _get_volume_level hits cache
         (polled every 30s by frontend).
@@ -386,19 +385,27 @@ class HAClient:
         for key, room in room_map.items():
             entity = room.get("entity", "")
             if not entity:
-                status[key] = EntityStatus.ONLINE
+                status[key] = {"status": EntityStatus.ONLINE, "friendly_name": ""}
                 continue
             state, attrs = self.state(entity, with_attrs=True)
+            friendly_name = attrs.get("friendly_name", entity) if attrs else entity
             if not state or state == EntityStatus.UNAVAILABLE:
-                status[key] = EntityStatus.UNAVAILABLE
+                status[key] = {
+                    "status": EntityStatus.UNAVAILABLE,
+                    "friendly_name": friendly_name,
+                }
                 continue
             # Refresh full state cache from background poll
             if isinstance(attrs, dict):
                 with self._cache_lock:
                     self._state_cache[entity] = (attrs, time.monotonic())
-            # Entity is online — still unavailable if it can't play_media
             info = self._get_entity_info(entity)
-            status[key] = (
-                EntityStatus.ONLINE if self._has_play_media(info) else EntityStatus.NO_PLAY_MEDIA
-            )
+            status[key] = {
+                "status": (
+                    EntityStatus.ONLINE
+                    if self._has_play_media(info)
+                    else EntityStatus.NO_PLAY_MEDIA
+                ),
+                "friendly_name": friendly_name,
+            }
         return status
