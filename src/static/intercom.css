@@ -390,8 +390,8 @@ body {
   opacity: 0;
 }
 
-/* ──── Sound bars icon ──── */
-.bars {
+/* ──── PTT icon (9 cells: classic = 4 bars, nothing = 3×3 dots) ──── */
+.ptt-icon {
   display: flex;
   gap: 4px;
   align-items: flex-end;
@@ -400,16 +400,20 @@ body {
   transition: opacity .25s, transform .25s;
 }
 
-.bars span {
+.ptt-icon span:nth-child(n+5) {
+  display: none;
+}
+
+.ptt-icon span {
   width: 5px;
   background: #666;
   border-radius: 10px;
   transition: background .3s, height .2s;
 }
-.bars span:nth-child(1) { height: 14px; }
-.bars span:nth-child(2) { height: 28px; }
-.bars span:nth-child(3) { height: 20px; }
-.bars span:nth-child(4) { height: 10px; }
+.ptt-icon span:nth-child(1) { height: 14px; }
+.ptt-icon span:nth-child(2) { height: 28px; }
+.ptt-icon span:nth-child(3) { height: 20px; }
+.ptt-icon span:nth-child(4) { height: 10px; }
 
 /* ──── Big checkmark (sent state) ──── */
 .checkmark {
@@ -428,7 +432,7 @@ body {
   display: flex;
 }
 
-.sent .bars {
+.sent .ptt-icon {
   opacity: 0;
 }
 
@@ -476,7 +480,7 @@ body {
 }
 .room-card.recording .status { color: #33d17a; }
 
-.room-card.recording .bars span {
+.room-card.recording .ptt-icon span {
   background: #33d17a;
   animation: bounce .6s ease-in-out infinite alternate;
 }
@@ -502,9 +506,9 @@ body {
 }
 }
 
-.room-card.recording .bars span:nth-child(2) { animation-delay: .1s; }
-.room-card.recording .bars span:nth-child(3) { animation-delay: .2s; }
-.room-card.recording .bars span:nth-child(4) { animation-delay: .3s; }
+.room-card.recording .ptt-icon span:nth-child(2) { animation-delay: .1s; }
+.room-card.recording .ptt-icon span:nth-child(3) { animation-delay: .2s; }
+.room-card.recording .ptt-icon span:nth-child(4) { animation-delay: .3s; }
 
 @keyframes bounce {
   from { transform: scaleY(.6); }
@@ -531,7 +535,7 @@ body {
 .room-card.sending .ptt-btn {
   background: #2a5038;
 }
-.room-card.sending .bars { opacity: 0; }
+.room-card.sending .ptt-icon { opacity: 0; }
 .room-card.sending .checkmark { display: none; }
 
 .room-card.sending .ptt-btn::after {
