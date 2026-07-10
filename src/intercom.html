@@ -21,6 +21,7 @@
 })();
 </script>
 <script src="/static/i18n.js"></script>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 <link rel="stylesheet" href="/static/intercom.css">
 </head>
 <body>
@@ -67,16 +68,24 @@ let currentTarget = '';
 let currentCard = null;
 let ROOM_NAMES = {};
 
-// Room icon mapping (extensible, falls back to 📢)
-const ROOM_ICONS = {
-  all:     '📢',
-  living:  '🛋️',
-  bedroom: '🛏️',
-  study:   '📚',
-  cinema:  '🎬',
+// Room icon mapping (Lucide)
+const ROOM_LUCIDE = {
+  all:     'radio',
+  living:  'sofa',
+  bedroom: 'bed',
+  study:   'book-open',
+  kitchen: 'cooking-pot',
+  bathroom:'bath',
+  cinema:  'tv',
 };
+
 function roomIcon(target) {
-  return ROOM_ICONS[target] || '🔊';
+  const name = ROOM_LUCIDE[target] || 'speaker';
+  return `<i data-lucide="${name}"></i>`;
+}
+
+function refreshIcons() {
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
 }
 
 function makeCard(target, name, isBroadcast) {
@@ -88,8 +97,10 @@ function makeCard(target, name, isBroadcast) {
     <div class="ptt-wrap">
       <div class="waves"></div>
       <button class="ptt-btn">
-        <div class="bars">
-          <span></span><span></span><span></span><span></span>
+        <div class="glyph-grid">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
         </div>
         <div class="checkmark">✓</div>
       </button>
@@ -108,13 +119,13 @@ function makeCard(target, name, isBroadcast) {
     card.innerHTML = `
       <div class="room-header">
         <div class="room-info">
-          <span class="room-name" data-room-name="${target}">${name}</span>
+          <div class="room-name" data-room-name="${target}">${name}</div>
           <div class="room-meta">
             <span class="dot"></span>
             <span class="device-name">…</span>
           </div>
         </div>
-        <span class="room-icon">${roomIcon(target)}</span>
+        <span class="room-icon" aria-hidden="true">${roomIcon(target)}</span>
       </div>
       ${pttHtml}
       <div class="status">${I18N.t('statusReady')}</div>`;
@@ -196,7 +207,7 @@ function applyRoomStatus(status) {
 async function loadRooms() {
   // Expose room data for i18n language switching
   window._ROOM_DATA = {};
-  window._ROOM_DATA['all'] = { name: I18N.t('broadcastAll'), name_en: 'Broadcast All' };
+  window._ROOM_DATA['all'] = { name: I18N.t('broadcastAll'), name_en: 'All' };
   ROOM_NAMES['all'] = I18N.t('broadcastAll');
   GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
@@ -208,6 +219,7 @@ async function loadRooms() {
       ROOM_NAMES[key] = room.name;
       GRID.appendChild(makeCard(key, room.name, false));
     }
+    refreshIcons();
   } catch (e) {
     const firstStatus = GRID.querySelector('.status');
     if (firstStatus) firstStatus.textContent = I18N.t('statusLoadFailed');

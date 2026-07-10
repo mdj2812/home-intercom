@@ -14,7 +14,7 @@ const I18N = (() => {
     "zh-CN": {
       appTitle: "📢 家庭广播",
       appHint: "按住录音 · 松开发送",
-      broadcastAll: "全部广播",
+      broadcastAll: "全部",
       statusReady: "就绪",
       statusRecording: "录音中…",
       statusSending: "发送中…",
@@ -29,7 +29,7 @@ const I18N = (() => {
     en: {
       appTitle: "📢 Home Intercom",
       appHint: "Hold to record · Release to send",
-      broadcastAll: "Broadcast All",
+      broadcastAll: "All",
       statusReady: "Ready",
       statusRecording: "Recording…",
       statusSending: "Sending…",
