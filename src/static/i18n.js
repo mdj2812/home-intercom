@@ -12,7 +12,7 @@ const I18N = (() => {
 
   const DATA = {
     "zh-CN": {
-      appTitle: "📢 家庭广播",
+      appTitle: "家庭广播",
       appHint: "按住录音 · 松开发送",
       broadcastAll: "全部",
       statusReady: "就绪",
@@ -24,10 +24,10 @@ const I18N = (() => {
       statusUnavailable: "离线",
       statusNetworkError: "网络错误",
       statusLoadFailed: "加载失败",
-      micError: "❌ 麦克风: ",
+      micError: "麦克风: ",
     },
     en: {
-      appTitle: "📢 Home Intercom",
+      appTitle: "Home Intercom",
       appHint: "Hold to record · Release to send",
       broadcastAll: "All",
       statusReady: "Ready",
@@ -39,7 +39,7 @@ const I18N = (() => {
       statusUnavailable: "Offline",
       statusNetworkError: "Network error",
       statusLoadFailed: "Load failed",
-      micError: "❌ Mic: ",
+      micError: "Mic: ",
     },
   };
 
@@ -141,7 +141,7 @@ const I18N = (() => {
       el.textContent = lang === "en" && room.name_en ? room.name_en : room.name;
     });
 
-    document.title = t("appTitle").replace(/^📢 /, "");
+    document.title = t("appTitle");
 
     document.querySelectorAll(".room-card .status").forEach((el) => {
       const card = el.closest(".room-card");
