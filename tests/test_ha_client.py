@@ -138,7 +138,13 @@ class TestHAClientQueryStatuses:
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = json.dumps(
-            {"state": "playing", "attributes": {"supported_features": SUPPORT_PLAY_MEDIA}}
+            {
+                "state": "playing",
+                "attributes": {
+                    "supported_features": SUPPORT_PLAY_MEDIA,
+                    "friendly_name": "Living Speaker",
+                },
+            }
         ).encode()
 
         room_map = {
@@ -149,20 +155,27 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": "online", "bedroom": "online"}
+        assert result == {
+            "living": {"status": "online", "friendly_name": "Living Speaker"},
+            "bedroom": {"status": "online", "friendly_name": "Living Speaker"},
+        }
 
     def test_unavailable(self):
         client = HAClient("http://ha:8123", "tok")
         mock_resp = MagicMock()
         mock_resp.status = 200
-        mock_resp.read.return_value = b'{"state": "unavailable"}'
+        mock_resp.read.return_value = json.dumps(
+            {"state": "unavailable", "attributes": {"friendly_name": "Living Speaker"}}
+        ).encode()
 
         room_map = {"living": {"entity": "media_player.living"}}
 
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": "unavailable"}
+        assert result == {
+            "living": {"status": "unavailable", "friendly_name": "Living Speaker"},
+        }
 
     def test_no_entity_defaults_available(self):
         client = HAClient("http://ha:8123", "tok")
@@ -171,7 +184,7 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen") as mock_open:
             result = client.query_statuses(room_map)
 
-        assert result == {"broadcast": "online"}
+        assert result == {"broadcast": {"status": "online", "friendly_name": ""}}
         mock_open.assert_not_called()
 
     def test_empty_state_treated_as_unavailable(self):
@@ -185,7 +198,9 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": "unavailable"}
+        assert result == {
+            "living": {"status": "unavailable", "friendly_name": "media_player.living"},
+        }
 
     def test_no_play_media_treated_as_unavailable(self):
         """Entity online but without PLAY_MEDIA — shows no_play_media status."""
@@ -193,7 +208,10 @@ class TestHAClientQueryStatuses:
         mock_resp = MagicMock()
         mock_resp.status = 200
         mock_resp.read.return_value = json.dumps(
-            {"state": "idle", "attributes": {"supported_features": 0}}
+            {
+                "state": "idle",
+                "attributes": {"supported_features": 0, "friendly_name": "Living Speaker"},
+            }
         ).encode()
 
         room_map = {"living": {"entity": "media_player.living"}}
@@ -201,7 +219,9 @@ class TestHAClientQueryStatuses:
         with patch("urllib.request.urlopen", return_value=mock_resp):
             result = client.query_statuses(room_map)
 
-        assert result == {"living": "no_play_media"}
+        assert result == {
+            "living": {"status": "no_play_media", "friendly_name": "Living Speaker"},
+        }
 
 
 class TestHAClientPlayAndAutoPause:

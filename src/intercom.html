@@ -28,16 +28,26 @@
 <div class="container">
   <div class="header">
     <div>
-      <h1 id="app-title">📢 家庭广播</h1>
+      <h1 id="app-title">家庭广播</h1>
       <p class="hint" id="app-hint">按住录音 · 松开发送</p>
-    </div>
-    <div class="header-right">
-      <button id="lang-toggle" onclick="I18N.toggleLang()">EN</button>
-      <span class="ver" id="ver">…</span>
     </div>
   </div>
 
   <div class="grid" id="grid"></div>
+
+  <footer class="footer">
+    <span class="ver" id="ver">…</span>
+    <div class="lang-dropdown" id="lang-dropdown">
+      <button type="button" id="lang-toggle" aria-haspopup="listbox" aria-expanded="false" aria-label="Language">
+        <span id="lang-toggle-label">中文</span>
+        <span class="lang-chevron" aria-hidden="true"></span>
+      </button>
+      <div class="lang-dropdown-menu" role="listbox" hidden>
+        <button type="button" role="option" class="lang-option" data-lang="zh-CN">中文</button>
+        <button type="button" role="option" class="lang-option" data-lang="en">EN</button>
+      </div>
+    </div>
+  </footer>
 </div>
 
 <script>
@@ -74,23 +84,43 @@ function makeCard(target, name, isBroadcast) {
   card.className = 'room-card' + (isBroadcast ? ' broadcast-card' : '');
   card.id = 'card-' + target;
 
-  card.innerHTML = `
-    <div class="room-header">
-      <span class="room-icon">${roomIcon(target)}</span>
-      <span${isBroadcast ? ' data-i18n="broadcastAll"' : ` data-room-name="${target}"`}>${name}</span>
-      <span class="dot"></span>
-    </div>
+  const pttHtml = `
     <div class="ptt-wrap">
       <div class="waves"></div>
       <button class="ptt-btn">
-        <div class="bars">
-          <span></span><span></span><span></span><span></span>
+        <div class="ptt-icon" aria-hidden="true">
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
+          <span></span><span></span><span></span>
         </div>
         <div class="checkmark">✓</div>
       </button>
-    </div>
-    <div class="status">${I18N.t('statusReady')}</div>
-  `;
+    </div>`;
+
+  if (isBroadcast) {
+    card.innerHTML = `
+      <div class="broadcast-main">
+        <div class="broadcast-info">
+          <div class="broadcast-label" data-i18n="broadcastAll">${name}</div>
+          <div class="status">${I18N.t('statusReady')}</div>
+        </div>
+        ${pttHtml}
+      </div>`;
+  } else {
+    card.innerHTML = `
+      <div class="room-header">
+        <div class="room-info">
+          <div class="room-name" data-room-name="${target}">${name}</div>
+          <div class="room-meta">
+            <span class="dot"></span>
+            <span class="device-name">…</span>
+          </div>
+        </div>
+        <span class="room-icon">${roomIcon(target)}</span>
+      </div>
+      ${pttHtml}
+      <div class="status">${I18N.t('statusReady')}</div>`;
+  }
 
   const btn = card.querySelector('.ptt-btn');
 
@@ -112,10 +142,65 @@ function makeCard(target, name, isBroadcast) {
   return card;
 }
 
+// Preview-only mock data (used only before first successful HA status load)
+const PREVIEW_DEVICE_NAMES = {
+  living: 'Living Room Speaker',
+  bedroom: 'Bedroom Speaker',
+};
+
+const PREVIEW_DEMO_STATUS = {
+  living: { status: EntityStatus.ONLINE, friendly_name: 'Living Room Speaker' },
+  bedroom: { status: EntityStatus.UNAVAILABLE, friendly_name: 'Bedroom Speaker' },
+};
+
+let haStatusLoaded = false;
+
+function applyPreviewFallback() {
+  for (const [key, friendly_name] of Object.entries(PREVIEW_DEVICE_NAMES)) {
+    const card = document.getElementById('card-' + key);
+    const deviceEl = card?.querySelector('.device-name');
+    if (deviceEl) deviceEl.textContent = friendly_name;
+  }
+  applyRoomStatus(PREVIEW_DEMO_STATUS);
+}
+
+function applyRoomStatus(status) {
+  for (const [key, info] of Object.entries(status)) {
+    const card = document.getElementById('card-' + key);
+    if (!card) continue;
+    const roomState = typeof info === 'object' ? info.status : info;
+    const deviceEl = card.querySelector('.device-name');
+    if (deviceEl && typeof info === 'object' && info.friendly_name) {
+      deviceEl.textContent = info.friendly_name;
+    }
+    const dot = card.querySelector('.dot');
+    const btn = card.querySelector('.ptt-btn');
+    if (roomState === EntityStatus.ONLINE) {
+      if (dot) dot.className = 'dot dot-online';
+      card.classList.remove(UNAVAILABLE_CLASS);
+      if (btn) btn.disabled = false;
+      const st = card.querySelector('.status');
+      if (st) st.textContent = I18N.t('statusReady');
+    } else if (roomState === EntityStatus.NO_PLAY_MEDIA) {
+      if (dot) dot.className = 'dot dot-error';
+      card.classList.add(UNAVAILABLE_CLASS);
+      if (btn) btn.disabled = true;
+      const st = card.querySelector('.status');
+      if (st) st.textContent = I18N.t('statusSkipped');
+    } else {
+      if (dot) dot.className = 'dot dot-error';
+      card.classList.add(UNAVAILABLE_CLASS);
+      if (btn) btn.disabled = true;
+      const st = card.querySelector('.status');
+      if (st) st.textContent = I18N.t('statusUnavailable');
+    }
+  }
+}
+
 async function loadRooms() {
   // Expose room data for i18n language switching
   window._ROOM_DATA = {};
-  window._ROOM_DATA['all'] = { name: I18N.t('broadcastAll'), name_en: 'Broadcast All' };
+  window._ROOM_DATA['all'] = { name: I18N.t('broadcastAll'), name_en: 'All' };
   ROOM_NAMES['all'] = I18N.t('broadcastAll');
   GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
@@ -252,34 +337,17 @@ async function processAndSend() {
 async function pollSpeakerStatus() {
   try {
     const resp = await fetch('/rooms/status');
+    if (!resp.ok) throw new Error('status unavailable');
     const status = await resp.json();
-    for (const [key, state] of Object.entries(status)) {
-      const card = document.getElementById('card-' + key);
-      if (!card) continue;
-      const dot = card.querySelector('.dot');
-      if (state === EntityStatus.ONLINE) {
-        if (dot) dot.className = 'dot dot-online';
-        card.classList.remove(UNAVAILABLE_CLASS);
-        const st = card.querySelector('.status');
-        if (st) st.textContent = I18N.t('statusReady');
-      } else if (state === EntityStatus.NO_PLAY_MEDIA) {
-        if (dot) dot.className = 'dot dot-error';
-        card.classList.add(UNAVAILABLE_CLASS);
-        const st = card.querySelector('.status');
-        if (st) st.textContent = I18N.t('statusSkipped');
-      } else {
-        // unavailable — same persistent error as no_play_media
-        if (dot) dot.className = 'dot dot-error';
-        card.classList.add(UNAVAILABLE_CLASS);
-        const st = card.querySelector('.status');
-        if (st) st.textContent = I18N.t('statusUnavailable');
-      }
-    }
-  } catch (e) { /* ignore */ }
+    if (status.error) throw new Error(status.error);
+    applyRoomStatus(status);
+    haStatusLoaded = true;
+  } catch (e) {
+    if (!haStatusLoaded) applyPreviewFallback();
+  }
 }
 
-loadRooms();
-setTimeout(pollSpeakerStatus, 1000);
+loadRooms().then(() => pollSpeakerStatus());
 setInterval(pollSpeakerStatus, 30000);
 
 // Show version number + fetch server config

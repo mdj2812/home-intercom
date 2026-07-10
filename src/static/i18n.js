@@ -5,11 +5,16 @@ const I18N = (() => {
   const STORAGE_KEY = "intercom-lang";
   const UNAVAILABLE_CLASS = "unavailable";
 
+  const LANG_OPTIONS = [
+    { code: "zh-CN", label: "中文" },
+    { code: "en", label: "EN" },
+  ];
+
   const DATA = {
     "zh-CN": {
-      appTitle: "📢 家庭广播",
+      appTitle: "家庭广播",
       appHint: "按住录音 · 松开发送",
-      broadcastAll: "全部广播",
+      broadcastAll: "全部",
       statusReady: "就绪",
       statusRecording: "录音中…",
       statusSending: "发送中…",
@@ -21,13 +26,12 @@ const I18N = (() => {
       statusMAFailed: "MA 失败",
       statusNetworkError: "网络错误",
       statusLoadFailed: "加载失败",
-      micError: "❌ 麦克风: ",
-      langLabel: "EN",
+      micError: "麦克风: ",
     },
     en: {
-      appTitle: "📢 Home Intercom",
+      appTitle: "Home Intercom",
       appHint: "Hold to record · Release to send",
-      broadcastAll: "Broadcast All",
+      broadcastAll: "All",
       statusReady: "Ready",
       statusRecording: "Recording…",
       statusSending: "Sending…",
@@ -39,8 +43,7 @@ const I18N = (() => {
       statusMAFailed: "MA failed",
       statusNetworkError: "Network error",
       statusLoadFailed: "Load failed",
-      micError: "❌ Mic: ",
-      langLabel: "中文",
+      micError: "Mic: ",
     },
   };
 
@@ -55,6 +58,63 @@ const I18N = (() => {
     return (DATA[lang] && DATA[lang][key]) || DATA["en"][key] || key;
   }
 
+  function getLangLabel(code) {
+    const opt = LANG_OPTIONS.find((o) => o.code === code);
+    return opt ? opt.label : code;
+  }
+
+  function closeLangDropdown() {
+    const root = document.getElementById("lang-dropdown");
+    if (!root) return;
+    root.classList.remove("open");
+    const trigger = document.getElementById("lang-toggle");
+    const menu = root.querySelector(".lang-dropdown-menu");
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+    if (menu) menu.hidden = true;
+  }
+
+  function updateLangDropdown() {
+    const label = document.getElementById("lang-toggle-label");
+    if (label) label.textContent = getLangLabel(lang);
+
+    document.querySelectorAll(".lang-dropdown-menu [data-lang]").forEach((btn) => {
+      const active = btn.dataset.lang === lang;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+
+  function initLangDropdown() {
+    const root = document.getElementById("lang-dropdown");
+    if (!root || root.dataset.bound) return;
+    root.dataset.bound = "1";
+
+    const trigger = document.getElementById("lang-toggle");
+    const menu = root.querySelector(".lang-dropdown-menu");
+    if (!trigger || !menu) return;
+
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = !root.classList.contains("open");
+      root.classList.toggle("open", open);
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      menu.hidden = !open;
+    });
+
+    menu.querySelectorAll("[data-lang]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setLang(btn.dataset.lang);
+        closeLangDropdown();
+      });
+    });
+
+    document.addEventListener("click", closeLangDropdown);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeLangDropdown();
+    });
+  }
+
   function setLang(newLang) {
     if (!DATA[newLang]) return;
     lang = newLang;
@@ -67,19 +127,17 @@ const I18N = (() => {
   }
 
   function applyToDOM() {
-    // Title + hint
+    document.documentElement.lang = lang;
+
     const h1 = document.querySelector(".header h1");
     if (h1) h1.textContent = t("appTitle");
     const hint = document.querySelector(".header .hint");
     if (hint) hint.textContent = t("appHint");
-    const langBtn = document.getElementById("lang-toggle");
-    if (langBtn) langBtn.textContent = t("langLabel");
+    updateLangDropdown();
 
-    // Broadcast card name — uses data-i18n attribute
     const bcName = document.querySelector('[data-i18n="broadcastAll"]');
     if (bcName) bcName.textContent = t("broadcastAll");
 
-    // Room names — use name_en from rooms.json when in English mode
     document.querySelectorAll("[data-room-name]").forEach((el) => {
       const key = el.getAttribute("data-room-name");
       const room = window._ROOM_DATA ? window._ROOM_DATA[key] : null;
@@ -87,16 +145,12 @@ const I18N = (() => {
       el.textContent = lang === "en" && room.name_en ? room.name_en : room.name;
     });
 
-    // Page title
-    document.title = t("appTitle").replace(/^📢 /, "");
+    document.title = t("appTitle");
 
-    // Status text — keep state, just translate to current language
-    // Skip unavailable cards; pollSpeakerStatus owns their text
     document.querySelectorAll(".room-card .status").forEach((el) => {
       const card = el.closest(".room-card");
       if (card && card.classList.contains(UNAVAILABLE_CLASS)) return;
 
-      // Find which key the current text corresponds to (any language)
       const val = el.textContent;
       let key = null;
       for (const k of Object.keys(DATA["zh-CN"])) {
@@ -109,12 +163,15 @@ const I18N = (() => {
     });
   }
 
-  // Apply translations on DOM ready
   function init() {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", applyToDOM);
-    } else {
+    const run = () => {
+      initLangDropdown();
       applyToDOM();
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", run);
+    } else {
+      run();
     }
   }
 
