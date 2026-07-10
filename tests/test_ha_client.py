@@ -2,6 +2,7 @@
 
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -782,6 +783,81 @@ class TestHAWebSocketClient:
             asyncio.run(ws._ws_connect())
 
         assert not ws.ready
+
+
+class TestVolume:
+    """Tests for volume get/set/restore helper methods."""
+
+    def test_get_volume_level_cache_hit(self):
+        """Cache hit returns cached volume_level without REST call."""
+        client = HAClient("http://ha:8123", "tok")
+        with client._cache_lock:
+            client._state_cache["media_player.test"] = (
+                {"volume_level": 0.75},
+                time.monotonic(),
+            )
+
+        with patch.object(client, "state") as mock_state:
+            result = client._get_volume_level("media_player.test")
+
+        assert result == 0.75
+        mock_state.assert_not_called()
+
+    def test_get_volume_level_cache_miss(self):
+        """Cache miss queries REST and populates cache."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "state", return_value=("playing", {"volume_level": 0.5})):
+            result = client._get_volume_level("media_player.test")
+
+        assert result == 0.5
+
+    def test_get_volume_level_no_attrs(self):
+        """REST response without attributes returns None."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "state", return_value=("playing", None)):
+            result = client._get_volume_level("media_player.test")
+
+        assert result is None
+
+    def test_set_volume_level_success(self):
+        """volume_set calls the right HA service."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "call", return_value=True):
+            client._set_volume_level("media_player.test", 0.8)
+
+    def test_restore_volume_with_value(self):
+        """Restore volume when saved_volume is set."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "_set_volume_level") as mock_set:
+            client._restore_volume("media_player.test", 0.6)
+
+        mock_set.assert_called_once_with("media_player.test", 0.6)
+
+    def test_restore_volume_none(self):
+        """No-op when saved_volume is None."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with patch.object(client, "_set_volume_level") as mock_set:
+            client._restore_volume("media_player.test", None)
+
+        mock_set.assert_not_called()
+
+    def test_volume_restore_bg(self):
+        """Background thread sleeps then restores volume."""
+        client = HAClient("http://ha:8123", "tok")
+
+        with (
+            patch("time.sleep") as mock_sleep,
+            patch.object(client, "_restore_volume") as mock_restore,
+        ):
+            client._volume_restore_bg("media_player.test", 0.7, 3.0)
+
+        mock_sleep.assert_called_once_with(3.0 + client._pause_buffer)
+        mock_restore.assert_called_once_with("media_player.test", 0.7)
 
     def test_ws_connect_reconnect_loop(self):
         """Cover _ws_connect reconnect after connection loss."""
