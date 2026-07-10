@@ -1,8 +1,10 @@
 """Home Assistant REST API client.
 
 Encapsulates all HA interactions: state queries, service calls, play + auto-pause.
+Also maintains a WebSocket connection for instantaneous state change events.
 """
 
+import asyncio
 import json
 import logging
 import ssl
@@ -66,6 +68,162 @@ class PlayError(StrEnum):
     MA_FAILED = "ma_failed"
 
 
+# ——— WebSocket wait constants ———
+WS_PLAYING_TIMEOUT = DEFAULT_STATE_TIMEOUT  # max seconds to wait for "playing" via WebSocket
+WS_PAUSE_TIMEOUT = 1.5  # max seconds to wait for non-playing state
+
+
+class HAWebSocketClient:
+    """Persistent HA WebSocket connection for state_changed events.
+
+    Runs in a background thread with its own asyncio event loop.
+    _auto_pause_bg() uses this to wait for state transitions instead of polling.
+
+    Uses a threading.Event pattern: the caller blocks on wait_for_state(),
+    the WS event loop sets the event when the expected state is observed.
+    """
+
+    def __init__(self, ha_url: str, token: str):
+        if not token or not ha_url:
+            raise ValueError("HA_URL and HA_TOKEN required for WebSocket")
+        parsed = urllib.parse.urlparse(ha_url)
+        ws_scheme = "wss" if parsed.scheme == "https" else "ws"
+        self._ws_url = f"{ws_scheme}://{parsed.netloc}/api/websocket"
+        self._token = token
+        self._msg_id = 0
+        self._waiter = None  # threading.Event
+        self._entity_id = None  # entity_id we're waiting for
+        self._expected_state = None  # state to match (None = any non-"playing")
+        self._lock = threading.Lock()
+        self._running = True
+        self._connected = threading.Event()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+    def _run_loop(self) -> None:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(self._ws_connect())
+        except Exception as e:
+            _logger.error(f"[intercom] WebSocket fatal: {e}")
+        finally:
+            loop.close()
+
+    async def _ws_connect(self) -> None:
+        import websockets
+
+        ssl_ctx = None
+        if self._ws_url.startswith("wss"):
+            ssl_ctx = ssl._create_unverified_context()
+
+        while self._running:
+            try:
+                async with websockets.connect(self._ws_url, ssl=ssl_ctx, max_size=2**20) as ws:
+                    # Phase 1: server sends auth_required (or auth_ok on older HA)
+                    msg = json.loads(await ws.recv())
+                    if msg.get("type") not in ("auth_required", "auth_ok"):
+                        _logger.warning(f"[intercom] WebSocket unexpected msg: {msg}")
+                        return  # protocol mismatch, don't retry
+
+                    # Phase 2: send auth with long-lived access token
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "type": "auth",
+                                "access_token": self._token,
+                            }
+                        )
+                    )
+                    msg = json.loads(await ws.recv())
+                    if msg.get("type") != "auth_ok":
+                        _logger.error(f"[intercom] WebSocket auth failed: {msg}")
+                        return  # auth failure, don't retry
+
+                    # Phase 3: subscribe to state_changed events
+                    self._msg_id += 1
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "id": self._msg_id,
+                                "type": "subscribe_events",
+                                "event_type": "state_changed",
+                            }
+                        )
+                    )
+                    msg = json.loads(await ws.recv())
+                    if not msg.get("success"):
+                        _logger.error(f"[intercom] WebSocket subscribe failed: {msg}")
+                        return
+
+                    self._connected.set()
+                    _logger.info("[intercom] WebSocket connected, subscribed to state_changed")
+
+                    # Event loop: dispatch state_changed events to callers
+                    while self._running:
+                        try:
+                            msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=5.0))
+                        except TimeoutError:
+                            continue
+
+                        if msg.get("type") != "event":
+                            continue
+
+                        event_data = msg.get("event", {})
+                        if event_data.get("event_type") != "state_changed":
+                            continue
+
+                        data = event_data.get("data", {})
+                        eid = data.get("entity_id", "")
+                        new_state = data.get("new_state", {}) or {}
+                        state = new_state.get("state", "")
+
+                        with self._lock:
+                            if self._waiter is None or eid != self._entity_id:
+                                continue
+                            expected = self._expected_state
+                            if expected is None:
+                                # pause-confirm: anything != "playing"
+                                if state != "playing":
+                                    self._waiter.set()
+                            elif state == expected:
+                                self._waiter.set()
+
+            except Exception as e:
+                _logger.warning(
+                    f"[intercom] WebSocket connection lost: {type(e).__name__}, reconnecting..."
+                )
+
+            self._connected.clear()
+            await asyncio.sleep(2)  # reconnect delay
+
+    def wait_for_state(self, entity_id: str, expected_state: str | None, timeout: float) -> bool:
+        """Wait for entity_id to reach expected_state.
+
+        expected_state=None means "wait until NOT playing" (pause confirm).
+        Returns True if state was reached before timeout, False otherwise.
+        """
+        event = threading.Event()
+        with self._lock:
+            self._waiter = event
+            self._entity_id = entity_id
+            self._expected_state = expected_state
+
+        ok = event.wait(timeout)
+
+        with self._lock:
+            self._waiter = None
+            self._entity_id = None
+            self._expected_state = None
+
+        return ok
+
+    @property
+    def ready(self) -> bool:
+        """Whether the WebSocket has authenticated and subscribed."""
+        return self._connected.is_set()
+
+
 class HAClient:
     """Home Assistant REST API client."""
 
@@ -92,6 +250,16 @@ class HAClient:
         self._cache_lock = threading.Lock()
         # entity_id → (attrs_dict, timestamp) — refreshed by query_statuses poll
         self._state_cache: dict[str, tuple[dict, float]] = {}
+
+        # WebSocket: auto-start, silent fallback to polling on failure
+        self._ws = None
+        if token and ha_url:
+            try:
+                import websockets  # noqa: F401 — verify import works
+
+                self._ws = HAWebSocketClient(ha_url, token)
+            except (ImportError, ValueError) as e:
+                _logger.info(f"[intercom] WebSocket unavailable (polling mode): {e}")
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
@@ -379,21 +547,49 @@ class HAClient:
         self._restore_volume(entity_id, saved_volume)
 
     def _auto_pause_bg(self, entity_id: str, wait_sec: float, saved_volume: float | None = None):
-        """Background thread: confirm playback → wait → pause + restore volume."""
+        """Background thread: confirm playback → wait → pause + verify, then restore volume.
+
+        Uses WebSocket state_changed events when available (instant response).
+        Falls back to REST polling when WebSocket is unavailable or times out.
+        """
         t0 = time.monotonic()
+        ws = self._ws  # local snapshot for type narrowing + thread safety
+        use_ws = ws is not None and ws.ready
+        playing_confirmed = False
 
         try:
-            # 1) Poll until "playing" state is confirmed
-            for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
-                state = self.state(entity_id)
-                if state == "playing":
-                    _logger.info(f"[intercom] {entity_id} playing confirmed (attempt {attempt})")
-                    break
-                time.sleep(STATE_POLL_INTERVAL)
+            # 1) Confirm "playing" state
+            # Quick REST pre-check (avoid race: state may have changed
+            # before WS waiter was registered)
+            if self.state(entity_id) == "playing":
+                _logger.info(f"[intercom] {entity_id} already playing (already there)")
+                playing_confirmed = True
+            elif use_ws:
+                assert ws is not None
+                _logger.info(f"[intercom] {entity_id} waiting for playing via ws...")
+                if ws.wait_for_state(entity_id, "playing", WS_PLAYING_TIMEOUT):
+                    _logger.info(f"[intercom] {entity_id} playing confirmed (ws)")
+                    playing_confirmed = True
+                else:
+                    _logger.info(f"[intercom] {entity_id} ws timeout for playing, polling")
             else:
-                _logger.info(
-                    f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing"
-                )
+                _logger.info(f"[intercom] {entity_id} ws not ready, polling")
+
+            if not playing_confirmed:
+                # Polling fallback (ws timed out or not available)
+                for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
+                    state = self.state(entity_id)
+                    if state == "playing":
+                        _logger.info(
+                            f"[intercom] {entity_id} playing confirmed (poll attempt {attempt})"
+                        )
+                        playing_confirmed = True
+                        break
+                    time.sleep(STATE_POLL_INTERVAL)
+                if not playing_confirmed:
+                    _logger.info(
+                        f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing"
+                    )
 
             # 2) Wait for remaining duration + buffer
             elapsed = time.monotonic() - t0
@@ -406,8 +602,21 @@ class HAClient:
                 time.sleep(remaining)
 
             # 3) Pause + confirm stopped
+            # Quick REST pre-check (already stopped)
+            if self.state(entity_id) != "playing":
+                _logger.info(f"[intercom] {entity_id} paused (already stopped)")
+                return
+
             for attempt in range(1, PAUSE_RETRIES + 1):
                 self.call("media_player/media_pause", {"entity_id": entity_id})
+
+                if use_ws:
+                    assert ws is not None  # guarded by use_ws
+                    _logger.info(f"[intercom] {entity_id} waiting for pause via ws...")
+                    if ws.wait_for_state(entity_id, None, WS_PAUSE_TIMEOUT):
+                        _logger.info(f"[intercom] {entity_id} paused (ws)")
+                        return
+
                 time.sleep(STATE_POLL_INTERVAL)
                 state = self.state(entity_id)
                 if state != "playing":
@@ -416,6 +625,7 @@ class HAClient:
                 _logger.info(
                     f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})"
                 )
+
             _logger.warning(
                 f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
             )
