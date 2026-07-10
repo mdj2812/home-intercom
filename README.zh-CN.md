@@ -55,6 +55,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `PUBLIC_URL` | （可选）反代域名，HA 通过这个 URL 拉音频 |
 | `AUDIO_DIR` | 音频存储目录，默认 `/data/audio` |
 | `PAUSE_BUFFER` | （可选）后备自动暂停额外等待秒数，默认 `0` |
+| `STATE_TIMEOUT` | （可选）实体状态查询超时秒数，默认 `5`（蓝牙/MA 设备增大） |
 | `TRUSTED_PROXY` | （可选）反代 IP，默认 `*`（允许所有） |
 
 ### rooms.json

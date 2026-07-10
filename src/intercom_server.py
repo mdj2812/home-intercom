@@ -8,7 +8,7 @@ import wave
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from ha_client import HAClient
+from ha_client import DEFAULT_STATE_TIMEOUT, HAClient
 
 app = Flask(__name__)
 
@@ -28,7 +28,24 @@ def _parse_pause_buffer() -> float:
 
 PAUSE_BUFFER = _parse_pause_buffer()
 
-haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER)
+
+def _parse_state_timeout() -> int:
+    raw = os.environ.get("STATE_TIMEOUT", str(DEFAULT_STATE_TIMEOUT))
+    try:
+        val = int(raw)
+        if val < 1:
+            raise ValueError
+        return val
+    except ValueError:
+        app.logger.warning(
+            f"[intercom] invalid STATE_TIMEOUT '{raw}', using {DEFAULT_STATE_TIMEOUT}"
+        )
+        return DEFAULT_STATE_TIMEOUT
+
+
+STATE_TIMEOUT = _parse_state_timeout()
+
+haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER, state_timeout=STATE_TIMEOUT)
 
 PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
 PCM_BPS = 2  # 16-bit audio = 2 bytes per sample
