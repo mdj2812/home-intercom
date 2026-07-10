@@ -9,7 +9,12 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="manifest" href="/static/manifest.json">
-<meta name="theme-color" content="#0f0f0f">
+<meta name="theme-color" content="#000000">
+
+<link href="/fonts/cjk.css" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:ROND,wght@0..100,100..900&display=swap" rel="stylesheet">
 
 <title>home-intercom</title>
 <script>
@@ -21,6 +26,7 @@
 })();
 </script>
 <script src="/static/i18n.js"></script>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
 <link rel="stylesheet" href="/static/intercom.css">
 </head>
 <body>
@@ -28,23 +34,23 @@
 <div class="container">
   <div class="header">
     <div>
-      <h1 id="app-title">家庭广播</h1>
-      <p class="hint" id="app-hint">按住录音 · 松开发送</p>
+      <h1 class="font-cjk" id="app-title">家庭广播</h1>
+      <p class="hint font-cjk" id="app-hint">按住录音 · 松开发送</p>
     </div>
   </div>
 
   <div class="grid" id="grid"></div>
 
   <footer class="footer">
-    <span class="ver" id="ver">…</span>
+    <span class="ver font-latin" id="ver">…</span>
     <div class="lang-dropdown" id="lang-dropdown">
-      <button type="button" id="lang-toggle" aria-haspopup="listbox" aria-expanded="false" aria-label="Language">
+      <button type="button" class="font-cjk" id="lang-toggle" aria-haspopup="listbox" aria-expanded="false" aria-label="Language">
         <span id="lang-toggle-label">中文</span>
         <span class="lang-chevron" aria-hidden="true"></span>
       </button>
       <div class="lang-dropdown-menu" role="listbox" hidden>
-        <button type="button" role="option" class="lang-option" data-lang="zh-CN">中文</button>
-        <button type="button" role="option" class="lang-option" data-lang="en">EN</button>
+        <button type="button" role="option" class="lang-option font-cjk" data-lang="zh-CN">中文</button>
+        <button type="button" role="option" class="lang-option font-latin" data-lang="en">EN</button>
       </div>
     </div>
   </footer>
@@ -67,16 +73,23 @@ let currentTarget = '';
 let currentCard = null;
 let ROOM_NAMES = {};
 
-// Room icon mapping (extensible, falls back to 📢)
-const ROOM_ICONS = {
-  all:     '📢',
-  living:  '🛋️',
-  bedroom: '🛏️',
-  study:   '📚',
-  cinema:  '🎬',
+const ROOM_LUCIDE = {
+  all:     'radio',
+  living:  'sofa',
+  bedroom: 'bed',
+  study:   'book-open',
+  kitchen: 'cooking-pot',
+  bathroom:'bath',
+  cinema:  'tv',
 };
+
 function roomIcon(target) {
-  return ROOM_ICONS[target] || '🔊';
+  const name = ROOM_LUCIDE[target] || 'speaker';
+  return `<i data-lucide="${name}"></i>`;
+}
+
+function refreshIcons() {
+  if (window.lucide) lucide.createIcons({ attrs: { 'stroke-width': 1.5 } });
 }
 
 function makeCard(target, name, isBroadcast) {
@@ -116,7 +129,7 @@ function makeCard(target, name, isBroadcast) {
             <span class="device-name">…</span>
           </div>
         </div>
-        <span class="room-icon">${roomIcon(target)}</span>
+        <span class="room-icon" aria-hidden="true">${roomIcon(target)}</span>
       </div>
       ${pttHtml}
       <div class="status">${I18N.t('statusReady')}</div>`;
@@ -139,6 +152,12 @@ function makeCard(target, name, isBroadcast) {
   btn.addEventListener('touchstart', e => e.preventDefault());
   btn.addEventListener('contextmenu', e => e.preventDefault());
 
+  const label = isBroadcast
+    ? card.querySelector('[data-i18n="broadcastAll"]')
+    : card.querySelector('[data-room-name]');
+  I18N.applyTextFont(label, name);
+  I18N.applyTextFont(card.querySelector('.status'), I18N.t('statusReady'));
+
   return card;
 }
 
@@ -159,7 +178,7 @@ function applyPreviewFallback() {
   for (const [key, friendly_name] of Object.entries(PREVIEW_DEVICE_NAMES)) {
     const card = document.getElementById('card-' + key);
     const deviceEl = card?.querySelector('.device-name');
-    if (deviceEl) deviceEl.textContent = friendly_name;
+    if (deviceEl) I18N.applyTextFont(deviceEl, friendly_name);
   }
   applyRoomStatus(PREVIEW_DEMO_STATUS);
 }
@@ -170,9 +189,7 @@ function applyRoomStatus(status) {
     if (!card) continue;
     const roomState = typeof info === 'object' ? info.status : info;
     const deviceEl = card.querySelector('.device-name');
-    if (deviceEl && typeof info === 'object' && info.friendly_name) {
-      deviceEl.textContent = info.friendly_name;
-    }
+    if (deviceEl && info.friendly_name) I18N.applyTextFont(deviceEl, info.friendly_name);
     const dot = card.querySelector('.dot');
     const btn = card.querySelector('.ptt-btn');
     if (roomState === EntityStatus.ONLINE) {
@@ -184,13 +201,13 @@ function applyRoomStatus(status) {
       card.classList.add(UNAVAILABLE_CLASS);
       if (btn) btn.disabled = true;
       const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusSkipped');
+      if (st) I18N.applyTextFont(st, I18N.t('statusSkipped'));
     } else {
       if (dot) dot.className = 'dot dot-error';
       card.classList.add(UNAVAILABLE_CLASS);
       if (btn) btn.disabled = true;
       const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusUnavailable');
+      if (st) I18N.applyTextFont(st, I18N.t('statusUnavailable'));
     }
   }
 }
@@ -210,16 +227,17 @@ async function loadRooms() {
       ROOM_NAMES[key] = room.name;
       GRID.appendChild(makeCard(key, room.name, false));
     }
+    refreshIcons();
   } catch (e) {
     const firstStatus = GRID.querySelector('.status');
-    if (firstStatus) firstStatus.textContent = I18N.t('statusLoadFailed');
+    if (firstStatus) I18N.applyTextFont(firstStatus, I18N.t('statusLoadFailed'));
   }
 }
 
 function setCardState(card, state, msg) {
   ['recording','sending','sent'].forEach(c => card.classList.remove(c));
   if (state) card.classList.add(state);
-  card.querySelector('.status').textContent = msg;
+  I18N.applyTextFont(card.querySelector('.status'), msg);
 }
 
 async function startRecording(target, card) {
@@ -347,10 +365,12 @@ setInterval(pollSpeakerStatus, 30000);
 
 // Show version number + fetch server config
 fetch('/version').then(r => r.json()).then(d => {
-  document.getElementById('ver').textContent = d.version;
+  const ver = document.getElementById('ver');
+  I18N.applyTextFont(ver, d.version);
   if (d.pcm_rate) TARGET_RATE = d.pcm_rate;
 }).catch(() => {
-  document.getElementById('ver').textContent = '';
+  const ver = document.getElementById('ver');
+  if (ver) { ver.textContent = ''; ver.classList.remove('font-latin', 'font-cjk'); }
 });
 </script>
 </body>

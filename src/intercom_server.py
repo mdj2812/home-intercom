@@ -3,10 +3,13 @@
 
 import json
 import os
+import re
 import sys
 import wave
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 from ha_client import HAClient
 
@@ -47,6 +50,52 @@ except Exception:
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 with open(ROOMS_FILE) as f:
     ROOM_MAP = json.load(f)
+
+ZEOS_CJK_FONT_ID = "1"
+ZEOS_CJK_FONT_BASE = f"https://fontsapi.zeoseven.com/{ZEOS_CJK_FONT_ID}/main"
+ZEOS_FETCH_UA = "Mozilla/5.0 (compatible; home-intercom/1.0)"
+_zeos_cache: dict[str, tuple[bytes, str]] = {}
+
+
+def _fetch_zeoseven(path: str) -> tuple[bytes, str]:
+    url = f"{ZEOS_CJK_FONT_BASE}/{path}"
+    cached = _zeos_cache.get(url)
+    if cached is not None:
+        return cached
+    req = Request(url, headers={"User-Agent": ZEOS_FETCH_UA})
+    try:
+        with urlopen(req, timeout=30) as resp:
+            data = resp.read()
+            content_type = resp.headers.get("Content-Type", "application/octet-stream")
+    except URLError as exc:
+        app.logger.warning("[intercom] zeoseven fetch failed %s: %s", url, exc)
+        return b"", ""
+    if data:
+        _zeos_cache[url] = (data, content_type)
+    return data, content_type
+
+
+@app.route("/fonts/cjk.css")
+def cjk_font_css():
+    """Proxy ZeoSeven CJK font CSS (their API returns empty for python-requests UA)."""
+    data, _ = _fetch_zeoseven("result.css")
+    if not data:
+        return Response("/* CJK font unavailable */", status=502, mimetype="text/css")
+    css = data.decode("utf-8")
+    css = css.replace('url("./', 'url("/fonts/cjk/')
+    css = css.replace("url('./", "url('/fonts/cjk/")
+    return Response(css, mimetype="text/css; charset=utf-8")
+
+
+@app.route("/fonts/cjk/<path:filename>")
+def cjk_font_file(filename):
+    filename = os.path.basename(filename)
+    if not re.fullmatch(r"[a-f0-9]+\.woff2", filename):
+        return "", 404
+    data, content_type = _fetch_zeoseven(filename)
+    if not data:
+        return "", 502
+    return Response(data, mimetype=content_type or "font/woff2")
 
 
 @app.route("/")

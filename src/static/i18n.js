@@ -54,6 +54,17 @@ const I18N = (() => {
     return (DATA[lang] && DATA[lang][key]) || DATA["en"][key] || key;
   }
 
+  function hasCJK(text) {
+    return /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(text || "");
+  }
+
+  function applyTextFont(el, text) {
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove("font-latin", "font-cjk");
+    el.classList.add(hasCJK(text) ? "font-cjk" : "font-latin");
+  }
+
   function getLangLabel(code) {
     const opt = LANG_OPTIONS.find((o) => o.code === code);
     return opt ? opt.label : code;
@@ -71,7 +82,7 @@ const I18N = (() => {
 
   function updateLangDropdown() {
     const label = document.getElementById("lang-toggle-label");
-    if (label) label.textContent = getLangLabel(lang);
+    if (label) applyTextFont(label, getLangLabel(lang));
 
     document.querySelectorAll(".lang-dropdown-menu [data-lang]").forEach((btn) => {
       const active = btn.dataset.lang === lang;
@@ -125,28 +136,34 @@ const I18N = (() => {
   function applyToDOM() {
     document.documentElement.lang = lang;
 
+    // Title + hint
     const h1 = document.querySelector(".header h1");
-    if (h1) h1.textContent = t("appTitle");
+    if (h1) applyTextFont(h1, t("appTitle"));
     const hint = document.querySelector(".header .hint");
-    if (hint) hint.textContent = t("appHint");
+    if (hint) applyTextFont(hint, t("appHint"));
     updateLangDropdown();
 
     const bcName = document.querySelector('[data-i18n="broadcastAll"]');
-    if (bcName) bcName.textContent = t("broadcastAll");
+    if (bcName) applyTextFont(bcName, t("broadcastAll"));
 
     document.querySelectorAll("[data-room-name]").forEach((el) => {
       const key = el.getAttribute("data-room-name");
       const room = window._ROOM_DATA ? window._ROOM_DATA[key] : null;
       if (!room) return;
-      el.textContent = lang === "en" && room.name_en ? room.name_en : room.name;
+      const name = lang === "en" && room.name_en ? room.name_en : room.name;
+      applyTextFont(el, name);
     });
 
+    // Page title
     document.title = t("appTitle");
 
+    // Status text — keep state, just translate to current language
+    // Skip unavailable cards; pollSpeakerStatus owns their text
     document.querySelectorAll(".room-card .status").forEach((el) => {
       const card = el.closest(".room-card");
       if (card && card.classList.contains(UNAVAILABLE_CLASS)) return;
 
+      // Find which key the current text corresponds to (any language)
       const val = el.textContent;
       let key = null;
       for (const k of Object.keys(DATA["zh-CN"])) {
@@ -155,10 +172,11 @@ const I18N = (() => {
           break;
         }
       }
-      if (key) el.textContent = t(key);
+      if (key) applyTextFont(el, t(key));
     });
   }
 
+  // Apply translations on DOM ready
   function init() {
     const run = () => {
       initLangDropdown();
@@ -171,7 +189,7 @@ const I18N = (() => {
     }
   }
 
-  return { t, setLang, toggleLang, init, get lang() { return lang; } };
+  return { t, setLang, toggleLang, init, applyTextFont, hasCJK, get lang() { return lang; } };
 })();
 
 I18N.init();

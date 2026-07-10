@@ -1,14 +1,70 @@
-﻿* {
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
+﻿/* Nothing OS inspired theme */
+
+:root {
+  --nothing-black: #000;
+  --nothing-surface: #0a0a0a;
+  --nothing-elevated: #141414;
+  --nothing-border: #2a2a2a;
+  --nothing-border-light: #3a3a3a;
+  --nothing-white: #fff;
+  --nothing-gray: #aaa;
+  --nothing-muted: #777;
+  --nothing-dim: #222;
+  --nothing-red: #d71921;
+  --nothing-red-dim: rgb(215 25 33 / 35%);
+  --nothing-red-glow: rgb(215 25 33 / 12%);
+  --nothing-green: #2ee676;
+  --nothing-green-dim: rgb(46 230 118 / 50%);
+  --font-latin: "Doto", monospace;
+  --font-latin-rond: 100;
+  --font-cjk: "JinzisheTongfang", monospace;
+  --fs-pixel: 12px;
+  --fs-pixel-lg: 24px;
+  --fs-broadcast-label: 30px;
 }
-html, body { height:100%; }
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body { height: 100%; }
+
+.font-latin {
+  font-family: var(--font-latin);
+  font-weight: 400;
+  font-synthesis: none;
+  font-variation-settings: "ROND" var(--font-latin-rond);
+}
+
+.font-cjk {
+  font-family: var(--font-cjk);
+  font-weight: 400;
+  font-synthesis: none;
+}
+
+.header h1.font-cjk,
+.broadcast-label.font-cjk,
+.room-name.font-cjk {
+  font-weight: 400;
+}
+
+.font-latin,
+.font-cjk {
+  text-shadow: 0 0 6px var(--nothing-black), 0 1px 0 var(--nothing-black);
+}
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #0f0f0f;
-  color: #fff;
+  font-size: var(--fs-pixel);
+  line-height: var(--fs-pixel);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: auto;
+  background-color: var(--nothing-black);
+  background-image:
+    radial-gradient(circle, var(--nothing-dim) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--nothing-white);
   touch-action: manipulation;
   -webkit-touch-callout: none;
   user-select: none;
@@ -30,20 +86,23 @@ body {
 }
 
 .header h1 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #ccc;
-  letter-spacing: 0.02em;
-  line-height: 1.25rem;
-  min-height: 1.25rem;
+  font-size: var(--fs-pixel-lg);
+  font-weight: 700;
+  color: var(--nothing-white);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  min-height: var(--fs-pixel-lg);
+  line-height: var(--fs-pixel-lg);
 }
 
 .header .hint {
-  font-size: 0.8rem;
-  color: #555;
+  font-size: var(--fs-pixel);
+  color: var(--nothing-gray);
   margin-top: 8px;
-  line-height: 1.2rem;
-  min-height: 2.4rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  min-height: var(--fs-pixel-lg);
+  line-height: var(--fs-pixel);
 }
 
 .footer {
@@ -55,8 +114,8 @@ body {
 }
 
 .footer .ver {
-  font-size: 0.7rem;
-  color: #444;
+  font-size: var(--fs-pixel);
+  color: var(--nothing-gray);
   letter-spacing: 0.08em;
 }
 
@@ -69,8 +128,8 @@ body {
   background: transparent;
   border: none;
   border-radius: 0;
-  color: #888;
-  font-size: 0.65rem;
+  color: var(--nothing-white);
+  font-size: var(--fs-pixel);
   width: 64px;
   min-width: 64px;
   height: 28px;
@@ -92,7 +151,7 @@ body {
 
 #lang-toggle:hover,
 .lang-dropdown.open #lang-toggle {
-  color: #ccc;
+  color: var(--nothing-white);
 }
 
 .lang-chevron {
@@ -114,8 +173,8 @@ body {
   top: calc(100% + 4px);
   right: 0;
   min-width: 100%;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--nothing-black);
+  border: none;
   z-index: 10;
 }
 
@@ -133,8 +192,8 @@ body {
   width: 100%;
   background: transparent;
   border: none;
-  color: #888;
-  font-size: 0.65rem;
+  color: var(--nothing-gray);
+  font-size: var(--fs-pixel);
   padding: 8px 12px;
   text-align: left;
   cursor: pointer;
@@ -145,8 +204,8 @@ body {
 
 .lang-option:hover,
 .lang-option.active {
-  background: #252525;
-  color: #ccc;
+  background: var(--nothing-elevated);
+  color: var(--nothing-white);
 }
 
 /* ──── Grid ──── */
@@ -156,10 +215,9 @@ body {
   gap: 10px;
 }
 
-/* ──── Broadcast card (全部) ──── */
+/* ──── Broadcast card ──── */
 .room-card.broadcast-card {
   grid-column: 1 / -1;
-  margin-bottom: 6px;
   padding: 14px clamp(24px, 8vw, 48px);
   align-items: stretch;
 }
@@ -170,6 +228,7 @@ body {
   align-items: center;
   gap: 12px;
   width: 100%;
+  padding-inline: 0;
 }
 
 .broadcast-info {
@@ -183,17 +242,18 @@ body {
 }
 
 .broadcast-label {
-  font-size: 30px;
-  line-height: 30px;
-  font-weight: 600;
-  color: #f0a030;
+  font-size: var(--fs-broadcast-label);
+  font-weight: 700;
+  color: var(--nothing-red);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: var(--fs-broadcast-label);
   width: 100%;
 }
 
 .broadcast-card .status {
   text-align: left;
   width: 100%;
-  margin-top: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -201,7 +261,19 @@ body {
 .broadcast-card .ptt-wrap {
   width: 120px;
   height: 120px;
+  --ptt-size: 120px;
   flex-shrink: 0;
+}
+
+.broadcast-card .ptt-icon {
+  width: 34px;
+  height: 34px;
+  gap: 5px;
+}
+
+.broadcast-card .ptt-icon span {
+  width: 6px;
+  height: 6px;
 }
 
 .broadcast-card .waves {
@@ -233,6 +305,18 @@ body {
   .broadcast-card .ptt-wrap {
     width: 96px;
     height: 96px;
+    --ptt-size: 96px;
+  }
+
+  .broadcast-card .ptt-icon {
+    width: 28px;
+    height: 28px;
+    gap: 4px;
+  }
+
+  .broadcast-card .ptt-icon span {
+    width: 5px;
+    height: 5px;
   }
 
   .broadcast-card .waves {
@@ -242,17 +326,17 @@ body {
 
 /* ──── Room card ──── */
 .room-card {
-  background: #1a1a1a;
-  border-radius: 20px;
+  background: var(--nothing-surface);
+  border-radius: 0;
   padding: 16px 12px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   position: relative;
   overflow: hidden;
-  transition: background .3s, box-shadow .3s;
-  border: 1px solid #2a2a2a;
+  transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
+  border: 1px solid var(--nothing-border);
 }
 
 .room-card:not(.broadcast-card) {
@@ -267,6 +351,18 @@ body {
 .room-card:not(.broadcast-card) .ptt-wrap {
   width: 92px;
   height: 92px;
+  --ptt-size: 92px;
+}
+
+.room-card:not(.broadcast-card) .ptt-icon {
+  width: 28px;
+  height: 28px;
+  gap: 4px;
+}
+
+.room-card:not(.broadcast-card) .ptt-icon span {
+  width: 5px;
+  height: 5px;
 }
 
 .room-card:not(.broadcast-card) .waves {
@@ -275,12 +371,9 @@ body {
 
 /* ──── Room header ──── */
 .room-header {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #999;
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   gap: 10px;
   width: 100%;
 }
@@ -296,11 +389,19 @@ body {
 
 .room-name {
   font-size: 14px;
+  font-weight: 700;
+  color: var(--nothing-white);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   line-height: 14px;
   width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.room-name.font-latin {
+  font-weight: 400;
 }
 
 .room-meta {
@@ -314,37 +415,62 @@ body {
 .device-name {
   font-size: 10px;
   line-height: 10px;
-  color: #666;
+  color: var(--nothing-muted);
+  letter-spacing: 0.04em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  flex: 1;
-}
-
-.room-icon {
-  flex-shrink: 0;
-  font-size: 1.1rem;
 }
 
 .room-header .dot {
-  flex-shrink: 0;
   width: 5px;
   height: 5px;
-  border-radius: 50%;
-  background: #444;
-  transition: background .3s;
+  border-radius: 0;
+  background: var(--nothing-dim);
+  transition: background 0.3s, box-shadow 0.3s;
+  flex-shrink: 0;
 }
 
-/* Dot state classes — used by pollSpeakerStatus + processAndSend */
+.room-header .room-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.room-header .room-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.room-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--nothing-gray);
+  opacity: 1;
+}
+
+.room-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.room-card.unavailable .room-icon {
+  opacity: 0.35;
+}
+
 .dot-online {
-  background: #33d17a !important;
-  box-shadow: 0 0 4px #33d17a;
+  background: var(--nothing-green) !important;
+  box-shadow: 0 0 6px var(--nothing-green-dim);
 }
 
 .dot-error {
-  background: #c0392b !important;
-  box-shadow: 0 0 4px #c0392b;
+  background: var(--nothing-red) !important;
+  box-shadow: 0 0 6px var(--nothing-red-dim);
 }
 
 /* ──── PTT Button ──── */
@@ -352,18 +478,20 @@ body {
   position: relative;
   width: 120px;
   height: 120px;
+  --ptt-size: 120px;
 }
 
 .ptt-btn {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
-  border: none;
-  background: #252525;
-  box-shadow: 0 6px 16px rgb(0 0 0 / 30%), inset 0 1px 2px rgb(255 255 255 / 6%);
+  border: 1px solid var(--nothing-border-light);
+  background: var(--nothing-elevated);
+  box-shadow: inset 0 0 0 4px var(--nothing-black);
   cursor: pointer;
   position: relative;
   z-index: 2;
-  transition: transform .15s ease, background .3s, box-shadow .3s;
+  transition: transform 0.15s ease, background 0.3s, border-color 0.3s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -371,6 +499,26 @@ body {
 
 .ptt-btn:active {
   transform: scale(0.96);
+}
+
+/* ──── PTT icon (9 cells: nothing = 3×3 dots) ──── */
+.ptt-icon {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  transition: opacity 0.25s;
+}
+
+.ptt-icon span {
+  width: 6px;
+  height: 6px;
+  background: var(--nothing-muted);
+  border-radius: 50%;
+  justify-self: center;
+  align-self: center;
+  transition: background 0.2s, transform 0.2s, opacity 0.2s;
 }
 
 /* ──── Ripple waves ──── */
@@ -386,46 +534,24 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  border: 2px solid #33d17a;
+  border: 1px solid var(--nothing-white);
   opacity: 0;
 }
 
-/* ──── PTT icon (9 cells: classic = 4 bars, nothing = 3×3 dots) ──── */
-.ptt-icon {
-  display: flex;
-  gap: 4px;
-  align-items: flex-end;
-  justify-content: center;
-  height: 36px;
-  transition: opacity .25s, transform .25s;
-}
-
-.ptt-icon span:nth-child(n+5) {
-  display: none;
-}
-
-.ptt-icon span {
-  width: 5px;
-  background: #666;
-  border-radius: 10px;
-  transition: background .3s, height .2s;
-}
-.ptt-icon span:nth-child(1) { height: 14px; }
-.ptt-icon span:nth-child(2) { height: 28px; }
-.ptt-icon span:nth-child(3) { height: 20px; }
-.ptt-icon span:nth-child(4) { height: 10px; }
-
-/* ──── Big checkmark (sent state) ──── */
+/* ──── Checkmark (sent state) ──── */
 .checkmark {
   display: none;
   position: absolute;
   inset: 0;
   align-items: center;
   justify-content: center;
-  font-size: 3.4rem;
+  font-size: calc(var(--ptt-size, 120px) * 0.32);
+  line-height: 1;
   font-weight: 700;
-  color: #fff;
-  animation: pop-in .4s cubic-bezier(0.34,1.56,0.64,1);
+  font-family: var(--font-latin);
+  font-variation-settings: "ROND" var(--font-latin-rond);
+  color: var(--nothing-white);
+  animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .sent .checkmark {
@@ -437,30 +563,34 @@ body {
 }
 
 @keyframes pop-in {
-0% {
-  transform: scale(0);
-  opacity: 0;
-}
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
 
-60% {
-  transform: scale(1.15);
-  opacity: 1;
-}
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 
-100% {
-  transform: scale(1);
-  opacity: 1;
-}
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* ──── Status text ──── */
 .status {
-  font-size: 0.75rem;
-  color: #555;
-  height: 1.4em;
-  line-height: 1.4em;
+  font-size: var(--fs-pixel);
+  color: var(--nothing-gray);
+  height: var(--fs-pixel);
+  line-height: var(--fs-pixel);
   text-align: center;
-  transition: color .3s;
+  transition: color 0.3s;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  width: 100%;
 }
 
 /* ══════════════════════════════════════
@@ -469,23 +599,47 @@ body {
 
 /* recording */
 .room-card.recording {
-  border-color: rgb(51 209 122 / 40%);
-  box-shadow: 0 0 24px rgb(51 209 122 / 8%);
+  border-color: var(--nothing-white);
+  box-shadow: 0 0 20px var(--nothing-red-glow);
 }
 
 .room-card.recording .ptt-btn {
-  background: #2a5038;
+  background: var(--nothing-black);
+  border-color: var(--nothing-white);
   transform: scale(0.95);
-  box-shadow: inset 0 4px 14px rgb(0 0 0 / 35%);
 }
-.room-card.recording .status { color: #33d17a; }
+
+.room-card.recording .status {
+  color: var(--nothing-white);
+}
 
 .room-card.recording .ptt-icon span {
-  background: #33d17a;
-  animation: bounce .6s ease-in-out infinite alternate;
+  background: var(--nothing-white);
+  animation: glyph-pulse 0.8s ease-in-out infinite alternate;
 }
 
-/* wave animation */
+.room-card.recording .ptt-icon span:nth-child(1) { animation-delay: 0s; }
+.room-card.recording .ptt-icon span:nth-child(2) { animation-delay: 0.05s; }
+.room-card.recording .ptt-icon span:nth-child(3) { animation-delay: 0.1s; }
+.room-card.recording .ptt-icon span:nth-child(4) { animation-delay: 0.15s; }
+.room-card.recording .ptt-icon span:nth-child(5) { animation-delay: 0.2s; }
+.room-card.recording .ptt-icon span:nth-child(6) { animation-delay: 0.25s; }
+.room-card.recording .ptt-icon span:nth-child(7) { animation-delay: 0.3s; }
+.room-card.recording .ptt-icon span:nth-child(8) { animation-delay: 0.35s; }
+.room-card.recording .ptt-icon span:nth-child(9) { animation-delay: 0.4s; }
+
+@keyframes glyph-pulse {
+  from {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
 .room-card.recording .waves::before {
   animation: ripple 2s ease-out infinite;
 }
@@ -495,59 +649,64 @@ body {
 }
 
 @keyframes ripple {
-0% {
-  transform: scale(1);
-  opacity: .5;
-}
+  0% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
 
-100% {
-  transform: scale(1.4);
-  opacity: 0;
-}
-}
-
-.room-card.recording .ptt-icon span:nth-child(2) { animation-delay: .1s; }
-.room-card.recording .ptt-icon span:nth-child(3) { animation-delay: .2s; }
-.room-card.recording .ptt-icon span:nth-child(4) { animation-delay: .3s; }
-
-@keyframes bounce {
-  from { transform: scaleY(.6); }
-  to   { transform: scaleY(1.3); }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
 }
 
 /* disabled (offline / not ready) */
 .room-card.unavailable {
-  opacity: .45;
+  opacity: 0.4;
 }
 
 .room-card.unavailable .ptt-btn {
   cursor: not-allowed;
   pointer-events: none;
+  opacity: 0.45;
 }
-.room-card.unavailable .status { color: #c0392b; }
+
+.room-card.unavailable .status {
+  color: var(--nothing-red);
+}
 
 /* sending */
 .room-card.sending {
-  border-color: rgb(51 209 122 / 35%);
-  box-shadow: 0 0 24px rgb(51 209 122 / 8%);
+  border-color: var(--nothing-border-light);
+  box-shadow: 0 0 16px var(--nothing-red-glow);
 }
 
 .room-card.sending .ptt-btn {
-  background: #2a5038;
+  background: var(--nothing-black);
+  border-color: var(--nothing-white);
 }
-.room-card.sending .ptt-icon { opacity: 0; }
-.room-card.sending .checkmark { display: none; }
+
+.room-card.sending .ptt-icon {
+  opacity: 0;
+}
+
+.room-card.sending .checkmark {
+  display: none;
+}
 
 .room-card.sending .ptt-btn::after {
   content: "";
   position: absolute;
-  inset: -3px;
-  border: 3px solid rgb(51 209 122 / 20%);
-  border-top-color: #33d17a;
+  inset: -4px;
+  border: 1px solid var(--nothing-dim);
+  border-top-color: var(--nothing-white);
   border-radius: 50%;
-  animation: spin .8s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
-.room-card.sending .status { color: #f0a030; }
+
+.room-card.sending .status {
+  color: var(--nothing-gray);
+}
 
 @keyframes spin {
   to { transform: rotate(360deg); }
@@ -555,18 +714,14 @@ body {
 
 /* sent */
 .room-card.sent {
-  border-color: rgb(51 209 122 / 35%);
+  border-color: var(--nothing-white);
 }
 
 .room-card.sent .ptt-btn {
-  background: #2a5038;
+  background: var(--nothing-black);
+  border-color: var(--nothing-white);
 }
-.room-card.sent .status { color: #33d17a; }
 
-/* broadcast card accent */
-.broadcast-card.recording .status { color: #f0a030; }
-.broadcast-card.recording .ptt-btn { background: #503a20; }
-.broadcast-card.sent .ptt-btn { background: #503a20; }
-
-.broadcast-card .waves::before,
-.broadcast-card .waves::after { border-color: #f0a030; }
+.room-card.sent .status {
+  color: var(--nothing-white);
+}
