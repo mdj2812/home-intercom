@@ -74,27 +74,7 @@ function makeCard(target, name, isBroadcast) {
   card.className = 'room-card' + (isBroadcast ? ' broadcast-card' : '');
   card.id = 'card-' + target;
 
-  const headerHtml = isBroadcast
-    ? `
-    <div class="room-header">
-      <span class="room-icon">${roomIcon(target)}</span>
-      <span data-i18n="broadcastAll">${name}</span>
-      <span class="dot"></span>
-    </div>`
-    : `
-    <div class="room-header">
-      <div class="room-info">
-        <span class="room-name" data-room-name="${target}">${name}</span>
-        <div class="room-meta">
-          <span class="dot"></span>
-          <span class="device-name">…</span>
-        </div>
-      </div>
-      <span class="room-icon">${roomIcon(target)}</span>
-    </div>`;
-
-  card.innerHTML = `
-    ${headerHtml}
+  const pttHtml = `
     <div class="ptt-wrap">
       <div class="waves"></div>
       <button class="ptt-btn">
@@ -103,9 +83,32 @@ function makeCard(target, name, isBroadcast) {
         </div>
         <div class="checkmark">✓</div>
       </button>
-    </div>
-    <div class="status">${I18N.t('statusReady')}</div>
-  `;
+    </div>`;
+
+  if (isBroadcast) {
+    card.innerHTML = `
+      <div class="broadcast-main">
+        <div class="broadcast-info">
+          <div class="broadcast-label" data-i18n="broadcastAll">${name}</div>
+          <div class="status">${I18N.t('statusReady')}</div>
+        </div>
+        ${pttHtml}
+      </div>`;
+  } else {
+    card.innerHTML = `
+      <div class="room-header">
+        <div class="room-info">
+          <span class="room-name" data-room-name="${target}">${name}</span>
+          <div class="room-meta">
+            <span class="dot"></span>
+            <span class="device-name">…</span>
+          </div>
+        </div>
+        <span class="room-icon">${roomIcon(target)}</span>
+      </div>
+      ${pttHtml}
+      <div class="status">${I18N.t('statusReady')}</div>`;
+  }
 
   const btn = card.querySelector('.ptt-btn');
 
