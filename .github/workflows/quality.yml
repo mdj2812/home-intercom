@@ -10,6 +10,9 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
 
+    env:
+      AUDIO_DIR: /tmp/audio
+
     steps:
       - uses: actions/checkout@v4
 
