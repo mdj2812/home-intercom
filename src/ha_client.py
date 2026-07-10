@@ -106,7 +106,7 @@ class HAWebSocketClient:
         try:
             loop.run_until_complete(self._ws_connect())
         except Exception as e:
-            print(f"[intercom] WebSocket fatal: {e}")
+            _logger.error(f"[intercom] WebSocket fatal: {e}")
         finally:
             loop.close()
 
@@ -123,7 +123,7 @@ class HAWebSocketClient:
                     # Phase 1: server sends auth_required (or auth_ok on older HA)
                     msg = json.loads(await ws.recv())
                     if msg.get("type") not in ("auth_required", "auth_ok"):
-                        print(f"[intercom] WebSocket unexpected msg: {msg}")
+                        _logger.warning(f"[intercom] WebSocket unexpected msg: {msg}")
                         return  # protocol mismatch, don't retry
 
                     # Phase 2: send auth with long-lived access token
@@ -137,7 +137,7 @@ class HAWebSocketClient:
                     )
                     msg = json.loads(await ws.recv())
                     if msg.get("type") != "auth_ok":
-                        print(f"[intercom] WebSocket auth failed: {msg}")
+                        _logger.error(f"[intercom] WebSocket auth failed: {msg}")
                         return  # auth failure, don't retry
 
                     # Phase 3: subscribe to state_changed events
@@ -153,11 +153,11 @@ class HAWebSocketClient:
                     )
                     msg = json.loads(await ws.recv())
                     if not msg.get("success"):
-                        print(f"[intercom] WebSocket subscribe failed: {msg}")
+                        _logger.error(f"[intercom] WebSocket subscribe failed: {msg}")
                         return
 
                     self._connected.set()
-                    print("[intercom] WebSocket connected, subscribed to state_changed")
+                    _logger.info("[intercom] WebSocket connected, subscribed to state_changed")
 
                     # Event loop: dispatch state_changed events to callers
                     while self._running:
@@ -190,7 +190,9 @@ class HAWebSocketClient:
                                 self._waiter.set()
 
             except Exception as e:
-                print(f"[intercom] WebSocket connection lost: {type(e).__name__}, reconnecting...")
+                _logger.warning(
+                    f"[intercom] WebSocket connection lost: {type(e).__name__}, reconnecting..."
+                )
 
             self._connected.clear()
             await asyncio.sleep(2)  # reconnect delay
@@ -257,7 +259,7 @@ class HAClient:
 
                 self._ws = HAWebSocketClient(ha_url, token)
             except (ImportError, ValueError) as e:
-                print(f"[intercom] WebSocket unavailable (polling mode): {e}")
+                _logger.info(f"[intercom] WebSocket unavailable (polling mode): {e}")
 
     def _request(
         self, method: str, path: str, data: dict | None = None, timeout: int = 10
