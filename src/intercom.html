@@ -144,13 +144,13 @@ function makeCard(target, name, isBroadcast) {
 
 // Preview-only mock data (used only before first successful HA status load)
 const PREVIEW_DEVICE_NAMES = {
-  living: 'HomePod',
-  bedroom: '小爱音响',
+  living: 'Living Room Speaker',
+  bedroom: 'Bedroom Speaker',
 };
 
 const PREVIEW_DEMO_STATUS = {
-  living: { status: EntityStatus.ONLINE, friendly_name: 'HomePod' },
-  bedroom: { status: EntityStatus.UNAVAILABLE, friendly_name: '小爱音响' },
+  living: { status: EntityStatus.ONLINE, friendly_name: 'Living Room Speaker' },
+  bedroom: { status: EntityStatus.UNAVAILABLE, friendly_name: 'Bedroom Speaker' },
 };
 
 let haStatusLoaded = false;
@@ -179,6 +179,8 @@ function applyRoomStatus(status) {
       if (dot) dot.className = 'dot dot-online';
       card.classList.remove(UNAVAILABLE_CLASS);
       if (btn) btn.disabled = false;
+      const st = card.querySelector('.status');
+      if (st) st.textContent = I18N.t('statusReady');
     } else if (roomState === EntityStatus.NO_PLAY_MEDIA) {
       if (dot) dot.className = 'dot dot-error';
       card.classList.add(UNAVAILABLE_CLASS);
