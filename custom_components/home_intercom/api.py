@@ -304,6 +304,46 @@ class PanelView(HomeAssistantView):
         return web.Response(text=html, content_type="text/html")
 
 
+class StaticView(HomeAssistantView):
+    """Serve static assets (CSS, JS, icons, manifest) for the PWA.
+
+    Replaces async_register_static_paths which has API compatibility issues
+    across HA versions.
+    """
+
+    url = "/home_intercom/static/{filename}"
+    name = "home_intercom:static"
+    requires_auth = False
+
+    _MIME_TYPES = {
+        ".css": "text/css",
+        ".js": "application/javascript",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".ico": "image/x-icon",
+        ".wav": "audio/wav",
+        ".svg": "image/svg+xml",
+        ".woff2": "font/woff2",
+    }
+
+    async def get(self, request: web.Request, filename: str) -> web.Response:
+        static_dir = _SRC_DIR / "static"
+
+        # Security: prevent path traversal
+        if ".." in filename or filename.startswith("/"):
+            return web.Response(status=404)
+
+        filepath = static_dir / filename
+        if not filepath.is_file():
+            return web.Response(status=404)
+
+        content_type = self._MIME_TYPES.get(filepath.suffix, "application/octet-stream")
+        return web.Response(
+            body=filepath.read_bytes(),
+            content_type=content_type,
+        )
+
+
 def register_api_views(hass: HomeAssistant) -> None:
     """Register all HomeAssistantView endpoints."""
     hass.http.register_view(RecordView)
@@ -311,3 +351,4 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(VersionView)
     hass.http.register_view(RoomsView)
     hass.http.register_view(PanelView)
+    hass.http.register_view(StaticView)

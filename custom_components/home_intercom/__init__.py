@@ -96,15 +96,8 @@ async def _async_setup_integration(
 
     os.makedirs(audio_dir, exist_ok=True)
 
-    # Register HTTP API views
+    # Register HTTP API views (includes static file serving)
     register_api_views(hass)
-
-    # Register static file paths for PWA assets
-    static_dir = str(_SRC_DIR / "static")
-    await hass.http.async_register_static_paths(
-        "/home_intercom/static",
-        static_dir,
-    )
 
     # Register the PWA frontend as a sidebar panel
     hass.components.frontend.async_register_built_in_panel(
