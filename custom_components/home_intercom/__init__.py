@@ -99,20 +99,31 @@ async def _async_setup_integration(
     # Register HTTP API views (includes static file serving)
     register_api_views(hass)
 
-    # Register the PWA frontend as a sidebar panel
-    hass.components.frontend.async_register_built_in_panel(
-        component_name="custom",
-        sidebar_title="Home Intercom",
-        sidebar_icon="mdi:intercom",
-        frontend_url_path="home_intercom",
-        config={
-            "_panel_custom": {
-                "name": "home-intercom-panel",
-                "module_url": "/home_intercom/panel",
-            }
-        },
-        require_admin=False,
-    )
+    # Register the PWA frontend as a sidebar panel.
+    # API varies across HA versions — try old path first, fall back.
+    try:
+        frontend = hass.components.frontend
+    except AttributeError:
+        try:
+            frontend = hass.data["frontend"]
+        except KeyError:
+            _LOGGER.warning("Cannot register sidebar panel — frontend not found")
+            frontend = None
+
+    if frontend is not None:
+        frontend.async_register_built_in_panel(
+            component_name="custom",
+            sidebar_title="Home Intercom",
+            sidebar_icon="mdi:intercom",
+            frontend_url_path="home_intercom",
+            config={
+                "_panel_custom": {
+                    "name": "home-intercom-panel",
+                    "module_url": "/home_intercom/panel",
+                }
+            },
+            require_admin=False,
+        )
 
     # Register announce service
     _register_services(hass, room_map)
