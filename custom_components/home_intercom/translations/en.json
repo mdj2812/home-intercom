@@ -52,5 +52,14 @@
         }
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "status": { "name": "Status" },
+      "rooms_configured": { "name": "Rooms Configured" }
+    },
+    "button": {
+      "announce_all": { "name": "Announce All" }
+    }
   }
 }

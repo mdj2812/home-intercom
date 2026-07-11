@@ -19,7 +19,7 @@ from pathlib import Path
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
+from homeassistant.const import CONF_ENTITY_ID, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
@@ -30,6 +30,8 @@ from .const import DOMAIN
 from .player import play_announcement
 
 _LOGGER = logging.getLogger(__name__)
+
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 # Path to src directory (where intercom.html and static/ live)
 _SRC_DIR = Path(__file__).parent.parent.parent / "src"
@@ -147,6 +149,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up from config entry (config flow)."""
     room_map = _load_room_config(entry=entry)
     await _async_setup_integration(hass, room_map)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
