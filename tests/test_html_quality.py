@@ -83,9 +83,9 @@ class TestHtmlStructure:
         assert "debugger" not in html_content
 
     def test_script_tags(self, html_content):
-        """External i18n.js + title init + main inline script."""
-        assert html_content.count("<script") == 3
-        assert html_content.count("</script>") == 3
+        """External i18n.js + title init + context detection + main inline script."""
+        assert html_content.count("<script") == 4
+        assert html_content.count("</script>") == 4
 
     def test_css_is_external(self, html_content):
         """CSS must be in separate file, linked via <link>."""

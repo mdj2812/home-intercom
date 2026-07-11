@@ -290,7 +290,16 @@ class PanelView(HomeAssistantView):
         try:
             html = html_path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return web.Response(text="<h1>Home Intercom</h1><p>Frontend not found</p>", content_type="text/html")
+            return web.Response(
+                text="<h1>Home Intercom</h1><p>Frontend not found</p>",
+                content_type="text/html",
+            )
+
+        # Rewrite static asset paths for HA panel context.
+        # JS handles API paths via window.API_BASE detection,
+        # but <link>/<script> in <head> load before JS runs.
+        html = html.replace('src="/static/', 'src="/home_intercom/static/')
+        html = html.replace('href="/static/', 'href="/home_intercom/static/')
 
         return web.Response(text=html, content_type="text/html")
 

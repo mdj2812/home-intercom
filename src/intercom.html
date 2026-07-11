@@ -13,6 +13,17 @@
 
 <title>home-intercom</title>
 <script>
+// Detect running context: container vs HA integration panel
+(function(){
+  var path = window.location.pathname;
+  // HA panel mode: page served at /home_intercom/panel
+  var isHA = path.indexOf('/home_intercom/') !== -1;
+  window.API_BASE = isHA ? '/api/home_intercom' : '';
+  window.STATIC_BASE = isHA ? '/home_intercom/static' : '/static';
+  window.PANEL_BASE = isHA ? '/home_intercom' : '';
+})();
+</script>
+<script>
 // Set initial title from saved language before i18n.js loads
 (function(){
   var lang = localStorage.getItem("intercom-lang") || "";
@@ -57,7 +68,7 @@ const PlayError   = { PLAY_FAILED: "play_failed", MA_FAILED: "ma_failed" };
 const UNAVAILABLE_CLASS = "unavailable";
 
 const GRID = document.getElementById('grid');
-const RECORD_URL = '/record';
+const RECORD_URL = (window.API_BASE || '') + '/record';
 // PCM target rate fetched from /version on startup
 let TARGET_RATE = 16000;  // fallback, overwritten by server
 
@@ -205,7 +216,7 @@ async function loadRooms() {
   GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
   try {
-    const resp = await fetch('/rooms.json');
+    const resp = await fetch((window.API_BASE || '') + '/rooms');
     const rooms = await resp.json();
     for (const [key, room] of Object.entries(rooms)) {
       window._ROOM_DATA[key] = room;
@@ -336,7 +347,7 @@ async function processAndSend() {
 
 async function pollSpeakerStatus() {
   try {
-    const resp = await fetch('/rooms/status');
+    const resp = await fetch((window.API_BASE || '') + '/rooms/status');
     if (!resp.ok) throw new Error('status unavailable');
     const status = await resp.json();
     if (status.error) throw new Error(status.error);
@@ -351,7 +362,7 @@ loadRooms().then(() => pollSpeakerStatus());
 setInterval(pollSpeakerStatus, 30000);
 
 // Show version number + fetch server config
-fetch('/version').then(r => r.json()).then(d => {
+fetch((window.API_BASE || '') + '/version').then(r => r.json()).then(d => {
   document.getElementById('ver').textContent = d.version;
   if (d.pcm_rate) TARGET_RATE = d.pcm_rate;
 }).catch(() => {

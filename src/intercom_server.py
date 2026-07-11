@@ -74,7 +74,12 @@ def index():
 
 
 @app.route("/rooms.json")
-def rooms():
+def rooms_json():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
+
+
+@app.route("/rooms")
+def rooms_alias():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 
 
