@@ -26,8 +26,8 @@ from .player import play_announcement
 
 _LOGGER = logging.getLogger(__name__)
 
-# Path to the src directory (where intercom.html and static/ live)
-_SRC_DIR = Path(__file__).parent.parent.parent / "src"
+# Path to the integration directory (where PWA frontend and static/ live)
+_INTEGRATION_DIR = Path(__file__).parent
 
 
 def _concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
@@ -164,7 +164,7 @@ class RecordView(HomeAssistantView):
         audio_url = f"/local/home_intercom_audio/{filename}"
 
         # Chime prepend (same logic as Flask version)
-        chime_path = str(_SRC_DIR / "static" / "pre_announce.wav")
+        chime_path = str(_INTEGRATION_DIR / "static" / "pre_announce.wav")
         audio_url_with_chime = None
         duration_with_chime = None
         if os.path.exists(chime_path):
@@ -252,13 +252,14 @@ class VersionView(HomeAssistantView):
     requires_auth = True
 
     async def get(self, request: web.Request) -> web.Response:
-        # Read version from .docker-image or fallback to manifest
+        # Read version from manifest.json
         version = "dev"
-        docker_image_path = _SRC_DIR.parent / "docker" / ".docker-image"
+        manifest_path = _INTEGRATION_DIR / "manifest.json"
         try:
-            with open(docker_image_path, encoding="utf-8") as f:
-                version = f.read().strip()
-        except FileNotFoundError:
+            import json as _json
+            with open(manifest_path, encoding="utf-8") as f:
+                version = _json.load(f).get("version", "dev")
+        except (FileNotFoundError, Exception):
             pass
 
         return web.json_response({"version": version, "pcm_rate": PCM_RATE})
@@ -286,7 +287,7 @@ class PanelView(HomeAssistantView):
     requires_auth = True
 
     async def get(self, request: web.Request) -> web.Response:
-        html_path = _SRC_DIR / "intercom.html"
+        html_path = _INTEGRATION_DIR / "intercom.html"
         try:
             html = html_path.read_text(encoding="utf-8")
         except FileNotFoundError:
@@ -327,7 +328,7 @@ class StaticView(HomeAssistantView):
     }
 
     async def get(self, request: web.Request, filename: str) -> web.Response:
-        static_dir = _SRC_DIR / "static"
+        static_dir = _INTEGRATION_DIR / "static"
 
         # Security: prevent path traversal
         if ".." in filename or filename.startswith("/"):

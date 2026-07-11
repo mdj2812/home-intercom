@@ -34,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 # Path to src directory (where intercom.html and static/ live)
-_SRC_DIR = Path(__file__).parent.parent.parent / "src"
+_INTEGRATION_DIR = Path(__file__).parent
 
 # YAML config schema (legacy fallback)
 ROOM_SCHEMA = vol.Schema(
@@ -73,7 +73,7 @@ def _load_room_config(config: ConfigType | None = None, entry: ConfigEntry | Non
         return dict(config[DOMAIN]["rooms"])
 
     # Fallback: rooms.json (legacy container mode)
-    rooms_path = _SRC_DIR / "rooms.json"
+    rooms_path = _INTEGRATION_DIR / "rooms.json"
     try:
         with open(rooms_path, encoding="utf-8") as f:
             return json.load(f)
