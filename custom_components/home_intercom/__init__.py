@@ -120,11 +120,10 @@ async def _async_setup_integration(
             },
             require_admin=False,
         )
-    except (ImportError, AttributeError, TypeError) as exc:
+    except (ImportError, AttributeError, TypeError, ValueError) as exc:
         _LOGGER.warning(
-            "Cannot register sidebar panel: %s — access directly at %s/home_intercom/panel",
+            "Cannot register sidebar panel: %s — access directly at /home_intercom/panel",
             exc,
-            hass.config.api.base_url if hasattr(hass.config, "api") else "",
         )
 
     # Register announce service
