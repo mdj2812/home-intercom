@@ -24,6 +24,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
+from .announce import handle_announce_service
 from .api import register_api_views
 from .const import DOMAIN
 from .player import play_announcement
@@ -130,37 +131,7 @@ def _register_services(hass: HomeAssistant, room_map: dict) -> None:
 
     async def _handle_announce(call: ServiceCall):
         """Handle home_intercom.announce service call."""
-        target = call.data.get("target", "all")
-        message = call.data.get("message", "")
-        volume = call.data.get("volume")
-        url = call.data.get("url")
-
-        if target == "all":
-            targets = [(k, v) for k, v in room_map.items() if v.get("entity")]
-        else:
-            room = room_map.get(target)
-            if not room:
-                _LOGGER.warning("Unknown target: %s", target)
-                return
-            targets = [(target, room)]
-
-        if not url and not message:
-            _LOGGER.warning("Announce called without message or url")
-            return
-
-        if message and not url:
-            _LOGGER.info("TTS announce not yet implemented: %s", message)
-            return
-
-        if url:
-            for _key, room in targets:
-                await play_announcement(
-                    hass,
-                    room["entity"],
-                    url,
-                    0,
-                    announce_volume=volume,
-                )
+        await handle_announce_service(hass, call)
 
     hass.services.async_register(DOMAIN, "announce", _handle_announce)
 
