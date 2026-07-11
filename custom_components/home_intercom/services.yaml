@@ -1,0 +1,37 @@
+announce:
+  name: Announce
+  description: Trigger an intercom announcement to one or more rooms.
+  fields:
+    target:
+      name: Target Room
+      description: Room key (e.g. "living") or "all" for all rooms.
+      required: true
+      example: "living"
+      selector:
+        text: {}
+    message:
+      name: Message
+      description: TTS text message to speak (optional — uses recorded audio if omitted).
+      required: false
+      example: "Dinner is ready!"
+      selector:
+        text:
+          multiline: true
+    volume:
+      name: Volume
+      description: Playback volume (0-100). Only applies to Music Assistant players.
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          mode: slider
+    url:
+      name: Audio URL
+      description: Direct URL to an audio file (WAV). Overrides message TTS.
+      required: false
+      example: "http://192.168.1.100:8764/audio/my_message.wav"
+      selector:
+        text: {}
