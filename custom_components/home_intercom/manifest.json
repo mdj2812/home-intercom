@@ -2,7 +2,7 @@
   "domain": "home_intercom",
   "name": "Home Intercom",
   "codeowners": ["@mdj2812"],
-  "config_flow": false,
+  "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/mdj2812/home-intercom",
   "integration_type": "service",

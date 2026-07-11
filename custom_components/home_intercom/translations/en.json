@@ -1,3 +1,56 @@
 {
-  "title": "Home Intercom"
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Intercom",
+        "description": "Configure your intercom rooms.\n\nUse YAML format — one room per line:\n```yaml\n{example}\n```",
+        "data": {
+          "rooms_text": "Rooms (YAML)"
+        }
+      }
+    },
+    "error": {
+      "invalid_yaml": "Invalid YAML format",
+      "invalid_entity": "Entity not found or not a media_player"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage Rooms",
+        "description": "Current rooms:\n\n{rooms}",
+        "data": {
+          "action": "Action",
+          "edit_key": "Room to edit",
+          "remove_key": "Room to remove"
+        }
+      },
+      "add_room": {
+        "title": "Add Room",
+        "data": {
+          "key": "Room Key",
+          "name": "Display Name",
+          "entity_id": "Media Player Entity",
+          "announce_volume": "Announce Volume"
+        },
+        "error": {
+          "key_required": "Room key is required",
+          "key_exists": "A room with this key already exists"
+        }
+      },
+      "edit_room": {
+        "title": "Edit Room",
+        "data": {
+          "key": "Room Key",
+          "name": "Display Name",
+          "entity_id": "Media Player Entity",
+          "announce_volume": "Announce Volume"
+        },
+        "error": {
+          "key_required": "Room key is required",
+          "key_exists": "A room with this key already exists"
+        }
+      }
+    }
+  }
 }

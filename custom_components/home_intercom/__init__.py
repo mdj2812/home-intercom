@@ -4,18 +4,12 @@ Registers HTTP views (HomeAssistantView) for the PWA frontend and API,
 serves static assets, and provides audio recording + playback to any
 media_player entity.
 
-Architecture:
-  PWA (push-to-talk) → HomeAssistantView (/api/home_intercom/record)
-  → player.py (direct hass service calls, no HA_TOKEN needed)
-  → any media_player entity (Music Assistant / Xiaomi / HomePod / Chromecast)
-
-Configuration (YAML, until #17 config flow):
-  home_intercom:
-    rooms:
-      living:
-        name: Living Room
-        entity: media_player.living_room_speaker
+Configuration:
+  - Config flow (preferred): HA UI → Settings → Devices & Services → Add
+  - YAML (legacy): home_intercom: { rooms: { key: { name, entity } } }
 """
+
+from __future__ import annotations
 
 import json
 import logging
@@ -24,6 +18,7 @@ from pathlib import Path
 
 import voluptuous as vol
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
@@ -38,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 # Path to src directory (where intercom.html and static/ live)
 _SRC_DIR = Path(__file__).parent.parent.parent / "src"
 
-# YAML config schema (temporary — replaced by config flow in #17)
+# YAML config schema (legacy fallback)
 ROOM_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): cv.string,
@@ -53,9 +48,7 @@ CONFIG_SCHEMA = vol.Schema(
     {
         DOMAIN: vol.Schema(
             {
-                vol.Required("rooms"): vol.Schema(
-                    {cv.string: ROOM_SCHEMA}
-                ),
+                vol.Required("rooms"): vol.Schema({cv.string: ROOM_SCHEMA}),
             }
         )
     },
@@ -63,41 +56,47 @@ CONFIG_SCHEMA = vol.Schema(
 )
 
 
-def _load_room_config(config: ConfigType) -> dict:
-    """Load room configuration from YAML config or fallback to rooms.json."""
-    if DOMAIN in config and "rooms" in config[DOMAIN]:
+def _load_room_config(config: ConfigType | None = None, entry: ConfigEntry | None = None) -> dict:
+    """Load room configuration.
+
+    Priority: config entry (UI) > YAML config > rooms.json fallback.
+    """
+    # Config entry (from config flow)
+    if entry and entry.data.get("rooms"):
+        return dict(entry.data["rooms"])
+
+    # YAML config
+    if config and DOMAIN in config and "rooms" in config[DOMAIN]:
         return dict(config[DOMAIN]["rooms"])
 
-    # Fallback: try rooms.json (legacy container mode)
+    # Fallback: rooms.json (legacy container mode)
     rooms_path = _SRC_DIR / "rooms.json"
     try:
         with open(rooms_path, encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        _LOGGER.warning("No room config found in YAML or rooms.json")
+        _LOGGER.warning("No room config found")
         return {}
 
 
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up Home Intercom from configuration.yaml.
-
-    Will be replaced by config flow in #17.
-    """
-    room_map = _load_room_config(config)
-
+async def _async_setup_integration(
+    hass: HomeAssistant,
+    room_map: dict,
+) -> None:
+    """Shared setup logic for both YAML and config entry paths."""
     audio_dir = hass.config.path("www", "home_intercom_audio")
-    hass.data[DOMAIN] = {
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN].update({
         "rooms": room_map,
         "audio_dir": audio_dir,
-    }
+    })
 
-    # Ensure audio directory exists
     os.makedirs(audio_dir, exist_ok=True)
 
-    # Register HTTP API views (HomeAssistantView)
+    # Register HTTP API views
     register_api_views(hass)
 
-    # Register static file paths for PWA assets (CSS, JS, icons)
+    # Register static file paths for PWA assets
     static_dir = str(_SRC_DIR / "static")
     await hass.http.async_register_static_paths(
         "/home_intercom/static",
@@ -111,11 +110,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         sidebar_title="Home Intercom",
         sidebar_icon="mdi:intercom",
         frontend_url_path="home_intercom",
-        config={"_panel_custom": {"name": "home-intercom-panel", "module_url": "/home_intercom/panel"}},
+        config={
+            "_panel_custom": {
+                "name": "home-intercom-panel",
+                "module_url": "/home_intercom/panel",
+            }
+        },
         require_admin=False,
     )
 
-    # Register the announce service (basic — full impl in #18)
+    # Register announce service
+    _register_services(hass, room_map)
+
+    _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
+
+
+def _register_services(hass: HomeAssistant, room_map: dict) -> None:
+    """Register home_intercom services."""
+
     async def _handle_announce(call: ServiceCall):
         """Handle home_intercom.announce service call."""
         target = call.data.get("target", "all")
@@ -136,9 +148,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             _LOGGER.warning("Announce called without message or url")
             return
 
-        # For TTS messages: generate audio via HA TTS
         if message and not url:
-            # TODO: TTS integration in #18
             _LOGGER.info("TTS announce not yet implemented: %s", message)
             return
 
@@ -148,15 +158,29 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     hass,
                     room["entity"],
                     url,
-                    0,  # duration unknown for external URLs
+                    0,
                     announce_volume=volume,
                 )
 
     hass.services.async_register(DOMAIN, "announce", _handle_announce)
 
-    _LOGGER.info(
-        "Home Intercom set up — %d rooms, audio: %s",
-        len(room_map),
-        audio_dir,
-    )
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """YAML-based setup (legacy fallback)."""
+    room_map = _load_room_config(config=config)
+    await _async_setup_integration(hass, room_map)
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up from config entry (config flow)."""
+    room_map = _load_room_config(entry=entry)
+    await _async_setup_integration(hass, room_map)
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    hass.services.async_remove(DOMAIN, "announce")
+    hass.data.pop(DOMAIN, None)
     return True
