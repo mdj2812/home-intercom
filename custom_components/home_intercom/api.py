@@ -289,7 +289,9 @@ class PanelView(HomeAssistantView):
     async def get(self, request: web.Request) -> web.Response:
         html_path = _INTEGRATION_DIR / "intercom.html"
         try:
-            html = html_path.read_text(encoding="utf-8")
+            html = await request.app["hass"].async_add_executor_job(
+                html_path.read_text, encoding="utf-8"
+            )
         except FileNotFoundError:
             return web.Response(
                 text="<h1>Home Intercom</h1><p>Frontend not found</p>",
@@ -339,8 +341,9 @@ class StaticView(HomeAssistantView):
             return web.Response(status=404)
 
         content_type = self._MIME_TYPES.get(filepath.suffix, "application/octet-stream")
+        body = await request.app["hass"].async_add_executor_job(filepath.read_bytes)
         return web.Response(
-            body=filepath.read_bytes(),
+            body=body,
             content_type=content_type,
         )
 
