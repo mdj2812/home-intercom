@@ -96,35 +96,12 @@ async def _async_setup_integration(
 
     os.makedirs(audio_dir, exist_ok=True)
 
-    # Register HTTP API views (includes static file serving)
+    # Register HTTP API views (includes static file serving + PWA frontend)
     register_api_views(hass)
 
-    # Register the PWA frontend as a sidebar panel.
-    # In HA 2026.7+, register_panel is accessed via the frontend integration.
-    try:
-        from homeassistant.components.frontend import (
-            async_register_built_in_panel,
-        )
-
-        async_register_built_in_panel(
-            hass,
-            component_name="custom",
-            sidebar_title="Home Intercom",
-            sidebar_icon="mdi:intercom",
-            frontend_url_path="home_intercom",
-            config={
-                "_panel_custom": {
-                    "name": "home-intercom-panel",
-                    "module_url": "/home_intercom/panel",
-                }
-            },
-            require_admin=False,
-        )
-    except (ImportError, AttributeError, TypeError, ValueError) as exc:
-        _LOGGER.warning(
-            "Cannot register sidebar panel: %s — access directly at /home_intercom/panel",
-            exc,
-        )
+    # Panel: add as Lovelace "Webpage" card → URL: /home_intercom/panel
+    # Sidebar registration removed — incompatible with HA 2026.7 panel API changes.
+    # Users add it via: Edit Dashboard → Add Card → Webpage → /home_intercom/panel
 
     # Register announce service
     _register_services(hass, room_map)
