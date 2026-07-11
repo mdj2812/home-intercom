@@ -100,18 +100,14 @@ async def _async_setup_integration(
     register_api_views(hass)
 
     # Register the PWA frontend as a sidebar panel.
-    # API varies across HA versions — try old path first, fall back.
+    # In HA 2026.7+, register_panel is accessed via the frontend integration.
     try:
-        frontend = hass.components.frontend
-    except AttributeError:
-        try:
-            frontend = hass.data["frontend"]
-        except KeyError:
-            _LOGGER.warning("Cannot register sidebar panel — frontend not found")
-            frontend = None
+        from homeassistant.components.frontend import (
+            async_register_built_in_panel,
+        )
 
-    if frontend is not None:
-        frontend.async_register_built_in_panel(
+        async_register_built_in_panel(
+            hass,
             component_name="custom",
             sidebar_title="Home Intercom",
             sidebar_icon="mdi:intercom",
@@ -123,6 +119,12 @@ async def _async_setup_integration(
                 }
             },
             require_admin=False,
+        )
+    except (ImportError, AttributeError, TypeError) as exc:
+        _LOGGER.warning(
+            "Cannot register sidebar panel: %s — access directly at %s/home_intercom/panel",
+            exc,
+            hass.config.api.base_url if hasattr(hass.config, "api") else "",
         )
 
     # Register announce service
