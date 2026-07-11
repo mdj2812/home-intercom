@@ -284,7 +284,7 @@ class PanelView(HomeAssistantView):
 
     url = "/home_intercom/panel"
     name = "home_intercom:panel"
-    requires_auth = True
+    requires_auth = False  # HTML page only — API endpoints still require auth
 
     async def get(self, request: web.Request) -> web.Response:
         html_path = _INTEGRATION_DIR / "intercom.html"

@@ -99,18 +99,6 @@ async def _async_setup_integration(
     # Register HTTP API views (includes static file serving + PWA frontend)
     register_api_views(hass)
 
-    # Register sidebar panel via core HTTP API (works across HA versions)
-    try:
-        hass.http.register_panel(
-            "home_intercom",
-            "/home_intercom/panel",
-            "Home Intercom",
-            "mdi:intercom",
-            require_admin=False,
-        )
-    except (TypeError, AttributeError) as exc:
-        _LOGGER.warning("Cannot register sidebar panel: %s", exc)
-
     # Register announce service
     _register_services(hass, room_map)
 
