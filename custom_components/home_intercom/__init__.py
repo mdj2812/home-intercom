@@ -104,7 +104,6 @@ async def _async_setup_integration(
     await hass.http.async_register_static_paths(
         "/home_intercom/static",
         static_dir,
-        cache_headers=True,
     )
 
     # Register the PWA frontend as a sidebar panel
