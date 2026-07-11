@@ -1,0 +1,54 @@
+name: Validate HA Integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "custom_components/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "custom_components/**"
+
+jobs:
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate with hassfest
+        uses: home-assistant/actions/hassfest@master
+
+  syntax:
+    name: Python Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check syntax
+        run: |
+          python3 -m py_compile custom_components/home_intercom/__init__.py
+          python3 -m py_compile custom_components/home_intercom/const.py
+
+      - name: Validate JSON
+        run: |
+          python3 -c "import json; json.load(open('custom_components/home_intercom/manifest.json'))"
+          python3 -c "import json; json.load(open('custom_components/home_intercom/translations/en.json'))"
+
+      - name: Validate YAML
+        run: |
+          python3 -c "
+          import sys
+          try:
+              import yaml
+          except ImportError:
+              print('PyYAML not installed, skipping YAML validation')
+              sys.exit(0)
+          yaml.safe_load(open('custom_components/home_intercom/services.yaml'))
+          print('services.yaml: OK')
+          "
