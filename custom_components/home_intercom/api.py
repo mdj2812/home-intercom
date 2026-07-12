@@ -6,7 +6,7 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /version       → VersionView (GET version + pcm_rate)
   /rooms         → RoomsView   (GET room config)
   /audio/<path>  → AudioView   (GET recorded WAV files)
-  /panel         → PanelView   (GET PWA frontend HTML)
+  /              → PanelView   (GET PWA frontend HTML)
 """
 
 from __future__ import annotations
@@ -303,12 +303,13 @@ class RoomsView(HomeAssistantView):
 
 
 class PanelView(HomeAssistantView):
-    """GET /home_intercom/panel — PWA frontend HTML.
+    """GET /home_intercom — PWA frontend HTML.
 
-    Served at the panel path registered via async_register_built_in_panel.
+    Serves the intercom.html PWA page with static asset paths rewritten
+    for the HA panel context (/home_intercom/static/...).
     """
 
-    url = "/home_intercom/panel"
+    url = "/home_intercom"
     name = "home_intercom:panel"
     requires_auth = False  # HTML page only — API endpoints still require auth
 

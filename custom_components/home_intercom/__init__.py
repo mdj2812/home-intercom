@@ -6,13 +6,13 @@ media_player entity.
 
 Configuration: YAML only (home_intercom: { rooms: { key: { name, entity_id } } })
 
-Sidebar: add a Dashboard with Webpage card pointing to /home_intercom/panel.
+Sidebar: add a Dashboard with Webpage card pointing to /home_intercom.
 Alternatively, if panel_iframe is available in your HA version:
   panel_iframe:
     intercom:
       title: "Home Intercom"
       icon: "mdi:bullhorn-outline"
-      url: "/home_intercom/panel"
+      url: "/home_intercom"
 """
 
 from __future__ import annotations

@@ -16,7 +16,7 @@
 // Detect running context: container vs HA integration panel
 (function(){
   var path = window.location.pathname;
-  // HA panel mode: page served at /home_intercom/panel
+  // HA panel mode: page served at /home_intercom
   var isHA = path.indexOf('/home_intercom/') !== -1;
   window.API_BASE = isHA ? '/api/home_intercom' : '';
   window.STATIC_BASE = isHA ? '/home_intercom/static' : '/static';
