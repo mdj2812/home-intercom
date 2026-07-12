@@ -86,13 +86,15 @@ def _register_services(hass: HomeAssistant) -> None:
 
 
 def _register_panel(hass: HomeAssistant) -> None:
-    """Register sidebar panel via frontend component.
+    """Register sidebar panel via async_register_built_in_panel.
 
-    Uses hass.components.frontend (already loaded by dependency)
-    rather than a direct import to avoid blocking on module load.
+    Must be called during async_setup before frontend phase completes.
     """
-    frontend = hass.components.frontend
-    frontend.async_register_built_in_panel(
+    # Import at call time — module is already loaded by the 'frontend' dependency
+    from homeassistant.components.frontend import async_register_built_in_panel
+
+    async_register_built_in_panel(
+        hass,
         DOMAIN,
         sidebar_title="Home Intercom",
         sidebar_icon="mdi:intercom",
