@@ -90,17 +90,18 @@ fi
 echo "==> Checking API endpoints..."
 
 # 1. /api/home_intercom/version
-if docker exec "${CONTAINER_NAME}" \
-    curl -sf "http://localhost:${HA_PORT}/api/home_intercom/version" -o /dev/null 2>/dev/null; then
-    echo "  ✅ GET /api/home_intercom/version"
+VER=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS "http://localhost:${HA_PORT}/api/home_intercom/version" 2>/dev/null || echo "")
+if echo "${VER}" | grep -q '"version"'; then
+    echo "  ✅ GET /api/home_intercom/version — ${VER}"
 else
-    echo "  ❌ GET /api/home_intercom/version not responding"
+    echo "  ❌ GET /api/home_intercom/version — unexpected: ${VER}"
     exit 1
 fi
 
 # 2. /api/home_intercom/rooms
 ROOMS=$(docker exec "${CONTAINER_NAME}" \
-    curl -sf "http://localhost:${HA_PORT}/api/home_intercom/rooms" 2>/dev/null)
+    curl -sS "http://localhost:${HA_PORT}/api/home_intercom/rooms" 2>/dev/null || echo "")
 if echo "${ROOMS}" | grep -q '"test"'; then
     echo "  ✅ GET /api/home_intercom/rooms — test room found"
 else
@@ -111,7 +112,7 @@ fi
 
 # 3. /api/home_intercom/rooms/status
 STATUS=$(docker exec "${CONTAINER_NAME}" \
-    curl -sf "http://localhost:${HA_PORT}/api/home_intercom/rooms/status" 2>/dev/null || echo "{}")
+    curl -sS "http://localhost:${HA_PORT}/api/home_intercom/rooms/status" 2>/dev/null || echo "{}")
 if echo "${STATUS}" | grep -q '"test"'; then
     echo "  ✅ GET /api/home_intercom/rooms/status — test room in response"
 else
@@ -119,15 +120,17 @@ else
 fi
 
 # 4. /home_intercom/panel — PWA HTML (no /api prefix)
+PANEL_CODE=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' "http://localhost:${HA_PORT}/home_intercom/panel" 2>/dev/null || echo "000")
 PANEL=$(docker exec "${CONTAINER_NAME}" \
-    curl -sfL "http://localhost:${HA_PORT}/home_intercom/panel" 2>/dev/null || echo "")
+    curl -sSL "http://localhost:${HA_PORT}/home_intercom/panel" 2>/dev/null || echo "")
 if echo "${PANEL}" | grep -q '<'; then
-    echo "  ✅ GET /home_intercom/panel — HTML returned"
+    echo "  ✅ GET /home_intercom/panel — HTML returned (HTTP ${PANEL_CODE})"
 elif [ -n "${PANEL}" ]; then
-    echo "  ⚠️  GET /home_intercom/panel — responded but not HTML"
+    echo "  ⚠️  GET /home_intercom/panel — responded but not HTML (HTTP ${PANEL_CODE})"
     echo "     First 100 chars: ${PANEL:0:100}"
 else
-    echo "  ❌ GET /home_intercom/panel — empty response or timeout"
+    echo "  ❌ GET /home_intercom/panel — empty response (HTTP ${PANEL_CODE})"
     exit 1
 fi
 
