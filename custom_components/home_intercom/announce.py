@@ -118,7 +118,7 @@ async def handle_announce_service(
 
     # Resolve targets
     if target == "all":
-        targets = [(k, v) for k, v in room_map.items() if v.get("entity")]
+        targets = [(k, v) for k, v in room_map.items() if v.get("entity_id")]
     else:
         room = room_map.get(target)
         if not room:

@@ -312,11 +312,11 @@ async function processAndSend() {
         // Map entity → room key for card lookup
         const entityToKey = {};
         for (const [key, room] of Object.entries(window._ROOM_DATA || {})) {
-          if (room.entity) entityToKey[room.entity] = key;
+          if (room.entity_id) entityToKey[room.entity_id] = key;
         }
         // Show error on each skipped room's card
         for (const e of errors) {
-          const key = entityToKey[e.entity];
+          const key = entityToKey[e.entity_id];
           if (!key) continue;
           const card = document.getElementById('card-' + key);
           if (!card) continue;

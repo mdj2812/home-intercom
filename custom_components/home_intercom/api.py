@@ -134,14 +134,14 @@ class RecordView(HomeAssistantView):
         room_map = _get_hass_data(hass).get("rooms", {})
 
         if target == "all":
-            targets = [(k, v) for k, v in room_map.items() if v.get("entity")]
+            targets = [(k, v) for k, v in room_map.items() if v.get("entity_id")]
             if not targets:
                 return web.json_response(
                     {"ok": False, "error": "no rooms configured"}, status=500
                 )
         else:
             room = room_map.get(target)
-            if not room or not room.get("entity"):
+            if not room or not room.get("entity_id"):
                 return web.json_response(
                     {"ok": False, "error": f"unknown target: {target}"}, status=400
                 )
@@ -183,7 +183,7 @@ class RecordView(HomeAssistantView):
             announce_volume = tgt_room.get("announce_volume")
             result = await play_announcement(
                 hass,
-                tgt_room["entity"],
+                tgt_room["entity_id"],
                 audio_url,
                 duration if not duration_with_chime else 0,
                 announce_volume=announce_volume,
@@ -194,7 +194,7 @@ class RecordView(HomeAssistantView):
                 ok_count += 1
             else:
                 errors.append(
-                    {"entity": tgt_room["entity"], "error": result.error or "unknown"}
+                    {"entity_id": tgt_room["entity_id"], "error": result.error or "unknown"}
                 )
 
         name = room_map[target]["name"] if target != "all" else "全部"
