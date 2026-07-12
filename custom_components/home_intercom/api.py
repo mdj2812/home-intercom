@@ -133,7 +133,7 @@ class RecordView(HomeAssistantView):
 
     url = "/api/home_intercom/record"
     name = "api:home_intercom:record"
-    requires_auth = False  # PWA is served from HA domain, inherits HA auth
+    requires_auth = True  # PWA carries HA auth cookie
 
     async def post(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]

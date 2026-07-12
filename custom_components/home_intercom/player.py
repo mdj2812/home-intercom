@@ -165,15 +165,14 @@ async def _call_play_media(
     Saves current volume, sets announce volume if higher, restores after.
     """
     try:
-        entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
-        if entity is None:
+        state = hass.states.get(entity_id)
+        if state is None:
             return PlayResult(ok=False, error="entity_not_found"), None
 
         # Volume boost: save current → set announce volume
         saved_volume = None
         if announce_volume is not None and announce_volume > 0:
-            state = hass.states.get(entity_id)
-            cv = state.attributes.get("volume_level") if state else None
+            cv = state.attributes.get("volume_level")
             if cv is not None and cv * 100 < announce_volume:
                 saved_volume = cv
                 target = announce_volume / 100.0
@@ -184,7 +183,17 @@ async def _call_play_media(
                     blocking=True,
                 )
 
-        await entity.async_play_media("music", audio_url, announce=True)
+        await hass.services.async_call(
+            "media_player",
+            "play_media",
+            {
+                "entity_id": entity_id,
+                "media_content_id": audio_url,
+                "media_content_type": "music",
+                "extra": {"announce": True},
+            },
+            blocking=True,
+        )
         return PlayResult(ok=True), saved_volume
     except Exception as e:
         _LOGGER.error("play_media failed for %s: %s", entity_id, e)
@@ -227,7 +236,9 @@ async def _play_standard(
 
             unsub = async_track_state_change_event(hass, [entity_id], _cb)
             try:
-                await _asyncio.wait_for(done_ev.wait(), timeout=30)
+                # Wait for playback to finish before restoring volume.
+                # TODO: derive timeout from audio duration (duration + 10)
+                await _asyncio.wait_for(done_ev.wait(), timeout=120)
             except TimeoutError:
                 pass
             finally:
