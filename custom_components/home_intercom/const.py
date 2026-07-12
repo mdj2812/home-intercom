@@ -15,4 +15,5 @@ CONF_ROOMS = "rooms"
 SERVICE_ANNOUNCE = "announce"
 
 # ——— Defaults ———
-DEFAULT_AUDIO_DIR = "www/home_intercom_audio"
+AUDIO_SUBDIR = "home_intercom_audio"
+WWW_DIR = "www"

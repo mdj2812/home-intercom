@@ -20,13 +20,9 @@ from homeassistant.helpers.typing import ConfigType
 
 from .announce import handle_announce_service
 from .api import register_api_views
-from .const import DOMAIN
+from .const import AUDIO_SUBDIR, DOMAIN, WWW_DIR
 
 _LOGGER = logging.getLogger(__name__)
-
-# Constants
-AUDIO_SUBDIR = "home_intercom_audio"
-WWW_DIR = "www"
 
 ROOM_SCHEMA = vol.Schema(
     {
