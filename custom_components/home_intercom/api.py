@@ -180,7 +180,7 @@ class RecordView(HomeAssistantView):
                 duration_with_chime = await hass.async_add_executor_job(
                     _concat_wavs, chime_path, filepath, filepath_chime
                 )
-                audio_url_with_chime = f"/local/home_intercom_audio/{filename_chime}"
+                audio_url_with_chime = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename_chime}"
             except Exception as exc:
                 _LOGGER.warning("Failed to prepend chime: %s", exc)
 
