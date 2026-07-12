@@ -38,7 +38,6 @@ jobs:
       - name: Validate JSON
         run: |
           python3 -c "import json; json.load(open('custom_components/home_intercom/manifest.json'))"
-          python3 -c "import json; json.load(open('custom_components/home_intercom/translations/en.json'))"
 
       - name: Validate YAML
         run: |

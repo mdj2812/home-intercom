@@ -4,7 +4,7 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /record        → RecordView  (POST audio → WAV → play)
   /rooms/status  → StatusView  (GET speaker online status)
   /version       → VersionView (GET version + pcm_rate)
-  /rooms         → RoomsView   (GET rooms.json)
+  /rooms         → RoomsView   (GET room config)
   /audio/<path>  → AudioView   (GET recorded WAV files)
   /panel         → PanelView   (GET PWA frontend HTML)
 """

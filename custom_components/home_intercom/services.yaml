@@ -9,14 +9,13 @@ announce:
       example: "living"
       selector:
         text: {}
-    message:
-      name: Message
-      description: TTS text message to speak (optional — uses recorded audio if omitted).
-      required: false
-      example: "Dinner is ready!"
+    url:
+      name: Audio URL
+      description: URL to a WAV audio file.
+      required: true
+      example: "http://192.168.1.100:8123/local/home_intercom_audio/intercom_living.wav"
       selector:
-        text:
-          multiline: true
+        text: {}
     volume:
       name: Volume
       description: Playback volume boost (1-100). Boosts volume during announcement then restores.
@@ -28,10 +27,3 @@ announce:
           max: 100
           step: 5
           mode: slider
-    url:
-      name: Audio URL
-      description: Direct URL to an audio file (WAV). Overrides message TTS.
-      required: false
-      example: "http://192.168.1.100:8764/audio/my_message.wav"
-      selector:
-        text: {}

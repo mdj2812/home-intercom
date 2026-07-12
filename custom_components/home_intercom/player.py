@@ -87,7 +87,7 @@ async def play_announcement(
         announce_volume: Optional volume (1-100) for MA players.
         audio_url_with_chime: URL with chime prepended (for standard players).
         duration_with_chime: Duration of chime + audio.
-        pause_buffer: Extra seconds before auto-pause (HomePod needs ~1.0).
+        pause_buffer: Extra seconds before auto-pause (default 0.0, tuned per-room).
 
     Returns:
         PlayResult with .ok and optional .error.
