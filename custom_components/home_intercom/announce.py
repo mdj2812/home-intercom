@@ -57,6 +57,7 @@ async def handle_announce_service(
     for key, room in targets:
         entity = room.get("entity_id", "")
         announce_volume = room.get("announce_volume") if volume is None else volume
+        pause_buffer = room.get("pause_buffer", 0.0)
 
         result: PlayResult = await play_announcement(
             hass,
@@ -64,6 +65,7 @@ async def handle_announce_service(
             url,
             0,  # duration unknown for external URLs
             announce_volume=announce_volume,
+            pause_buffer=pause_buffer,
         )
         results[key] = result.to_dict()
         if result.ok:

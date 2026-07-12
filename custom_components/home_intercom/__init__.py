@@ -37,6 +37,7 @@ ROOM_SCHEMA = vol.Schema(
         vol.Required(CONF_NAME): cv.string,
         vol.Required(CONF_ENTITY_ID): cv.string,
         vol.Optional("announce_volume"): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+        vol.Optional("pause_buffer"): vol.All(vol.Coerce(float), vol.Range(min=0)),
     }
 )
 
