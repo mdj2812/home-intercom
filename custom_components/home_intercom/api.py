@@ -215,8 +215,8 @@ class StatusView(HomeAssistantView):
     """GET /api/home_intercom/rooms/status — query speaker online status."""
 
     url = "/api/home_intercom/rooms/status"
-    name = "api:home_intercom:rooms_status"
-    requires_auth = True
+    name = "api:home_intercom:status"
+    requires_auth = False  # public: entity online/offline states only
 
     async def get(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]
@@ -249,7 +249,7 @@ class VersionView(HomeAssistantView):
 
     url = "/api/home_intercom/version"
     name = "api:home_intercom:version"
-    requires_auth = True
+    requires_auth = False  # public: version + PCM rate only
 
     async def get(self, request: web.Request) -> web.Response:
         # Read version from manifest.json
@@ -270,7 +270,7 @@ class RoomsView(HomeAssistantView):
 
     url = "/api/home_intercom/rooms"
     name = "api:home_intercom:rooms"
-    requires_auth = True
+    requires_auth = False  # public: room names only, no secrets
 
     async def get(self, request: web.Request) -> web.Response:
         return web.json_response(_get_hass_data(request.app["hass"]).get("rooms", {}))
