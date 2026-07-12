@@ -66,7 +66,8 @@ async def _setup(hass: HomeAssistant, room_map: dict) -> None:
         }
     )
 
-    os.makedirs(audio_dir, exist_ok=True)
+    # Offload filesystem operations to executor
+    await hass.async_add_executor_job(os.makedirs, audio_dir, True)
 
     register_api_views(hass)
     _register_services(hass)
@@ -85,11 +86,13 @@ def _register_services(hass: HomeAssistant) -> None:
 
 
 def _register_panel(hass: HomeAssistant) -> None:
-    """Register sidebar panel via async_register_built_in_panel."""
-    from homeassistant.components.frontend import async_register_built_in_panel
+    """Register sidebar panel via frontend component.
 
-    async_register_built_in_panel(
-        hass,
+    Uses hass.components.frontend (already loaded by dependency)
+    rather than a direct import to avoid blocking on module load.
+    """
+    frontend = hass.components.frontend
+    frontend.async_register_built_in_panel(
         DOMAIN,
         sidebar_title="Home Intercom",
         sidebar_icon="mdi:intercom",
