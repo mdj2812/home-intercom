@@ -163,10 +163,9 @@ async def _call_play_media(
 ) -> PlayResult:
     """Call media_player.play_media via REST API (matching developer tools)."""
     try:
-        # Use HA's internal aiohttp session with auto-auth
         from homeassistant.helpers.aiohttp_client import async_get_clientsession
-        session = async_get_clientsession(hass)
 
+        session = async_get_clientsession(hass)
         internal_url = hass.config.internal_url or "http://127.0.0.1:8123"
         api_url = f"{internal_url.rstrip('/')}/api/services/media_player/play_media"
 
@@ -182,6 +181,7 @@ async def _call_play_media(
                 },
                 "announce": True,
             },
+            headers={"Authorization": f"Bearer {_get_token(hass)}"},
         ) as resp:
             if resp.status == 200:
                 return PlayResult(ok=True)
@@ -191,6 +191,22 @@ async def _call_play_media(
     except Exception as e:
         _LOGGER.error("play_media call failed: %s", e)
         return PlayResult(ok=False, error="call_failed")
+
+
+def _get_token(hass: HomeAssistant) -> str:
+    """Get HA long-lived access token for REST API auth."""
+    import os
+    # Priority: dedicated token file (set up during deployment)
+    token_path = os.path.join(hass.config.config_dir, "ha_access_token")
+    try:
+        with open(token_path, encoding="utf-8") as f:
+            tok = f.read().strip()
+            if tok:
+                return tok
+    except Exception:
+        pass
+    # Fallback: supervisor token (works for Hass.io add-ons)
+    return os.environ.get("SUPERVISOR_TOKEN", "")
 
 
 async def _play_standard(
