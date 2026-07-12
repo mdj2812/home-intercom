@@ -43,5 +43,4 @@ jobs:
         run: |
           python -m pytest tests/ -v --tb=short \
             --cov=src \
-            --cov=custom_components \
             --cov-report=term-missing
