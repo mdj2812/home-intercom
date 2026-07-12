@@ -201,6 +201,7 @@ class RecordView(HomeAssistantView):
         errors: list[dict] = []
         for _tgt_key, tgt_room in targets:
             announce_volume = tgt_room.get("announce_volume")
+            pause_buffer = tgt_room.get("pause_buffer", 0.0)
             result = await play_announcement(
                 hass,
                 tgt_room["entity_id"],
@@ -209,6 +210,7 @@ class RecordView(HomeAssistantView):
                 announce_volume=announce_volume,
                 audio_url_with_chime=audio_url_with_chime,
                 duration_with_chime=duration_with_chime,
+                pause_buffer=pause_buffer,
             )
             if result.ok:
                 ok_count += 1
