@@ -252,15 +252,19 @@ class VersionView(HomeAssistantView):
     requires_auth = False  # public: version + PCM rate only
 
     async def get(self, request: web.Request) -> web.Response:
-        # Read version from manifest.json
+        # Read version from manifest.json (offloaded to executor)
         version = "dev"
         manifest_path = _INTEGRATION_DIR / "manifest.json"
-        try:
-            import json as _json
-            with open(manifest_path, encoding="utf-8") as f:
-                version = _json.load(f).get("version", "dev")
-        except (FileNotFoundError, Exception):
-            pass
+
+        def _read_version() -> str:
+            try:
+                import json as _json
+                with open(manifest_path, encoding="utf-8") as f:
+                    return _json.load(f).get("version", "dev")
+            except (FileNotFoundError, Exception):
+                return "dev"
+
+        version = await request.app["hass"].async_add_executor_job(_read_version)
 
         return web.json_response({"version": version, "pcm_rate": PCM_RATE})
 
