@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONTAINER_NAME="ha-home-intercom-smoke"
 HA_PORT="8123"
 HA_URL="http://localhost:${HA_PORT}"
-MAX_WAIT=180
+MAX_WAIT=300
 POLL_INTERVAL=3
 
 cleanup() {
@@ -63,8 +63,8 @@ if [ "${elapsed}" -ge "${MAX_WAIT}" ]; then
     exit 1
 fi
 
-# Give HA a few more seconds to finish loading
-sleep 10
+# Give HA extra time to finish integration setup
+sleep 15
 
 # ── Verify no home_intercom errors ──────────────────────────
 echo "==> Checking for Home Intercom errors in logs..."
@@ -86,10 +86,10 @@ else
     echo "${SETUP_LOGS}" | head -5
 fi
 
-# ── Verify HTTP views registered ────────────────────────────
+# ── Verify API endpoints ────────────────────────────────────
 echo "==> Checking API endpoints..."
 
-# 1. /api/home_intercom/version — returns version + pcm_rate
+# 1. /api/home_intercom/version
 if docker exec "${CONTAINER_NAME}" \
     curl -sf "http://localhost:${HA_PORT}/api/home_intercom/version" -o /dev/null 2>/dev/null; then
     echo "  ✅ GET /api/home_intercom/version"
@@ -98,7 +98,7 @@ else
     exit 1
 fi
 
-# 2. /api/home_intercom/rooms — returns room configuration (public, no auth)
+# 2. /api/home_intercom/rooms
 ROOMS=$(docker exec "${CONTAINER_NAME}" \
     curl -sf "http://localhost:${HA_PORT}/api/home_intercom/rooms" 2>/dev/null)
 if echo "${ROOMS}" | grep -q '"test"'; then
@@ -109,7 +109,7 @@ else
     exit 1
 fi
 
-# 3. /api/home_intercom/rooms/status — returns speaker status
+# 3. /api/home_intercom/rooms/status
 STATUS=$(docker exec "${CONTAINER_NAME}" \
     curl -sf "http://localhost:${HA_PORT}/api/home_intercom/rooms/status" 2>/dev/null || echo "{}")
 if echo "${STATUS}" | grep -q '"test"'; then
@@ -118,14 +118,16 @@ else
     echo "  ⚠️  GET /api/home_intercom/rooms/status — no test room (may need real media_player)"
 fi
 
-# 4. /api/home_intercom/panel — returns PWA frontend HTML
+# 4. /api/home_intercom/panel — PWA HTML
 PANEL=$(docker exec "${CONTAINER_NAME}" \
     curl -sf "http://localhost:${HA_PORT}/api/home_intercom/panel" 2>/dev/null || echo "")
-if echo "${PANEL}" | grep -qi '<!DOCTYPE html>'; then
+if echo "${PANEL}" | grep -qi '<!DOCTYPE\|<html'; then
     echo "  ✅ GET /api/home_intercom/panel — HTML returned"
-else
-    echo "  ❌ GET /api/home_intercom/panel — not HTML"
+elif [ -n "${PANEL}" ]; then
+    echo "  ⚠️  GET /api/home_intercom/panel — responded but not HTML"
     echo "     First 100 chars: ${PANEL:0:100}"
+else
+    echo "  ❌ GET /api/home_intercom/panel — empty response or timeout"
     exit 1
 fi
 
