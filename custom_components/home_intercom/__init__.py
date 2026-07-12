@@ -66,8 +66,8 @@ async def _setup(hass: HomeAssistant, room_map: dict) -> None:
         }
     )
 
-    # Offload filesystem operations to executor
-    await hass.async_add_executor_job(os.makedirs, audio_dir, True)
+    # Offload filesystem operations to executor (lambda needed — kwarg support)
+    await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
 
     register_api_views(hass)
     _register_services(hass)
