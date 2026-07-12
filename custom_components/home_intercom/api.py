@@ -165,7 +165,7 @@ class RecordView(HomeAssistantView):
             )
 
         # Build public URL — absolute URL needed for DLNA/MiOT players
-        base_url = hass.config.external_url or hass.config.internal_url or "http://homeassistant.local:8123"
+        base_url = hass.config.internal_url or hass.config.external_url or "http://192.168.99.4:8123"
         audio_url = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename}"
 
         # Chime prepend (same logic as Flask version)
