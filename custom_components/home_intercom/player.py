@@ -163,21 +163,12 @@ async def _call_play_media(
 ) -> PlayResult:
     """Call media_player.play_media — standard interface, matching dev tools."""
     try:
-        await hass.services.async_call(
-            "media_player",
-            "play_media",
-            {
-                "entity_id": entity_id,
-                "media_content_id": audio_url,
-                "media_content_type": "music",
-                "extra": {
-                    "metadata": {
-                        "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-                        "browse_entity_id": entity_id,
-                    },
-                },
-            },
-        )
+        # Call entity directly, bypassing hass.services.async_call
+        # which bypasses HA core's service schema transformation.
+        entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
+        if entity is None:
+            return PlayResult(ok=False, error="entity_not_found")
+        await entity.async_play_media("music", audio_url)
         return PlayResult(ok=True)
     except Exception as e:
         _LOGGER.error("play_media failed for %s: %s", entity_id, e)
