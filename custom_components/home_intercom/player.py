@@ -156,24 +156,56 @@ async def _play_ma_announcement(
         return PlayResult(ok=False, error="ma_failed")
 
 
+async def _call_play_media(
+    hass: HomeAssistant,
+    entity_id: str,
+    audio_url: str,
+) -> PlayResult:
+    """Call media_player.play_media via REST API (matching developer tools)."""
+    try:
+        # Use HA's internal aiohttp session with auto-auth
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+        session = async_get_clientsession(hass)
+
+        internal_url = hass.config.internal_url or "http://127.0.0.1:8123"
+        api_url = f"{internal_url.rstrip('/')}/api/services/media_player/play_media"
+
+        async with session.post(
+            api_url,
+            json={
+                "entity_id": entity_id,
+                "media_content_id": audio_url,
+                "media_content_type": "music",
+                "metadata": {
+                    "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
+                    "browse_entity_id": entity_id,
+                },
+                "announce": True,
+            },
+        ) as resp:
+            if resp.status == 200:
+                return PlayResult(ok=True)
+            body = await resp.text()
+            _LOGGER.error("play_media failed %d: %s", resp.status, body[:200])
+            return PlayResult(ok=False, error=f"http_{resp.status}")
+    except Exception as e:
+        _LOGGER.error("play_media call failed: %s", e)
+        return PlayResult(ok=False, error="call_failed")
+
+
 async def _play_standard(
     hass: HomeAssistant,
     entity_id: str,
     audio_url: str,
 ) -> PlayResult:
-    """Play via media_player.play_media.
+    """Play via media_player.play_media (announce=True).
 
-    Metadata structure matches HA UI developer tools format,
-    which Xiaomi miot requires for URL playback.
+    For modern players (HomePod, Chromecast) that handle announce correctly.
     """
     service_data: dict[str, Any] = {
         "entity_id": entity_id,
         "media_content_id": audio_url,
         "media_content_type": "music",
-        "metadata": {
-            "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-            "browse_entity_id": entity_id,
-        },
         "announce": True,
     }
     try:
@@ -200,26 +232,9 @@ async def _play_with_timer(
 
     For basic players (Xiaomi via miot) that need manual pause after playback.
     """
-    service_data: dict[str, Any] = {
-        "entity_id": entity_id,
-        "media_content_id": audio_url,
-        "media_content_type": "music",
-        "metadata": {
-            "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-            "browse_entity_id": entity_id,
-        },
-        "announce": True,
-    }
-    try:
-        await hass.services.async_call(
-            "media_player",
-            "play_media",
-            service_data,
-            blocking=True,
-        )
-    except Exception as e:
-        _LOGGER.error("play_media failed for %s: %s", entity_id, e)
-        return PlayResult(ok=False, error="play_failed")
+    result = await _call_play_media(hass, entity_id, audio_url)
+    if not result.ok:
+        return result
 
     # Background pause timer
     hass.async_create_background_task(
