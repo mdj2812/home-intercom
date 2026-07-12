@@ -155,10 +155,14 @@ class RecordView(HomeAssistantView):
         filepath = os.path.join(audio_dir, filename)
 
         if data[: len(WAV_MAGIC)] == WAV_MAGIC:
-            _rate, duration = _handle_wav_passthrough(data, filepath)
+            rate, duration = await hass.async_add_executor_job(
+                _handle_wav_passthrough, data, filepath
+            )
         else:
-            rate = int(request.query.get("rate", PCM_RATE))
-            duration = _handle_pcm_to_wav(data, rate, filepath)
+            rate_obj = int(request.query.get("rate", PCM_RATE))
+            duration = await hass.async_add_executor_job(
+                _handle_pcm_to_wav, data, rate_obj, filepath
+            )
 
         # Build public URL — served from HA's own domain at /local/home_intercom_audio/
         audio_url = f"/local/home_intercom_audio/{filename}"
@@ -171,7 +175,9 @@ class RecordView(HomeAssistantView):
             filename_chime = f"intercom_{target}_chime.wav"
             filepath_chime = os.path.join(audio_dir, filename_chime)
             try:
-                duration_with_chime = _concat_wavs(chime_path, filepath, filepath_chime)
+                duration_with_chime = await hass.async_add_executor_job(
+                    _concat_wavs, chime_path, filepath, filepath_chime
+                )
                 audio_url_with_chime = f"/local/home_intercom_audio/{filename_chime}"
             except Exception as exc:
                 _LOGGER.warning("Failed to prepend chime: %s", exc)
@@ -225,7 +231,7 @@ class StatusView(HomeAssistantView):
         # Query entity states via hass (no REST round-trip)
         status = {}
         for key, room in room_map.items():
-            entity = room.get("entity", "")
+            entity = room.get("entity_id", "")
             if not entity:
                 status[key] = "online"
                 continue
