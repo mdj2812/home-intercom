@@ -69,7 +69,7 @@ def _concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
 
 
 def _get_hass_data(hass: HomeAssistant) -> dict:
-    """Get integration data dict — guaranteed to exist after async_setup_entry."""
+    """Get integration data dict — guaranteed to exist after async_setup."""
     return hass.data.get(DOMAIN, {})
 
 

@@ -4,9 +4,7 @@ Registers HTTP views (HomeAssistantView) for the PWA frontend and API,
 serves static assets, and provides audio recording + playback to any
 media_player entity.
 
-Configuration:
-  - Config flow (preferred): HA UI → Settings → Devices & Services → Add
-  - YAML (legacy): home_intercom: { rooms: { key: { name, entity } } }
+Configuration: YAML only (home_intercom: { rooms: { key: { name, entity_id } } })
 """
 
 from __future__ import annotations
@@ -18,8 +16,7 @@ from pathlib import Path
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ENTITY_ID, CONF_NAME, Platform
+from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
@@ -27,16 +24,11 @@ from homeassistant.helpers.typing import ConfigType
 from .announce import handle_announce_service
 from .api import register_api_views
 from .const import DOMAIN
-from .player import play_announcement
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
-
-# Path to src directory (where intercom.html and static/ live)
 _INTEGRATION_DIR = Path(__file__).parent
 
-# YAML config schema (legacy fallback)
 ROOM_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): cv.string,
@@ -59,20 +51,21 @@ CONFIG_SCHEMA = vol.Schema(
 )
 
 
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """YAML-based setup for Home Intercom."""
+    room_map = await _load_room_config(hass, config)
+    await _setup(hass, room_map)
+    return True
+
+
 async def _load_room_config(
     hass: HomeAssistant,
     config: ConfigType | None = None,
-    entry: ConfigEntry | None = None,
 ) -> dict:
     """Load room configuration.
 
-    Priority: config entry (UI) > YAML config > rooms.json fallback.
+    Priority: YAML config > rooms.json fallback.
     """
-    # Config entry (from config flow)
-    if entry and entry.data.get("rooms"):
-        return dict(entry.data["rooms"])
-
-    # YAML config
     if config and DOMAIN in config and "rooms" in config[DOMAIN]:
         return dict(config[DOMAIN]["rooms"])
 
@@ -88,15 +81,12 @@ async def _load_room_config(
 
     result = await hass.async_add_executor_job(_read_json)
     if not result:
-        _LOGGER.warning("No room config found")
+        _LOGGER.warning("No room config found in YAML or rooms.json")
     return result
 
 
-async def _async_setup_integration(
-    hass: HomeAssistant,
-    room_map: dict,
-) -> None:
-    """Shared setup logic for both YAML and config entry paths."""
+async def _setup(hass: HomeAssistant, room_map: dict) -> None:
+    """Shared setup: register views, services, audio dir."""
     audio_dir = hass.config.path("www", "home_intercom_audio")
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].update({
@@ -106,42 +96,19 @@ async def _async_setup_integration(
 
     os.makedirs(audio_dir, exist_ok=True)
 
-    # Register HTTP API views (includes static file serving + PWA frontend)
+    # Register HTTP API views (PWA frontend + REST API)
     register_api_views(hass)
 
     # Register announce service
-    _register_services(hass, room_map)
+    _register_services(hass)
 
     _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
 
 
-def _register_services(hass: HomeAssistant, room_map: dict) -> None:
-    """Register home_intercom services."""
+def _register_services(hass: HomeAssistant) -> None:
+    """Register home_intercom.announce service."""
 
     async def _handle_announce(call: ServiceCall):
-        """Handle home_intercom.announce service call."""
         await handle_announce_service(hass, call)
 
     hass.services.async_register(DOMAIN, "announce", _handle_announce)
-
-
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """YAML-based setup (legacy fallback)."""
-    room_map = await _load_room_config(hass, config=config)
-    await _async_setup_integration(hass, room_map)
-    return True
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up from config entry (config flow)."""
-    room_map = await _load_room_config(hass, entry=entry)
-    await _async_setup_integration(hass, room_map)
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    return True
-
-
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    hass.services.async_remove(DOMAIN, "announce")
-    hass.data.pop(DOMAIN, None)
-    return True
