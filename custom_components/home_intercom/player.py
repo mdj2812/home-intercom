@@ -161,52 +161,28 @@ async def _call_play_media(
     entity_id: str,
     audio_url: str,
 ) -> PlayResult:
-    """Call media_player.play_media via REST API (matching developer tools)."""
+    """Call media_player.play_media for Xiaomi miot via async_call.
+
+    Key: media_content_type must NOT be 'music'/'audio' — xiaomi_miot
+    routes those to async_play_music (Xiaomi cloud music service).
+    Using non-recognized type triggers player_play_url (direct URL push).
+    """
     try:
-        from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
-        session = async_get_clientsession(hass)
-        internal_url = hass.config.internal_url or "http://127.0.0.1:8123"
-        api_url = f"{internal_url.rstrip('/')}/api/services/media_player/play_media"
-
-        async with session.post(
-            api_url,
-            json={
+        await hass.services.async_call(
+            "media_player",
+            "play_media",
+            {
                 "entity_id": entity_id,
                 "media_content_id": audio_url,
-                "media_content_type": "music",
-                "metadata": {
-                    "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-                    "browse_entity_id": entity_id,
-                },
+                "media_content_type": "url",
                 "announce": True,
             },
-            headers={"Authorization": f"Bearer {_get_token(hass)}"},
-        ) as resp:
-            if resp.status == 200:
-                return PlayResult(ok=True)
-            body = await resp.text()
-            _LOGGER.error("play_media failed %d: %s", resp.status, body[:200])
-            return PlayResult(ok=False, error=f"http_{resp.status}")
+            blocking=True,
+        )
+        return PlayResult(ok=True)
     except Exception as e:
-        _LOGGER.error("play_media call failed: %s", e)
-        return PlayResult(ok=False, error="call_failed")
-
-
-def _get_token(hass: HomeAssistant) -> str:
-    """Get HA long-lived access token for REST API auth."""
-    import os
-    # Priority: dedicated token file (set up during deployment)
-    token_path = os.path.join(hass.config.config_dir, "ha_access_token")
-    try:
-        with open(token_path, encoding="utf-8") as f:
-            tok = f.read().strip()
-            if tok:
-                return tok
-    except Exception:
-        pass
-    # Fallback: supervisor token (works for Hass.io add-ons)
-    return os.environ.get("SUPERVISOR_TOKEN", "")
+        _LOGGER.error("play_media failed for %s: %s", entity_id, e)
+        return PlayResult(ok=False, error="play_failed")
 
 
 async def _play_standard(
