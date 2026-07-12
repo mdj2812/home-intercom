@@ -164,8 +164,9 @@ class RecordView(HomeAssistantView):
                 _handle_pcm_to_wav, data, rate_obj, filepath
             )
 
-        # Build public URL — served from HA's own domain at /local/home_intercom_audio/
-        audio_url = f"/local/home_intercom_audio/{filename}"
+        # Build public URL — absolute URL needed for DLNA/MiOT players
+        base_url = hass.config.external_url or hass.config.internal_url or "http://homeassistant.local:8123"
+        audio_url = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename}"
 
         # Chime prepend (same logic as Flask version)
         chime_path = str(_INTEGRATION_DIR / "static" / "pre_announce.wav")
