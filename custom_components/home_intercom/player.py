@@ -163,18 +163,18 @@ async def _play_standard(
 ) -> PlayResult:
     """Play via media_player.play_media.
 
-    Uses metadata.navigateIds for Xiaomi miot compatibility.
+    Metadata structure matches HA UI developer tools format,
+    which Xiaomi miot requires for URL playback.
     """
     service_data: dict[str, Any] = {
         "entity_id": entity_id,
         "media_content_id": audio_url,
         "media_content_type": "music",
-        "extra": {
-            "metadata": {
-                "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-                "browse_entity_id": entity_id,
-            },
+        "metadata": {
+            "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
+            "browse_entity_id": entity_id,
         },
+        "announce": True,
     }
     try:
         await hass.services.async_call(
@@ -204,12 +204,11 @@ async def _play_with_timer(
         "entity_id": entity_id,
         "media_content_id": audio_url,
         "media_content_type": "music",
-        "extra": {
-            "metadata": {
-                "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-                "browse_entity_id": entity_id,
-            },
+        "metadata": {
+            "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
+            "browse_entity_id": entity_id,
         },
+        "announce": True,
     }
     try:
         await hass.services.async_call(
