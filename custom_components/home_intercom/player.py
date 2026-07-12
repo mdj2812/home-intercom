@@ -287,16 +287,39 @@ async def _auto_pause(
     duration: float,
     pause_buffer: float,
 ) -> None:
-    """Background task: wait for playback to finish, then pause."""
-    # Wait for playing state (up to 5s)
+    """Background task: wait for playback to finish, then pause.
+
+    Listens for state_changed events instead of fixed-duration sleep.
+    Falls back to duration-based timeout if state event never arrives.
+    """
+    from homeassistant.helpers.event import async_track_state_change_event
+    import asyncio
+
+    done = asyncio.Event()
+
+    def _on_state_change(event):
+        if event.data.get("entity_id") != entity_id:
+            return
+        new_state = event.data.get("new_state")
+        if new_state and new_state.state != "playing":
+            done.set()
+
+    # Wait up to 5s for playing, then listen for state change
     for _ in range(PLAYING_CONFIRM_RETRIES):
         state = hass.states.get(entity_id)
         if state and state.state == "playing":
             break
         await asyncio.sleep(STATE_POLL_INTERVAL)
 
-    # Sleep for duration + buffer
-    await asyncio.sleep(duration + pause_buffer)
+    unsub = async_track_state_change_event(hass, [entity_id], _on_state_change)
+
+    try:
+        # Wait for state change with duration-based fallback timeout
+        await asyncio.wait_for(done.wait(), timeout=duration + pause_buffer + 5)
+    except asyncio.TimeoutError:
+        pass  # fallback: just pause now
+    finally:
+        unsub()
 
     # Pause with retry
     for attempt in range(PAUSE_RETRIES):
