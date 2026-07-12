@@ -1,12 +1,8 @@
 # Minimal HA config for container smoke tests.
-# Only loads essentials — no default_config to speed up boot.
-homeassistant:
-  name: "Smoke Test"
-  unit_system: metric
+# default_config ensures all built-in deps (http, api, etc.) are available.
+# Logger levels kept low to speed up boot and reduce noise.
 
-frontend:
-http:
-  use_x_forwarded_for: true
+default_config:
 
 home_intercom:
   rooms:
@@ -18,3 +14,5 @@ logger:
   default: warning
   logs:
     custom_components.home_intercom: debug
+    homeassistant.components.http: warning
+    homeassistant.setup: warning
