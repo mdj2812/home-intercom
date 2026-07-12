@@ -168,7 +168,7 @@ async def _call_play_media(
         entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
         if entity is None:
             return PlayResult(ok=False, error="entity_not_found")
-        await entity.async_play_media("music", audio_url)
+        await entity.async_play_media("music", audio_url, announce=True)
         return PlayResult(ok=True)
     except Exception as e:
         _LOGGER.error("play_media failed for %s: %s", entity_id, e)
@@ -188,7 +188,7 @@ async def _play_standard(
         entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
         if entity is None:
             return PlayResult(ok=False, error="entity_not_found")
-        await entity.async_play_media("music", audio_url)
+        await entity.async_play_media("music", audio_url, announce=True)
         return PlayResult(ok=True)
     except Exception as e:
         _LOGGER.error("play_media failed for %s: %s", entity_id, e)
