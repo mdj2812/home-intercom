@@ -165,7 +165,6 @@ async def _call_play_media(
     try:
         # Call entity directly, bypassing hass.services.async_call
         # which bypasses HA core's service schema transformation.
-        _LOGGER.info("play_media: %s → %s", entity_id, audio_url)
         entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
         if entity is None:
             return PlayResult(ok=False, error="entity_not_found")
@@ -181,23 +180,15 @@ async def _play_standard(
     entity_id: str,
     audio_url: str,
 ) -> PlayResult:
-    """Play via media_player.play_media (announce=True).
+    """Play via entity.async_play_media directly.
 
     For modern players (HomePod, Chromecast) that handle announce correctly.
     """
-    service_data: dict[str, Any] = {
-        "entity_id": entity_id,
-        "media_content_id": audio_url,
-        "media_content_type": "music",
-        "announce": True,
-    }
     try:
-        await hass.services.async_call(
-            "media_player",
-            "play_media",
-            service_data,
-            blocking=True,
-        )
+        entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
+        if entity is None:
+            return PlayResult(ok=False, error="entity_not_found")
+        await entity.async_play_media("music", audio_url)
         return PlayResult(ok=True)
     except Exception as e:
         _LOGGER.error("play_media failed for %s: %s", entity_id, e)
