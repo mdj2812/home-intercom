@@ -164,19 +164,12 @@ async def _play_standard(
     """Play via media_player.play_media (announce=True).
 
     For modern players (HomePod, Chromecast) that handle announce correctly.
-    Xiaomi miot players need the navigateIds/browse_entity_id metadata.
     """
     service_data: dict[str, Any] = {
         "entity_id": entity_id,
         "media_content_id": audio_url,
         "media_content_type": "music",
-        "extra": {
-            "metadata": {
-                "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-                "browse_entity_id": entity_id,
-            },
-            "announce": True,
-        },
+        "announce": True,
     }
     try:
         await hass.services.async_call(
@@ -206,13 +199,7 @@ async def _play_with_timer(
         "entity_id": entity_id,
         "media_content_id": audio_url,
         "media_content_type": "music",
-        "extra": {
-            "metadata": {
-                "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
-                "browse_entity_id": entity_id,
-            },
-            "announce": True,
-        },
+        "announce": True,
     }
     try:
         await hass.services.async_call(
