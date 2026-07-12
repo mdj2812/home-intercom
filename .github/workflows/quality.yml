@@ -31,16 +31,17 @@ jobs:
 
       - name: Ruff lint
         run: |
-          ruff check src/ tests/
-          ruff format --check src/ tests/
+          ruff check src/ tests/ custom_components/
+          ruff format --check src/ tests/ custom_components/
 
       - name: Stylelint CSS
         run: |
           npm install -g stylelint@17 stylelint-config-standard@40
-          stylelint src/static/*.css
+          stylelint custom_components/home_intercom/static/*.css
 
       - name: Pytest with coverage
         run: |
           python -m pytest tests/ -v --tb=short \
             --cov=src \
+            --cov=custom_components \
             --cov-report=term-missing
