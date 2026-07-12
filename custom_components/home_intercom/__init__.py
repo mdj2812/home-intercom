@@ -59,7 +59,11 @@ CONFIG_SCHEMA = vol.Schema(
 )
 
 
-def _load_room_config(config: ConfigType | None = None, entry: ConfigEntry | None = None) -> dict:
+async def _load_room_config(
+    hass: HomeAssistant,
+    config: ConfigType | None = None,
+    entry: ConfigEntry | None = None,
+) -> dict:
     """Load room configuration.
 
     Priority: config entry (UI) > YAML config > rooms.json fallback.
@@ -74,12 +78,18 @@ def _load_room_config(config: ConfigType | None = None, entry: ConfigEntry | Non
 
     # Fallback: rooms.json (legacy container mode)
     rooms_path = _INTEGRATION_DIR / "rooms.json"
-    try:
-        with open(rooms_path, encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+
+    def _read_json() -> dict:
+        try:
+            with open(rooms_path, encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    result = await hass.async_add_executor_job(_read_json)
+    if not result:
         _LOGGER.warning("No room config found")
-        return {}
+    return result
 
 
 async def _async_setup_integration(
@@ -117,14 +127,14 @@ def _register_services(hass: HomeAssistant, room_map: dict) -> None:
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """YAML-based setup (legacy fallback)."""
-    room_map = _load_room_config(config=config)
+    room_map = await _load_room_config(hass, config=config)
     await _async_setup_integration(hass, room_map)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up from config entry (config flow)."""
-    room_map = _load_room_config(entry=entry)
+    room_map = await _load_room_config(hass, entry=entry)
     await _async_setup_integration(hass, room_map)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
