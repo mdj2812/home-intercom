@@ -161,12 +161,7 @@ async def _call_play_media(
     entity_id: str,
     audio_url: str,
 ) -> PlayResult:
-    """Call media_player.play_media for Xiaomi miot via async_call.
-
-    Key: media_content_type must NOT be 'music'/'audio' — xiaomi_miot
-    routes those to async_play_music (Xiaomi cloud music service).
-    Using non-recognized type triggers player_play_url (direct URL push).
-    """
+    """Call media_player.play_media — standard interface, matching dev tools."""
     try:
         await hass.services.async_call(
             "media_player",
@@ -174,7 +169,7 @@ async def _call_play_media(
             {
                 "entity_id": entity_id,
                 "media_content_id": audio_url,
-                "media_content_type": "url",
+                "media_content_type": "music",
                 "announce": True,
             },
             blocking=True,
