@@ -165,6 +165,7 @@ async def _call_play_media(
     try:
         # Call entity directly, bypassing hass.services.async_call
         # which bypasses HA core's service schema transformation.
+        _LOGGER.info("play_media: %s → %s", entity_id, audio_url)
         entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
         if entity is None:
             return PlayResult(ok=False, error="entity_not_found")
