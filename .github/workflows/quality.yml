@@ -44,3 +44,20 @@ jobs:
           python -m pytest tests/ -v --tb=short \
             --cov=src \
             --cov-report=term-missing
+
+  docker-smoke:
+    name: Docker Container Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: home-intercom:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run Docker smoke test
+        run: bash tests/docker-smoke/run.sh --skip-build
