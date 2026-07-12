@@ -19,8 +19,6 @@ jobs:
 
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
-        with:
-          path: custom_components
 
   syntax:
     name: Python Syntax Check

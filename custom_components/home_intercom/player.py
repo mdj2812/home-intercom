@@ -10,14 +10,11 @@ Three-tier auto-stop strategy (unchanged from container version):
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import logging
-import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant
-
-from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,9 +101,7 @@ async def play_announcement(
 
     # Tier 1: Music Assistant
     if _is_ma_player(attrs):
-        return await _play_ma_announcement(
-            hass, entity_id, audio_url, announce_volume
-        )
+        return await _play_ma_announcement(hass, entity_id, audio_url, announce_volume)
 
     # Guard: entity must support play_media
     if not _has_play_media(attrs):
@@ -125,7 +120,9 @@ async def play_announcement(
         return await _play_standard(hass, entity_id, play_url, announce_volume=announce_volume)
 
     # Tier 3: Basic player with pause timer
-    return await _play_with_timer(hass, entity_id, play_url, play_duration, pause_buffer, announce_volume=announce_volume)
+    return await _play_with_timer(
+        hass, entity_id, play_url, play_duration, pause_buffer, announce_volume=announce_volume
+    )
 
 
 async def _play_ma_announcement(
@@ -181,7 +178,8 @@ async def _call_play_media(
                 saved_volume = cv
                 target = announce_volume / 100.0
                 await hass.services.async_call(
-                    "media_player", "volume_set",
+                    "media_player",
+                    "volume_set",
                     {"entity_id": entity_id, "volume_level": target},
                     blocking=True,
                 )
@@ -205,15 +203,20 @@ async def _play_standard(
     For modern players (HomePod, Chromecast) that handle announce correctly.
     Volume restore via state change listener.
     """
-    result, saved_volume = await _call_play_media(hass, entity_id, audio_url, announce_volume=announce_volume)
+    result, saved_volume = await _call_play_media(
+        hass, entity_id, audio_url, announce_volume=announce_volume
+    )
     if not result.ok:
         return result
 
     # Schedule volume restore when playback finishes
     if saved_volume is not None:
+
         async def _restore_on_change():
-            from homeassistant.helpers.event import async_track_state_change_event
             import asyncio as _asyncio
+
+            from homeassistant.helpers.event import async_track_state_change_event
+
             done_ev = _asyncio.Event()
 
             def _cb(event):
@@ -225,14 +228,16 @@ async def _play_standard(
             unsub = async_track_state_change_event(hass, [entity_id], _cb)
             try:
                 await _asyncio.wait_for(done_ev.wait(), timeout=30)
-            except _asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             finally:
                 unsub()
             await hass.services.async_call(
-                "media_player", "volume_set",
+                "media_player",
+                "volume_set",
                 {"entity_id": entity_id, "volume_level": saved_volume},
             )
+
         hass.async_create_background_task(
             _restore_on_change(), f"home_intercom_restore_vol_{entity_id}"
         )
@@ -253,7 +258,9 @@ async def _play_with_timer(
 
     For basic players (Xiaomi via miot) that need manual pause after playback.
     """
-    result, saved_volume = await _call_play_media(hass, entity_id, audio_url, announce_volume=announce_volume)
+    result, saved_volume = await _call_play_media(
+        hass, entity_id, audio_url, announce_volume=announce_volume
+    )
     if not result.ok:
         return result
 
@@ -278,8 +285,9 @@ async def _auto_pause(
     Falls back to duration-based timeout if state event never arrives.
     Restores original volume after pausing (if volume was boosted).
     """
-    from homeassistant.helpers.event import async_track_state_change_event
     import asyncio
+
+    from homeassistant.helpers.event import async_track_state_change_event
 
     done = asyncio.Event()
 
@@ -302,7 +310,7 @@ async def _auto_pause(
     try:
         # Wait for state change with duration-based fallback timeout
         await asyncio.wait_for(done.wait(), timeout=duration + pause_buffer + 5)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         pass  # fallback: just pause now
     finally:
         unsub()
@@ -323,11 +331,10 @@ async def _auto_pause(
 
     # Restore volume if it was boosted
     if saved_volume is not None:
-        try:
+        with contextlib.suppress(Exception):
             await hass.services.async_call(
-                "media_player", "volume_set",
+                "media_player",
+                "volume_set",
                 {"entity_id": entity_id, "volume_level": saved_volume},
                 blocking=True,
             )
-        except Exception:
-            pass

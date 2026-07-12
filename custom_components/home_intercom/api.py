@@ -11,7 +11,6 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import wave
@@ -39,8 +38,6 @@ def _guess_base_url(request: web.Request) -> str:
     return f"{scheme}://{host}"
 
 
-
-
 def _concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
     """Prepend chime WAV to audio WAV. Returns total duration (seconds)."""
     import shutil
@@ -60,8 +57,12 @@ def _concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
     if (chime_rate, chime_width, chime_channels) != (audio_rate, audio_width, audio_channels):
         _LOGGER.warning(
             "chime/audio format mismatch (chime=%dHz/%dB/%dch, audio=%dHz/%dB/%dch) — skipping chime",
-            chime_rate, chime_width, chime_channels,
-            audio_rate, audio_width, audio_channels,
+            chime_rate,
+            chime_width,
+            chime_channels,
+            audio_rate,
+            audio_width,
+            audio_channels,
         )
         shutil.copy2(audio_path, output_path)
         return len(audio_frames) / (audio_rate * audio_width)
@@ -147,9 +148,7 @@ class RecordView(HomeAssistantView):
         if target == "all":
             targets = [(k, v) for k, v in room_map.items() if v.get("entity_id")]
             if not targets:
-                return web.json_response(
-                    {"ok": False, "error": "no rooms configured"}, status=500
-                )
+                return web.json_response({"ok": False, "error": "no rooms configured"}, status=500)
         else:
             room = room_map.get(target)
             if not room or not room.get("entity_id"):
@@ -177,11 +176,7 @@ class RecordView(HomeAssistantView):
 
         # Build public URL — absolute URL needed for DLNA/MiOT players.
         # Priority: configured external_url > internal_url > request host.
-        base_url = (
-            hass.config.external_url
-            or hass.config.internal_url
-            or _guess_base_url(request)
-        )
+        base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
         audio_url = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename}"
 
         # Chime prepend (same logic as Flask version)
@@ -195,7 +190,9 @@ class RecordView(HomeAssistantView):
                 duration_with_chime = await hass.async_add_executor_job(
                     _concat_wavs, chime_path, filepath, filepath_chime
                 )
-                audio_url_with_chime = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename_chime}"
+                audio_url_with_chime = (
+                    f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename_chime}"
+                )
             except Exception as exc:
                 _LOGGER.warning("Failed to prepend chime: %s", exc)
 
@@ -283,6 +280,7 @@ class VersionView(HomeAssistantView):
         def _read_version() -> str:
             try:
                 import json as _json
+
                 with open(manifest_path, encoding="utf-8") as f:
                     return _json.load(f).get("version", "dev")
             except (FileNotFoundError, Exception):

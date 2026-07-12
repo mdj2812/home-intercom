@@ -12,8 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import DOMAIN
 from .player import PlayResult, play_announcement
@@ -80,7 +79,6 @@ async def _generate_tts_audio(
         )
 
         # Verify by making a test call — tts.speak works via entity
-        tts_service = tts_platform.replace(".", "_")
         await hass.services.async_call(
             "tts",
             "speak",

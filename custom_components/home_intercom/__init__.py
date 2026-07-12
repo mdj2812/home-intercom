@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 
 import voluptuous as vol
-
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
@@ -33,9 +32,7 @@ ROOM_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): cv.string,
         vol.Required(CONF_ENTITY_ID): cv.string,
-        vol.Optional("announce_volume"): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=100)
-        ),
+        vol.Optional("announce_volume"): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
     }
 )
 
@@ -89,10 +86,12 @@ async def _setup(hass: HomeAssistant, room_map: dict) -> None:
     """Shared setup: register views, services, audio dir."""
     audio_dir = hass.config.path("www", "home_intercom_audio")
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN].update({
-        "rooms": room_map,
-        "audio_dir": audio_dir,
-    })
+    hass.data[DOMAIN].update(
+        {
+            "rooms": room_map,
+            "audio_dir": audio_dir,
+        }
+    )
 
     os.makedirs(audio_dir, exist_ok=True)
 

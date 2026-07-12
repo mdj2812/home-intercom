@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r req
 
 # Docker-specific files
 COPY src/intercom_server.py src/ha_client.py src/rooms.json ./
-COPY src/manifest.json ./static/
+COPY src/site.webmanifest ./static/manifest.json
 COPY docker/.docker-image /app/.docker-image
 
 # Shared files — canonical source in custom_components/
