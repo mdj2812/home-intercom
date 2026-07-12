@@ -3,7 +3,7 @@
   "name": "Home Intercom",
   "codeowners": ["@mdj2812"],
   "config_flow": false,
-  "dependencies": ["http"],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/mdj2812/home-intercom",
   "integration_type": "service",
   "iot_class": "local_push",

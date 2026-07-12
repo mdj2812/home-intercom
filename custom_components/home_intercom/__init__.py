@@ -56,7 +56,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def _setup(hass: HomeAssistant, room_map: dict) -> None:
-    """Shared setup: register views, services, audio dir."""
+    """Shared setup: register views, services, audio dir, sidebar panel."""
     audio_dir = hass.config.path(WWW_DIR, AUDIO_SUBDIR)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].update(
@@ -70,6 +70,7 @@ async def _setup(hass: HomeAssistant, room_map: dict) -> None:
 
     register_api_views(hass)
     _register_services(hass)
+    _register_panel(hass)
 
     _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
 
@@ -81,3 +82,17 @@ def _register_services(hass: HomeAssistant) -> None:
         await handle_announce_service(hass, call)
 
     hass.services.async_register(DOMAIN, "announce", _handle_announce)
+
+
+def _register_panel(hass: HomeAssistant) -> None:
+    """Register sidebar panel via async_register_built_in_panel."""
+    from homeassistant.components.frontend import async_register_built_in_panel
+
+    async_register_built_in_panel(
+        hass,
+        DOMAIN,
+        sidebar_title="Home Intercom",
+        sidebar_icon="mdi:intercom",
+        frontend_url_path=DOMAIN,
+        require_admin=False,
+    )
