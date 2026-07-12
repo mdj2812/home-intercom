@@ -19,7 +19,7 @@ announce:
           multiline: true
     volume:
       name: Volume
-      description: Playback volume (0-100). Only applies to Music Assistant players.
+      description: Playback volume boost (1-100). Boosts volume during announcement then restores.
       required: false
       default: 50
       selector:
