@@ -231,21 +231,22 @@ class StatusView(HomeAssistantView):
         # Query entity states via hass (no REST round-trip)
         status = {}
         for key, room in room_map.items():
-            entity = room.get("entity_id", "")
-            if not entity:
-                status[key] = "online"
+            entity_id = room.get("entity_id", "")
+            if not entity_id:
+                status[key] = {"status": "online", "friendly_name": room.get("name", key)}
                 continue
-            state = hass.states.get(entity)
+            state = hass.states.get(entity_id)
             if not state or state.state == "unavailable":
-                status[key] = "unavailable"
+                status[key] = {"status": "unavailable", "friendly_name": ""}
                 continue
             # Check supported_features
             attrs = state.attributes
+            friendly = attrs.get("friendly_name", entity_id)
             supported = attrs.get("supported_features", 0)
             if supported & (1 << 9):  # SUPPORT_PLAY_MEDIA
-                status[key] = "online"
+                status[key] = {"status": "online", "friendly_name": friendly}
             else:
-                status[key] = "no_play_media"
+                status[key] = {"status": "no_play_media", "friendly_name": friendly}
 
         return web.json_response(status)
 
