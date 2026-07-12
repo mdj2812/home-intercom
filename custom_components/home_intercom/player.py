@@ -170,6 +170,12 @@ async def _call_play_media(
                 "entity_id": entity_id,
                 "media_content_id": audio_url,
                 "media_content_type": "music",
+                "extra": {
+                    "metadata": {
+                        "navigateIds": [{}, {"media_content_type": "", "media_content_id": "__MANUAL_ENTRY__"}],
+                        "browse_entity_id": entity_id,
+                    },
+                },
             },
         )
         return PlayResult(ok=True)
