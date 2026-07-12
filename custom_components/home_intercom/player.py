@@ -122,10 +122,10 @@ async def play_announcement(
 
     # Tier 2: Modern player (supports repeat_set → assume announce=True works)
     if _has_repeat_set(attrs):
-        return await _play_standard(hass, entity_id, play_url)
+        return await _play_standard(hass, entity_id, play_url, announce_volume=announce_volume)
 
     # Tier 3: Basic player with pause timer
-    return await _play_with_timer(hass, entity_id, play_url, play_duration, pause_buffer)
+    return await _play_with_timer(hass, entity_id, play_url, play_duration, pause_buffer, announce_volume=announce_volume)
 
 
 async def _play_ma_announcement(
@@ -160,15 +160,46 @@ async def _call_play_media(
     hass: HomeAssistant,
     entity_id: str,
     audio_url: str,
+    *,
+    announce_volume: int | None = None,
 ) -> PlayResult:
-    """Call media_player.play_media — standard interface, matching dev tools."""
+    """Call entity.async_play_media directly with optional volume boost.
+
+    Saves current volume, sets announce volume if higher, restores after.
+    """
     try:
-        # Call entity directly, bypassing hass.services.async_call
-        # which bypasses HA core's service schema transformation.
         entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
         if entity is None:
             return PlayResult(ok=False, error="entity_not_found")
+
+        # Volume boost: save current → set announce volume
+        saved_volume = None
+        if announce_volume is not None and announce_volume > 0:
+            state = hass.states.get(entity_id)
+            cv = state.attributes.get("volume_level") if state else None
+            if cv is not None and cv * 100 < announce_volume:
+                saved_volume = cv
+                target = announce_volume / 100.0
+                await hass.services.async_call(
+                    "media_player", "volume_set",
+                    {"entity_id": entity_id, "volume_level": target},
+                    blocking=True,
+                )
+
         await entity.async_play_media("music", audio_url, announce=True)
+
+        # Schedule volume restore (non-blocking)
+        if saved_volume is not None:
+            async def _restore():
+                await asyncio.sleep(5)  # Let playback start before restoring
+                await hass.services.async_call(
+                    "media_player", "volume_set",
+                    {"entity_id": entity_id, "volume_level": saved_volume},
+                )
+            hass.async_create_background_task(
+                _restore(), f"home_intercom_restore_vol_{entity_id}"
+            )
+
         return PlayResult(ok=True)
     except Exception as e:
         _LOGGER.error("play_media failed for %s: %s", entity_id, e)
@@ -179,6 +210,8 @@ async def _play_standard(
     hass: HomeAssistant,
     entity_id: str,
     audio_url: str,
+    *,
+    announce_volume: int | None = None,
 ) -> PlayResult:
     """Play via entity.async_play_media directly.
 
@@ -188,7 +221,35 @@ async def _play_standard(
         entity = hass.data["entity_components"]["media_player"].get_entity(entity_id)
         if entity is None:
             return PlayResult(ok=False, error="entity_not_found")
+
+        # Volume boost: save current → set announce volume
+        saved_volume = None
+        if announce_volume is not None and announce_volume > 0:
+            state = hass.states.get(entity_id)
+            cv = state.attributes.get("volume_level") if state else None
+            if cv is not None and cv * 100 < announce_volume:
+                saved_volume = cv
+                target = announce_volume / 100.0
+                await hass.services.async_call(
+                    "media_player", "volume_set",
+                    {"entity_id": entity_id, "volume_level": target},
+                    blocking=True,
+                )
+
         await entity.async_play_media("music", audio_url, announce=True)
+
+        # Schedule volume restore (non-blocking)
+        if saved_volume is not None:
+            async def _restore():
+                await asyncio.sleep(5)
+                await hass.services.async_call(
+                    "media_player", "volume_set",
+                    {"entity_id": entity_id, "volume_level": saved_volume},
+                )
+            hass.async_create_background_task(
+                _restore(), f"home_intercom_restore_vol_{entity_id}"
+            )
+
         return PlayResult(ok=True)
     except Exception as e:
         _LOGGER.error("play_media failed for %s: %s", entity_id, e)
@@ -201,12 +262,14 @@ async def _play_with_timer(
     audio_url: str,
     duration: float,
     pause_buffer: float,
+    *,
+    announce_volume: int | None = None,
 ) -> PlayResult:
     """Play via media_player.play_media + background pause timer.
 
     For basic players (Xiaomi via miot) that need manual pause after playback.
     """
-    result = await _call_play_media(hass, entity_id, audio_url)
+    result = await _call_play_media(hass, entity_id, audio_url, announce_volume=announce_volume)
     if not result.ok:
         return result
 
