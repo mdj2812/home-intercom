@@ -5,6 +5,13 @@ serves static assets, and provides audio recording + playback to any
 media_player entity.
 
 Configuration: YAML only (home_intercom: { rooms: { key: { name, entity_id } } })
+
+Sidebar: add a panel_iframe entry in configuration.yaml:
+  panel_iframe:
+    intercom:
+      title: "Home Intercom"
+      icon: "mdi:bullhorn-outline"
+      url: "/home_intercom/panel"
 """
 
 from __future__ import annotations
@@ -56,7 +63,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def _setup(hass: HomeAssistant, room_map: dict) -> None:
-    """Shared setup: register views, services, audio dir, sidebar panel."""
+    """Shared setup: register views, services, audio dir."""
     audio_dir = hass.config.path(WWW_DIR, AUDIO_SUBDIR)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].update(
@@ -66,12 +73,10 @@ async def _setup(hass: HomeAssistant, room_map: dict) -> None:
         }
     )
 
-    # Offload filesystem operations to executor (lambda needed — kwarg support)
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
 
     register_api_views(hass)
     _register_services(hass)
-    _register_panel(hass)
 
     _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
 
@@ -83,21 +88,3 @@ def _register_services(hass: HomeAssistant) -> None:
         await handle_announce_service(hass, call)
 
     hass.services.async_register(DOMAIN, "announce", _handle_announce)
-
-
-def _register_panel(hass: HomeAssistant) -> None:
-    """Register sidebar panel via async_register_built_in_panel.
-
-    Must be called during async_setup before frontend phase completes.
-    """
-    # Import at call time — module is already loaded by the 'frontend' dependency
-    from homeassistant.components.frontend import async_register_built_in_panel
-
-    async_register_built_in_panel(
-        hass,
-        DOMAIN,
-        sidebar_title="Home Intercom",
-        sidebar_icon="mdi:intercom",
-        frontend_url_path=DOMAIN,
-        require_admin=False,
-    )
