@@ -239,11 +239,10 @@ class TestHAClientPlayAndAutoPause:
         mock_start.assert_called_once()
         assert result == {"ok": True}
 
-    @pytest.mark.skip(reason="Flaky mocking of threading.Thread.start across nested patches on Python 3.13")
     def test_play_failure_does_not_spawn_thread(self):
         with (
             patch("ha_client.HAWebSocketClient") as mock_ws,
-            patch("threading.Thread.start"),  # suppress WS bg thread
+            patch("threading.Thread") as mock_thread_class,
         ):
             mock_ws.return_value.ready = False
             client = HAClient("http://ha:8123", "tok")
@@ -253,11 +252,11 @@ class TestHAClientPlayAndAutoPause:
                 "urllib.request.urlopen",
                 side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
             ),
-            patch("threading.Thread.start") as mock_start,
+            patch("threading.Thread") as mock_thread_class,
         ):
             result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
-        mock_start.assert_not_called()
+        mock_thread_class.assert_not_called()
         assert result == {"ok": False, "error": "play_failed"}
 
 

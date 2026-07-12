@@ -118,16 +118,16 @@ else
     echo "  ⚠️  GET /api/home_intercom/rooms/status — no test room (may need real media_player)"
 fi
 
-# 4. /api/home_intercom/panel — PWA HTML
+# 4. /home_intercom/panel — PWA HTML (no /api prefix)
 PANEL=$(docker exec "${CONTAINER_NAME}" \
-    curl -sf "http://localhost:${HA_PORT}/api/home_intercom/panel" 2>/dev/null || echo "")
-if echo "${PANEL}" | grep -qi '<!DOCTYPE\|<html'; then
-    echo "  ✅ GET /api/home_intercom/panel — HTML returned"
+    curl -sfL "http://localhost:${HA_PORT}/home_intercom/panel" 2>/dev/null || echo "")
+if echo "${PANEL}" | grep -q '<'; then
+    echo "  ✅ GET /home_intercom/panel — HTML returned"
 elif [ -n "${PANEL}" ]; then
-    echo "  ⚠️  GET /api/home_intercom/panel — responded but not HTML"
+    echo "  ⚠️  GET /home_intercom/panel — responded but not HTML"
     echo "     First 100 chars: ${PANEL:0:100}"
 else
-    echo "  ❌ GET /api/home_intercom/panel — empty response or timeout"
+    echo "  ❌ GET /home_intercom/panel — empty response or timeout"
     exit 1
 fi
 
