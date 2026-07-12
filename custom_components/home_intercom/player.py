@@ -102,6 +102,10 @@ async def play_announcement(
 
     attrs = dict(state.attributes)
 
+    # Xiaomi miot speakers: use intelligent_speaker service (no wake-word trigger)
+    if entity_id.startswith("media_player.xiaomi_"):
+        return await _play_xiaomi_miot(hass, entity_id, audio_url)
+
     # Tier 1: Music Assistant
     if _is_ma_player(attrs):
         return await _play_ma_announcement(
@@ -154,6 +158,38 @@ async def _play_ma_announcement(
     except Exception as e:
         _LOGGER.error("MA announcement failed for %s: %s", entity_id, e)
         return PlayResult(ok=False, error="ma_failed")
+
+
+async def _play_xiaomi_miot(
+    hass: HomeAssistant,
+    entity_id: str,
+    audio_url: str,
+) -> PlayResult:
+    """Play audio on Xiaomi miot speakers via intelligent_speaker service.
+
+    Xiaomi speakers don't support announce mode in play_media — the audio
+    gets treated as a song and triggers the wake-word (小爱同学).
+    Use the xiaomi_miot.intelligent_speaker service instead, which streams
+    audio directly without disturbing the speaker state.
+    """
+    try:
+        await hass.services.async_call(
+            "xiaomi_miot",
+            "intelligent_speaker",
+            {
+                "entity_id": entity_id,
+                "text": "",
+                "execute": True,
+                "silent": False,
+                "audio": audio_url,
+                "tts": False,
+            },
+            blocking=True,
+        )
+        return PlayResult(ok=True)
+    except Exception as e:
+        _LOGGER.error("xiaomi_miot.intelligent_speaker failed for %s: %s", entity_id, e)
+        return PlayResult(ok=False, error="xiaomi_miot_failed")
 
 
 async def _play_standard(
