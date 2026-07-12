@@ -7,8 +7,6 @@ import urllib.error
 import urllib.request
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
 from ha_client import (
     PAUSE_RETRIES,
