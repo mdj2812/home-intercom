@@ -88,11 +88,44 @@ fi
 
 # ── Verify HTTP views registered ────────────────────────────
 echo "==> Checking API endpoints..."
+
+# 1. /api/home_intercom/version — returns version + pcm_rate
 if docker exec "${CONTAINER_NAME}" \
     curl -sf "http://localhost:${HA_PORT}/api/home_intercom/version" -o /dev/null 2>/dev/null; then
-    echo "  ✅ /api/home_intercom/version responds"
+    echo "  ✅ GET /api/home_intercom/version"
 else
-    echo "  ❌ /api/home_intercom/version not responding"
+    echo "  ❌ GET /api/home_intercom/version not responding"
+    exit 1
+fi
+
+# 2. /api/home_intercom/rooms — returns room configuration (public, no auth)
+ROOMS=$(docker exec "${CONTAINER_NAME}" \
+    curl -sf "http://localhost:${HA_PORT}/api/home_intercom/rooms" 2>/dev/null)
+if echo "${ROOMS}" | grep -q '"test"'; then
+    echo "  ✅ GET /api/home_intercom/rooms — test room found"
+else
+    echo "  ❌ GET /api/home_intercom/rooms — test room missing"
+    echo "     Response: ${ROOMS}"
+    exit 1
+fi
+
+# 3. /api/home_intercom/rooms/status — returns speaker status
+STATUS=$(docker exec "${CONTAINER_NAME}" \
+    curl -sf "http://localhost:${HA_PORT}/api/home_intercom/rooms/status" 2>/dev/null || echo "{}")
+if echo "${STATUS}" | grep -q '"test"'; then
+    echo "  ✅ GET /api/home_intercom/rooms/status — test room in response"
+else
+    echo "  ⚠️  GET /api/home_intercom/rooms/status — no test room (may need real media_player)"
+fi
+
+# 4. /api/home_intercom/panel — returns PWA frontend HTML
+PANEL=$(docker exec "${CONTAINER_NAME}" \
+    curl -sf "http://localhost:${HA_PORT}/api/home_intercom/panel" 2>/dev/null || echo "")
+if echo "${PANEL}" | grep -qi '<!DOCTYPE html>'; then
+    echo "  ✅ GET /api/home_intercom/panel — HTML returned"
+else
+    echo "  ❌ GET /api/home_intercom/panel — not HTML"
+    echo "     First 100 chars: ${PANEL:0:100}"
     exit 1
 fi
 
