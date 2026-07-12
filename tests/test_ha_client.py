@@ -240,7 +240,7 @@ class TestHAClientPlayAndAutoPause:
     def test_play_failure_does_not_spawn_thread(self):
         with (
             patch("ha_client.HAWebSocketClient") as mock_ws,
-            patch("threading.Thread") as mock_thread_class,
+            patch("ha_client.threading.Thread") as mock_thread_class,
         ):
             mock_ws.return_value.ready = False
             client = HAClient("http://ha:8123", "tok")
@@ -250,7 +250,7 @@ class TestHAClientPlayAndAutoPause:
                 "urllib.request.urlopen",
                 side_effect=urllib.error.HTTPError("url", 500, "err", {}, None),
             ),
-            patch("threading.Thread") as mock_thread_class,
+            patch("ha_client.threading.Thread") as mock_thread_class,
         ):
             result = client.play_announcement("media_player.test", "http://ha/audio/test.wav", 2.0)
 
