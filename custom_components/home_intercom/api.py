@@ -316,12 +316,19 @@ class PanelView(HomeAssistantView):
         html_path = _INTEGRATION_DIR / "intercom.html"
         try:
             html = await request.app["hass"].async_add_executor_job(
-                html_path.read_text, encoding="utf-8"
+                lambda: html_path.read_text(encoding="utf-8")
             )
         except FileNotFoundError:
             return web.Response(
                 text="<h1>Home Intercom</h1><p>Frontend not found</p>",
                 content_type="text/html",
+            )
+        except Exception as exc:
+            _LOGGER.exception("PanelView failed")
+            return web.Response(
+                text=f"<h1>500 Internal Server Error</h1><p>{exc}</p>",
+                content_type="text/html",
+                status=500,
             )
 
         # Rewrite static asset paths for HA panel context.
