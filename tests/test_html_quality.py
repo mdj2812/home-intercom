@@ -9,8 +9,8 @@ import tempfile
 
 import pytest
 
-HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "intercom.html")
-I18N_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "static", "i18n.js")
+HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "custom_components", "home_intercom", "intercom.html")
+I18N_PATH = os.path.join(os.path.dirname(__file__), "..", "custom_components", "home_intercom", "static", "i18n.js")
 
 # All translation keys required in both zh-CN and en — single source of truth
 I18N_REQUIRED_KEYS = [
@@ -64,7 +64,7 @@ def _extract_inline_js(html):
 
 
 class TestHtmlStructure:
-    CSS_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "static", "intercom.css")
+    CSS_PATH = os.path.join(os.path.dirname(__file__), "..", "custom_components", "home_intercom", "static", "intercom.css")
 
     def test_has_doctype(self, html_content):
         assert html_content.strip().startswith("<!DOCTYPE html>")
@@ -227,7 +227,7 @@ class TestDomConsistency:
 
     def test_unavailable_css_exists(self):
         """CSS must have .room-card.unavailable with pointer-events: none."""
-        css_path = os.path.join(os.path.dirname(__file__), "..", "src", "static", "intercom.css")
+        css_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "home_intercom", "static", "intercom.css")
         with open(css_path) as f:
             css = f.read()
         assert ".room-card.unavailable" in css
@@ -295,7 +295,7 @@ class TestI18N:
 
 class TestManifestAndIcons:
     def test_manifest_json_valid(self):
-        manifest_path = os.path.join(os.path.dirname(__file__), "..", "src", "manifest.json")
+        manifest_path = os.path.join(os.path.dirname(__file__), "..", "src", "site.webmanifest")
 
         with open(manifest_path) as f:
             manifest = json.load(f)
@@ -305,7 +305,7 @@ class TestManifestAndIcons:
         assert len(manifest["icons"]) > 0
 
     def test_icon_files_exist(self):
-        static_dir = os.path.join(os.path.dirname(__file__), "..", "src", "static")
+        static_dir = os.path.join(os.path.dirname(__file__), "..", "custom_components", "home_intercom", "static")
         expected = [
             "icon-192.png",
             "icon-512.png",
