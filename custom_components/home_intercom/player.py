@@ -169,11 +169,7 @@ async def _call_play_media(
             {
                 "entity_id": entity_id,
                 "media_content_id": audio_url,
-                # Empty type skips miot's music/audio check →
-                # falls through to player_play_url (direct URL push),
-                # same path dev tools uses after announce transform.
-                "media_content_type": "",
-                "announce": True,
+                "media_content_type": "music",
             },
         )
         return PlayResult(ok=True)
