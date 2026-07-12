@@ -216,7 +216,7 @@ async function loadRooms() {
   GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
   try {
-    const resp = await fetch((window.API_BASE || '') + '/rooms');
+    const resp = await fetch((window.API_BASE || '') + '/rooms', { credentials: 'same-origin' });
     const rooms = await resp.json();
     for (const [key, room] of Object.entries(rooms)) {
       window._ROOM_DATA[key] = room;
@@ -299,7 +299,9 @@ async function processAndSend() {
     }
 
     const resp = await fetch(RECORD_URL + '?target=' + currentTarget + '&rate=' + TARGET_RATE, {
-      method: 'POST', body: new Blob([new Uint8Array(pcm.buffer, 0, pcm.byteLength)]),
+      method: 'POST',
+      credentials: 'same-origin',
+      body: new Blob([new Uint8Array(pcm.buffer, 0, pcm.byteLength)]),
     });
 
     if (resp.ok) {
@@ -347,7 +349,7 @@ async function processAndSend() {
 
 async function pollSpeakerStatus() {
   try {
-    const resp = await fetch((window.API_BASE || '') + '/rooms/status');
+    const resp = await fetch((window.API_BASE || '') + '/rooms/status', { credentials: 'same-origin' });
     if (!resp.ok) throw new Error('status unavailable');
     const status = await resp.json();
     if (status.error) throw new Error(status.error);
@@ -362,7 +364,7 @@ loadRooms().then(() => pollSpeakerStatus());
 setInterval(pollSpeakerStatus, 30000);
 
 // Show version number + fetch server config
-fetch((window.API_BASE || '') + '/version').then(r => r.json()).then(d => {
+fetch((window.API_BASE || '') + '/version', { credentials: 'same-origin' }).then(r => r.json()).then(d => {
   document.getElementById('ver').textContent = d.version;
   if (d.pcm_rate) TARGET_RATE = d.pcm_rate;
 }).catch(() => {
