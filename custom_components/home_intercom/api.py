@@ -25,9 +25,20 @@ from .const import DOMAIN, PCM_BPS, PCM_RATE, WAV_HEADER_SIZE, WAV_MAGIC
 from .player import play_announcement
 
 _LOGGER = logging.getLogger(__name__)
-
-# Path to the integration directory (where PWA frontend and static/ live)
 _INTEGRATION_DIR = Path(__file__).parent
+
+
+def _guess_base_url(request: web.Request) -> str:
+    """Guess the HA base URL from the incoming request.
+
+    Uses X-Forwarded-Proto for reverse-proxy setups.
+    Falls back to request scheme + host.
+    """
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    host = request.host
+    return f"{scheme}://{host}"
+
+
 
 
 def _concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
@@ -164,8 +175,13 @@ class RecordView(HomeAssistantView):
                 _handle_pcm_to_wav, data, rate_obj, filepath
             )
 
-        # Build public URL — absolute URL needed for DLNA/MiOT players
-        base_url = hass.config.external_url or hass.config.internal_url or "http://192.168.99.4:8123"
+        # Build public URL — absolute URL needed for DLNA/MiOT players.
+        # Priority: configured external_url > internal_url > request host.
+        base_url = (
+            hass.config.external_url
+            or hass.config.internal_url
+            or _guess_base_url(request)
+        )
         audio_url = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename}"
 
         # Chime prepend (same logic as Flask version)
