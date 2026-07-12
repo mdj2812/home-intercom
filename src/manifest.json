@@ -1,0 +1,13 @@
+{
+  "name": "家庭广播",
+  "short_name": "广播",
+  "description": "家庭广播对讲系统",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#f39c12",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
