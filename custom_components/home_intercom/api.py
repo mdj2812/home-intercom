@@ -219,7 +219,7 @@ class RecordView(HomeAssistantView):
                     {"entity_id": tgt_room["entity_id"], "error": result.error or "unknown"}
                 )
 
-        name = room_map[target]["name"] if target != "all" else "全部"
+        name = room_map[target]["name"] if target != "all" else "All Rooms"
         _LOGGER.info("played on %d/%d rooms for %s", ok_count, len(targets), name)
 
         return web.json_response(
