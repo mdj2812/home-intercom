@@ -33,9 +33,8 @@ class TestStaticRoutes:
         assert "living" in data
         assert data["living"]["name"] == "Living Room"
 
-    @pytest.mark.skip(reason="Static files are in custom_components/, Docker copies at build time")
     def test_static_icon_192(self, client):
-        """icon-192.png served from static/ (copied from custom_components/ in Docker)."""
+        """icon-192.png served from static/ (symlinked from custom_components/)."""
         resp = client.get("/static/icon-192.png")
         assert resp.status_code == 200
         assert resp.content_length > 0
