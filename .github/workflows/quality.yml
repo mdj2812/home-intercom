@@ -1,8 +1,6 @@
 name: Code Quality
 
 on:
-  push:
-    branches: [main, 'feat/**', 'fix/**']
   pull_request:
     branches: [main]
 
@@ -31,16 +29,33 @@ jobs:
 
       - name: Ruff lint
         run: |
-          ruff check src/ tests/
-          ruff format --check src/ tests/
+          ruff check src/ tests/ custom_components/
+          ruff format --check src/ tests/ custom_components/
 
       - name: Stylelint CSS
         run: |
           npm install -g stylelint@17 stylelint-config-standard@40
-          stylelint src/static/*.css
+          stylelint custom_components/home_intercom/static/*.css
 
       - name: Pytest with coverage
         run: |
           python -m pytest tests/ -v --tb=short \
             --cov=src \
             --cov-report=term-missing
+
+  docker-smoke:
+    name: Docker Container Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: home-intercom:ci
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run Docker smoke test
+        run: bash tests/docker-smoke/run.sh --skip-build

@@ -1,0 +1,29 @@
+announce:
+  name: Announce
+  description: Trigger an intercom announcement to one or more rooms.
+  fields:
+    target:
+      name: Target Room
+      description: Room key (e.g. "living") or "all" for all rooms.
+      required: true
+      example: "living"
+      selector:
+        text: {}
+    url:
+      name: Audio URL
+      description: URL to a WAV audio file.
+      required: true
+      example: "http://192.168.1.100:8123/local/home_intercom_audio/intercom_living.wav"
+      selector:
+        text: {}
+    volume:
+      name: Volume
+      description: Playback volume boost (1-100). Boosts volume during announcement then restores.
+      required: false
+      default: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 5
+          mode: slider

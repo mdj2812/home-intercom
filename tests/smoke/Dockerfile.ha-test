@@ -1,0 +1,16 @@
+# Smoke-test HA container with Home Intercom custom component pre-installed.
+# Uses the official HA Core Docker image.
+
+FROM ghcr.io/home-assistant/home-assistant:stable
+
+# Ensure curl is available for health-check + API calls
+RUN apk add --no-cache curl
+
+# Copy minimal HA config
+COPY tests/smoke/configuration.yaml /config/configuration.yaml
+
+# Copy the custom component
+COPY custom_components/home_intercom/ /config/custom_components/home_intercom/
+
+# Ensure correct owner
+RUN chmod -R 755 /config/custom_components/home_intercom/

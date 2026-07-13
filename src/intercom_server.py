@@ -4,9 +4,10 @@
 import json
 import os
 import sys
-import wave
 
+from const import PCM_RATE, WAV_HEADER_SIZE
 from flask import Flask, jsonify, request, send_from_directory
+from shared import concat_wavs, handle_pcm_to_wav, handle_wav_passthrough, is_wav
 
 from ha_client import DEFAULT_STATE_TIMEOUT, HAClient
 
@@ -48,10 +49,6 @@ STATE_TIMEOUT = _parse_state_timeout()
 
 haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER, state_timeout=STATE_TIMEOUT)
 
-PCM_RATE = 16000  # target sample rate (Hz) for Xiaomi speaker WAV output
-PCM_BPS = 2  # 16-bit audio = 2 bytes per sample
-WAV_MAGIC = b"RIFF"
-WAV_HEADER_SIZE = 44  # RIFF(12) + fmt(24) + data(8) = minimum valid WAV header
 CHIME_WAV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "pre_announce.wav")
 
 # ——— Version ———
@@ -74,7 +71,12 @@ def index():
 
 
 @app.route("/rooms.json")
-def rooms():
+def rooms_json():
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
+
+
+@app.route("/rooms")
+def rooms_alias():
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 
 
@@ -101,88 +103,6 @@ def rooms_status():
 @app.route("/version")
 def version():
     return jsonify({"version": VERSION, "pcm_rate": PCM_RATE})
-
-
-def _handle_wav_passthrough(data, filepath):
-    """ESP32 hardware button → complete WAV file, write as-is.
-
-    Returns (sample_rate, duration_seconds).
-    """
-    with open(filepath, "wb") as f:
-        f.write(data)
-    with wave.open(filepath, "rb") as wf:
-        rate = wf.getframerate()
-        nframes = wf.getnframes()
-        duration = nframes / rate
-    app.logger.info(
-        f"[intercom] WAV passthrough {len(data)}B, "
-        f"{rate}Hz, {wf.getnchannels()}ch, {wf.getsampwidth() * 8}bit, {duration:.1f}s"
-    )
-    return rate, duration
-
-
-def _handle_pcm_to_wav(data, rate, filepath):
-    """Raw 16-bit mono PCM → write WAV file with correct header.
-
-    Returns duration_seconds.
-    """
-    with wave.open(filepath, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(PCM_BPS)
-        wf.setframerate(rate)
-        wf.writeframes(data)
-    duration = len(data) / (rate * PCM_BPS)
-    file_size = os.path.getsize(filepath)
-    app.logger.info(
-        f"[intercom] WAV written: {os.path.basename(filepath)} "
-        f"({file_size}B, {duration:.1f}s, {rate}Hz)"
-    )
-    return duration
-
-
-def _concat_wavs(chime_path, audio_path, output_path):
-    """Prepend chime WAV to audio WAV. Returns total duration (seconds).
-
-    Reads chime + audio, writes combined to output_path.
-    Both files must have the same sample rate, channels, and sample width.
-    """
-    with wave.open(chime_path, "rb") as wf_chime:
-        chime_rate = wf_chime.getframerate()
-        chime_frames = wf_chime.readframes(wf_chime.getnframes())
-        chime_width = wf_chime.getsampwidth()
-        chime_channels = wf_chime.getnchannels()
-
-    with wave.open(audio_path, "rb") as wf_audio:
-        audio_rate = wf_audio.getframerate()
-        audio_frames = wf_audio.readframes(wf_audio.getnframes())
-        audio_width = wf_audio.getsampwidth()
-        audio_channels = wf_audio.getnchannels()
-
-    # Guard: chime and audio must be compatible
-    if (chime_rate, chime_width, chime_channels) != (audio_rate, audio_width, audio_channels):
-        app.logger.warning(
-            f"[intercom] chime/audio format mismatch "
-            f"(chime={chime_rate}Hz/{chime_width}B/{chime_channels}ch, "
-            f"audio={audio_rate}Hz/{audio_width}B/{audio_channels}ch) — skipping chime"
-        )
-        # Copy original audio so output_path always exists (avoids 404)
-        import shutil
-
-        shutil.copy2(audio_path, output_path)
-        return len(audio_frames) / (audio_rate * audio_width)
-
-    # Write combined
-    total_frames = (len(chime_frames) + len(audio_frames)) // audio_width
-    duration = total_frames / audio_rate
-
-    with wave.open(output_path, "wb") as wf_out:
-        wf_out.setnchannels(audio_channels)
-        wf_out.setsampwidth(audio_width)
-        wf_out.setframerate(audio_rate)
-        wf_out.writeframes(chime_frames + audio_frames)
-
-    app.logger.info(f"[intercom] chime prepended ({duration:.1f}s total)")
-    return duration
 
 
 @app.route("/record", methods=["POST"])
@@ -214,16 +134,16 @@ def record():
     filename = f"intercom_{target}.wav"
     filepath = os.path.join(AUDIO_DIR, filename)
 
-    if data[: len(WAV_MAGIC)] == WAV_MAGIC:
-        _rate, duration = _handle_wav_passthrough(data, filepath)
+    if is_wav(data):
+        _rate, duration = handle_wav_passthrough(data, filepath)
     else:
         rate = int(request.args.get("rate", PCM_RATE))
-        duration = _handle_pcm_to_wav(data, rate, filepath)
+        duration = handle_pcm_to_wav(data, rate, filepath)
 
     # Prepend chime — creates a copy with chime for standard players
     filename_chime = f"intercom_{target}_chime.wav"
     filepath_chime = os.path.join(AUDIO_DIR, filename_chime)
-    duration_with_chime = _concat_wavs(CHIME_WAV, filepath, filepath_chime)
+    duration_with_chime = concat_wavs(CHIME_WAV, filepath, filepath_chime)
 
     # Build public URLs
     public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
@@ -261,6 +181,18 @@ def record():
             "url": audio_url,
         }
     )
+
+
+# ── HA-compatible `/api/home_intercom/…` aliases ─────────────────────────
+# Registered before __main__ so both `python intercom_server.py` and
+# `gunicorn intercom_server:app` pick up the extra routes.
+_HA_PREFIX = "/api/home_intercom"
+app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
+app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
+app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)
+app.add_url_rule(f"{_HA_PREFIX}/record", "ha_record", record, methods=["POST"])
+app.add_url_rule(f"{_HA_PREFIX}/audio/<path:filename>", "ha_audio", serve_audio)
+app.add_url_rule(f"{_HA_PREFIX}/static/<path:filename>", "ha_static", static_files)
 
 
 if __name__ == "__main__":

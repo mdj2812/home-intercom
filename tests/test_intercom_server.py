@@ -8,7 +8,9 @@ from unittest.mock import patch
 import pytest
 
 # src in pythonpath via pyproject.toml
-from intercom_server import WAV_HEADER_SIZE, app
+from const import WAV_HEADER_SIZE
+
+from intercom_server import app
 
 
 @pytest.fixture
@@ -34,7 +36,7 @@ class TestStaticRoutes:
         assert data["living"]["name"] == "Living Room"
 
     def test_static_icon_192(self, client):
-        """icon-192.png exists in src/static/."""
+        """icon-192.png served from static/ (symlinked from custom_components/)."""
         resp = client.get("/static/icon-192.png")
         assert resp.status_code == 200
         assert resp.content_length > 0
@@ -95,7 +97,7 @@ class TestHandleWavPassthrough:
     def test_valid_pcm_wav(self):
         import wave
 
-        from intercom_server import _handle_wav_passthrough
+        from shared import handle_wav_passthrough
 
         # Create a valid minimal WAV in memory
         buf = io.BytesIO()
@@ -111,7 +113,7 @@ class TestHandleWavPassthrough:
             tmp_path = tmp.name
 
         try:
-            rate, duration = _handle_wav_passthrough(wav_bytes, tmp_path)
+            rate, duration = handle_wav_passthrough(wav_bytes, tmp_path)
             assert rate == 16000
             assert duration == pytest.approx(0.5, rel=0.01)
             assert os.path.exists(tmp_path)
@@ -125,7 +127,7 @@ class TestHandlePcmToWav:
     def test_creates_valid_wav(self):
         import wave
 
-        from intercom_server import _handle_pcm_to_wav
+        from shared import handle_pcm_to_wav
 
         # 0.1s of 16-bit mono 16000 Hz PCM
         pcm = b"\x00\x00" * 1600
@@ -134,7 +136,7 @@ class TestHandlePcmToWav:
             tmp_path = tmp.name
 
         try:
-            duration = _handle_pcm_to_wav(pcm, 16000, tmp_path)
+            duration = handle_pcm_to_wav(pcm, 16000, tmp_path)
             assert duration == pytest.approx(0.1, rel=0.01)
             assert os.path.exists(tmp_path)
 
@@ -155,7 +157,7 @@ class TestConcatWavs:
         """Concat of two waves → duration equals sum of individual durations."""
         import wave
 
-        from intercom_server import _concat_wavs
+        from shared import concat_wavs
 
         chime_path = tmp_path / "chime.wav"
         audio_path = tmp_path / "audio.wav"
@@ -175,7 +177,7 @@ class TestConcatWavs:
             wf.setframerate(16000)
             wf.writeframes(b"\x00\x00" * 16000)
 
-        duration = _concat_wavs(str(chime_path), str(audio_path), str(output_path))
+        duration = concat_wavs(str(chime_path), str(audio_path), str(output_path))
         assert duration == pytest.approx(1.5, rel=0.01)
         assert os.path.exists(output_path)
 
@@ -190,7 +192,7 @@ class TestConcatWavs:
         """Mismatched rates → skip chime, duration = audio only."""
         import wave
 
-        from intercom_server import _concat_wavs
+        from shared import concat_wavs
 
         chime_path = tmp_path / "chime.wav"
         audio_path = tmp_path / "audio.wav"
@@ -208,7 +210,7 @@ class TestConcatWavs:
             wf.setframerate(44100)  # different rate!
             wf.writeframes(b"\x00\x00" * 44100)
 
-        duration = _concat_wavs(str(chime_path), str(audio_path), str(output_path))
+        duration = concat_wavs(str(chime_path), str(audio_path), str(output_path))
         assert duration == pytest.approx(1.0, rel=0.01)
 
 

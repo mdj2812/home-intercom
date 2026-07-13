@@ -1,5 +1,8 @@
 # Home Intercom
 
+[![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
+[![Docker](https://img.shields.io/badge/ghcr.io-mdj2812%2Fhome--intercom-blue)](https://github.com/mdj2812/home-intercom/pkgs/container/home-intercom)
+
 Push-to-talk PWA → Home Assistant → smart speakers. Hold a button, say something, it plays on your speakers.
 
 No ffmpeg needed — browser-native recording + pure Python PCM→WAV keeps the Docker image at 131MB.
@@ -12,9 +15,18 @@ No ffmpeg needed — browser-native recording + pure Python PCM→WAV keeps the 
 Phone PWA → Flask :8764 → Home Assistant API → speakers
                 ↕
            rooms.json (config)
+
+    ── or ──
+
+Phone PWA → HA integration → Home Assistant API → speakers
+                ↕
+        configuration.yaml (YAML config)
 ```
 
-Flask handles everything: receive audio, wrap PCM as WAV, call HA play_media. No streaming — most smart speakers require complete files to play.
+Two deployment modes:
+
+- **HA Integration (recommended)** — runs inside Home Assistant, no separate container
+- **Docker** — standalone Flask server (legacy, still fully supported)
 
 Auto-stop is tiered to match your speakers' capabilities:
 
@@ -28,7 +40,30 @@ If your speakers are integrated via [Music Assistant](https://music-assistant.io
 
 MA players support the native `play_announcement` service — playback stops automatically. **No timer-based pause needed** (no `PAUSE_BUFFER` config). More reliable, lower latency.
 
-## Deploy
+## Installation (HA Integration via HACS)
+
+[![Open your Home Assistant instance and open the Home Intercom repository inside the HACS add-on](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=mdj2812&repository=home-intercom&category=integration)
+
+1. Add this repository as a custom repository in HACS
+2. Install "Home Intercom" from HACS
+3. Add to `configuration.yaml`:
+
+```yaml
+home_intercom:
+  rooms:
+    living:
+      name: "Living Room"
+      entity_id: "media_player.living_room_speaker"
+      announce_volume: 50  # optional
+    bedroom:
+      name: "Bedroom"
+      entity_id: "media_player.bedroom_speaker"
+```
+
+4. Restart Home Assistant
+5. **Add to sidebar**: create a Dashboard → add Webpage card → URL: `/home_intercom`
+
+## Installation (Docker)
 
 ```bash
 git clone https://github.com/mdj2812/home-intercom.git
@@ -50,9 +85,9 @@ docker compose -f docker/docker-compose.example.yml pull
 docker compose -f docker/docker-compose.example.yml up -d
 ```
 
-## Configuration
+### Docker Configuration
 
-### Environment variables
+#### Environment variables
 
 | Variable | Description |
 |----------|-------------|
@@ -64,7 +99,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `STATE_TIMEOUT` | (Optional) Seconds to wait for entity state queries, defaults to `5` (increase for Bluetooth/MA devices) |
 | `TRUSTED_PROXY` | (Optional) Reverse proxy IP, defaults to `*` (any) |
 
-### rooms.json
+#### rooms.json
 
 ```json
 {
@@ -77,7 +112,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 `announce_volume` (optional, 0-100) overrides the announcement volume for Music Assistant players only. When set, MA will play a chime then announce at the specified volume. Omit the field to use the player's current volume.
 
-### Pre-announce chime
+## Pre-announce chime
 
 When you press the intercom button, a doorbell chime plays before your announcement. The chime is:
 
@@ -88,10 +123,12 @@ The chime file is served from `/static/pre_announce.wav` and can be replaced wit
 
 ## HTTPS
 
-PWA recording requires HTTPS. Recommended: Caddy reverse proxy.
+PWA recording requires HTTPS. For Docker, recommended: Caddy reverse proxy.
 
 ```Caddyfile
 broadcast.your-domain.com {
     reverse_proxy 127.0.0.1:8764
 }
 ```
+
+For the HA integration, HTTPS is handled by your Home Assistant reverse proxy.

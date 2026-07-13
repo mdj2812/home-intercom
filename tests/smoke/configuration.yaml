@@ -1,0 +1,18 @@
+# Minimal HA config for container smoke tests.
+# default_config ensures all built-in deps (http, api, etc.) are available.
+# Logger levels kept low to speed up boot and reduce noise.
+
+default_config:
+
+home_intercom:
+  rooms:
+    test:
+      name: Test Room
+      entity_id: media_player.test_speaker
+
+logger:
+  default: warning
+  logs:
+    custom_components.home_intercom: debug
+    homeassistant.components.http: warning
+    homeassistant.setup: warning
