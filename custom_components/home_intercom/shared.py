@@ -36,7 +36,11 @@ def handle_wav_passthrough(data: bytes, filepath: str) -> tuple[int, float]:
         duration = wf.getnframes() / rate
     _LOGGER.info(
         "WAV passthrough %dB, %dHz, %dch, %dbit, %.1fs",
-        len(data), rate, wf.getnchannels(), wf.getsampwidth() * 8, duration,
+        len(data),
+        rate,
+        wf.getnchannels(),
+        wf.getsampwidth() * 8,
+        duration,
     )
     return rate, duration
 
@@ -55,7 +59,10 @@ def handle_pcm_to_wav(data: bytes, rate: int, filepath: str) -> float:
     file_size = os.path.getsize(filepath)
     _LOGGER.info(
         "WAV written: %s (%dB, %.1fs, %dHz)",
-        os.path.basename(filepath), file_size, duration, rate,
+        os.path.basename(filepath),
+        file_size,
+        duration,
+        rate,
     )
     return duration
 
@@ -81,7 +88,12 @@ def concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
     if (chime_rate, chime_width, chime_channels) != (audio_rate, audio_width, audio_channels):
         _LOGGER.warning(
             "chime/audio format mismatch (chime=%dHz/%dB/%dch, audio=%dHz/%dB/%dch) — skipping chime",
-            chime_rate, chime_width, chime_channels, audio_rate, audio_width, audio_channels,
+            chime_rate,
+            chime_width,
+            chime_channels,
+            audio_rate,
+            audio_width,
+            audio_channels,
         )
         shutil.copyfile(audio_path, output_path)
         with wave.open(output_path, "rb") as wf:
