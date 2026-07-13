@@ -28,6 +28,11 @@ PLAYING_CONFIRM_RETRIES = 10  # 10 × 0.5s = 5s max
 PAUSE_RETRIES = 5
 DEFAULT_PAUSE_BUFFER = 0.0
 
+# Xiaomi screen-speaker display-clear via TTS
+_XIAOMI_CLEAR_TEXT = "关机"
+_XIAOMI_TTS_DOMAIN = "xiaomi_miot"
+_XIAOMI_TTS_SERVICE = "intelligent_speaker"
+
 
 class PlayResult:
     """Result of a play_announcement call."""
@@ -250,23 +255,6 @@ async def _play_standard(
                     {"entity_id": entity_id, "volume_level": saved_volume},
                     blocking=True,
                 )
-        # Stop to clear now-playing display
-        with contextlib.suppress(Exception):
-            await hass.services.async_call(
-                "media_player",
-                "media_stop",
-                {"entity_id": entity_id},
-                blocking=True,
-            )
-
-        # Clear Xiaomi screen speaker display with silent TTS
-        with contextlib.suppress(Exception):
-            await hass.services.async_call(
-                "xiaomi_miot",
-                "intelligent_speaker",
-                {"entity_id": entity_id, "text": "关机", "silent": True, "execute": True},
-                blocking=True,
-            )
 
     hass.async_create_background_task(
         _cleanup_after_playback(), f"home_intercom_cleanup_{entity_id}"
@@ -369,22 +357,19 @@ async def _auto_pause(
                 blocking=True,
             )
 
-    # Stop playback to clear now-playing display on screen devices
-    with contextlib.suppress(Exception):
-        await hass.services.async_call(
-            "media_player",
-            "media_stop",
-            {"entity_id": entity_id},
-            blocking=True,
-        )
-
-    # Xiaomi screen speakers: push empty TTS (silent) to clear display metadata.
-    # player_play_music hardcodes audio_id → cloud metadata ("心灵之谜")
-    # persists until the display is refreshed with new content.
-    with contextlib.suppress(Exception):
-        await hass.services.async_call(
-            "xiaomi_miot",
-            "intelligent_speaker",
-            {"entity_id": entity_id, "text": "关机", "silent": True, "execute": True},
-            blocking=True,
-        )
+    # Xiaomi screen speakers: push silent TTS to clear display metadata.
+    # player_play_music hardcodes audio_id → cloud metadata persists
+    # until the display is refreshed with new content.
+    if hass.services.has_service(_XIAOMI_TTS_DOMAIN, _XIAOMI_TTS_SERVICE):
+        with contextlib.suppress(Exception):
+            await hass.services.async_call(
+                _XIAOMI_TTS_DOMAIN,
+                _XIAOMI_TTS_SERVICE,
+                {
+                    "entity_id": entity_id,
+                    "text": _XIAOMI_CLEAR_TEXT,
+                    "silent": True,
+                    "execute": True,
+                },
+                blocking=True,
+            )
