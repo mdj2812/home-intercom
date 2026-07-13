@@ -54,12 +54,18 @@ class RecordView(HomeAssistantView):
 
     url = "/api/home_intercom/record"
     name = "api:home_intercom:record"
-    requires_auth = True  # PWA carries HA auth cookie
+    requires_auth = False  # auth via X-PWA-Token header
 
     async def post(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]
         data = await request.read()
         target = request.query.get("target", "")
+
+        # Verify shared secret token (injected into PWA HTML by PanelView)
+        pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
+        if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
+            _LOGGER.warning("RecordView: invalid or missing X-PWA-Token")
+            return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
 
         if not target:
             return web.json_response({"ok": False, "error": "missing target"}, status=400)
@@ -265,11 +271,11 @@ class PanelView(HomeAssistantView):
         # Web browsers use localStorage.hassTokens; Companion App WebView
         # uses OAuth and doesn't populate localStorage — server-side injection
         # is the only reliable way to get a token into the PWA.
-        api_token = request.app["hass"].data.get(DOMAIN, {}).get("api_token", "")
-        if api_token:
+        pwa_token = request.app["hass"].data.get(DOMAIN, {}).get("pwa_token", "")
+        if pwa_token:
             html = html.replace(
                 "</head>",
-                f'<script>window._HA_API_TOKEN="{api_token}";</script>\n</head>',
+                f'<script>window._PWA_TOKEN="{pwa_token}";</script>\n</head>',
             )
 
         return web.Response(

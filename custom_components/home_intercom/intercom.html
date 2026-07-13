@@ -70,32 +70,33 @@ const UNAVAILABLE_CLASS = "unavailable";
 const GRID = document.getElementById('grid');
 const RECORD_URL = (window.API_BASE || '') + '/record';
 
-// Read HA access token from localStorage (lazy — checked on every API call).
-// Supports multiple HA clients: web frontend, Companion App, etc.
-function getHAToken() {
-  // Priority 1: server-injected token (works for all clients including Companion App)
-  if (window._HA_API_TOKEN) return window._HA_API_TOKEN;
-  try {
-    // Standard HA frontend (desktop/mobile web)
-    var t = JSON.parse(localStorage.getItem('hassTokens') || 'null');
-    if (t && t.access_token) return t.access_token;
-    // HA 2025+ key
-    t = JSON.parse(localStorage.getItem('hass_auth') || 'null');
-    if (t && t.access_token) return t.access_token;
-    // Flat key (some clients)
-    var raw = localStorage.getItem('access_token');
-    if (raw) return raw;
-  } catch(e) {}
-  return '';
-}
-
-// Build headers dict for HA API calls (adds Bearer token when available)
+// Build headers dict for HA API calls.
+// Priority: server-injected PWA token → HA localStorage token
 function authHeaders(extra) {
   var h = extra || {};
-  var token = getHAToken();
-  if (token) {
-    h['Authorization'] = 'Bearer ' + token;
+  // Server-injected shared secret (works everywhere: web, Companion App, etc.)
+  if (window._PWA_TOKEN) {
+    h['X-PWA-Token'] = window._PWA_TOKEN;
+    return h;
   }
+  // Fallback: HA localStorage token (desktop/mobile web)
+  try {
+    var t = JSON.parse(localStorage.getItem('hassTokens') || 'null');
+    if (t && t.access_token) {
+      h['Authorization'] = 'Bearer ' + t.access_token;
+      return h;
+    }
+    t = JSON.parse(localStorage.getItem('hass_auth') || 'null');
+    if (t && t.access_token) {
+      h['Authorization'] = 'Bearer ' + t.access_token;
+      return h;
+    }
+    var raw = localStorage.getItem('access_token');
+    if (raw) {
+      h['Authorization'] = 'Bearer ' + raw;
+      return h;
+    }
+  } catch(e) {}
   return h;
 }
 // PCM target rate fetched from /version on startup

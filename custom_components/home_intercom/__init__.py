@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import timedelta
+import secrets
 
 import voluptuous as vol
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
@@ -78,47 +78,15 @@ async def _setup(hass: HomeAssistant, room_map: dict) -> None:
 
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
 
-    # Create a system-level API token for the PWA (Companion App compat).
-    # Token is stored in hass.data and injected into the HTML by PanelView.
-    api_token = await _create_pwa_token(hass)
-    if api_token:
-        hass.data[DOMAIN]["api_token"] = api_token
+    # Generate a shared secret token for PWA ↔ backend auth.
+    # The Companion App's WebView doesn't carry HA auth for /api/ calls;
+    # we use a simple bearer token injected into the HTML instead.
+    hass.data[DOMAIN]["pwa_token"] = secrets.token_urlsafe(32)
 
     register_api_views(hass)
     _register_services(hass)
 
     _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
-
-
-async def _create_pwa_token(hass: HomeAssistant) -> str | None:
-    """Create a long-lived access token for the PWA frontend."""
-    try:
-        # Get the owner user (or first available user)
-        users = await hass.auth.async_get_users()
-        owner = None
-        for u in users:
-            if u.is_owner:
-                owner = u
-                break
-        if not owner and users:
-            owner = users[0]
-        if not owner:
-            _LOGGER.warning("No HA users found — PWA token injection skipped")
-            return None
-
-        # Create a refresh token with 10-year expiration
-        refresh_token = await hass.auth.async_create_refresh_token(
-            owner,
-            client_id="https://github.com/mdj2812/home-intercom",
-            client_name="Home Intercom PWA",
-            access_token_expiration=timedelta(days=3650),
-        )
-        access_token = hass.auth.async_create_access_token(refresh_token)
-        _LOGGER.info("Created PWA API token for user %s", owner.name)
-        return access_token
-    except Exception as exc:
-        _LOGGER.warning("Failed to create PWA token (web browser will still work via localStorage): %s", exc)
-        return None
 
 
 def _register_services(hass: HomeAssistant) -> None:
