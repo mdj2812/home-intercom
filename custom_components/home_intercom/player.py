@@ -360,7 +360,9 @@ async def _auto_pause(
     # Xiaomi screen speakers: push silent TTS to clear display metadata.
     # player_play_music hardcodes audio_id → cloud metadata persists
     # until the display is refreshed with new content.
-    if hass.services.has_service(_XIAOMI_TTS_DOMAIN, _XIAOMI_TTS_SERVICE):
+    # Detect Xiaomi by xiaoai_id attribute (set by xiaomi_miot integration).
+    state = hass.states.get(entity_id)
+    if state and state.attributes.get("xiaoai_id"):
         with contextlib.suppress(Exception):
             await hass.services.async_call(
                 _XIAOMI_TTS_DOMAIN,
