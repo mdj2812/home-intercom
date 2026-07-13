@@ -24,7 +24,7 @@ from .player import play_announcement
 from .shared import concat_wavs as _concat_wavs
 from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
 from .shared import handle_wav_passthrough as _handle_wav_passthrough
-from .shared import is_wav, write_wav_metadata
+from .shared import is_wav
 
 _LOGGER = logging.getLogger(__name__)
 _INTEGRATION_DIR = Path(__file__).parent
@@ -110,7 +110,6 @@ class RecordView(HomeAssistantView):
         chime_path = str(_INTEGRATION_DIR / "static" / "pre_announce.wav")
         audio_url_with_chime = None
         duration_with_chime = None
-        filepath_chime = None
         if os.path.exists(chime_path):
             filename_chime = f"intercom_{target}_chime.wav"
             filepath_chime = os.path.join(audio_dir, filename_chime)
@@ -123,12 +122,6 @@ class RecordView(HomeAssistantView):
                 )
             except Exception as exc:
                 _LOGGER.warning("Failed to prepend chime: %s", exc)
-
-        # Inject clean metadata into the WAV that will be played.
-        # Xiaomi screen speakers display file metadata — without this they
-        # show random cloud-sourced titles and album art during broadcasts.
-        play_file = filepath_chime if audio_url_with_chime else filepath
-        await hass.async_add_executor_job(write_wav_metadata, play_file, "家庭广播", "")
 
         # Play on each target room
         ok_count = 0
