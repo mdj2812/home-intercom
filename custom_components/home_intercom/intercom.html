@@ -73,6 +73,8 @@ const RECORD_URL = (window.API_BASE || '') + '/record';
 // Read HA access token from localStorage (lazy — checked on every API call).
 // Supports multiple HA clients: web frontend, Companion App, etc.
 function getHAToken() {
+  // Priority 1: server-injected token (works for all clients including Companion App)
+  if (window._HA_API_TOKEN) return window._HA_API_TOKEN;
   try {
     // Standard HA frontend (desktop/mobile web)
     var t = JSON.parse(localStorage.getItem('hassTokens') || 'null');

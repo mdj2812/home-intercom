@@ -261,6 +261,17 @@ class PanelView(HomeAssistantView):
         html = html.replace('src="/static/', 'src="/home_intercom/static/')
         html = html.replace('href="/static/', 'href="/home_intercom/static/')
 
+        # Inject server-generated API token for Companion App compatibility.
+        # Web browsers use localStorage.hassTokens; Companion App WebView
+        # uses OAuth and doesn't populate localStorage — server-side injection
+        # is the only reliable way to get a token into the PWA.
+        api_token = request.app["hass"].data.get(DOMAIN, {}).get("api_token", "")
+        if api_token:
+            html = html.replace(
+                "</head>",
+                f'<script>window._HA_API_TOKEN="{api_token}";</script>\n</head>',
+            )
+
         return web.Response(text=html, content_type="text/html")
 
 
