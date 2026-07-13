@@ -268,6 +268,18 @@ def record():
     )
 
 
+# ── HA-compatible `/api/home_intercom/…` aliases ─────────────────────────
+# Registered before __main__ so both `python intercom_server.py` and
+# `gunicorn intercom_server:app` pick up the extra routes.
+_HA_PREFIX = "/api/home_intercom"
+app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
+app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
+app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)
+app.add_url_rule(f"{_HA_PREFIX}/record", "ha_record", record, methods=["POST"])
+app.add_url_rule(f"{_HA_PREFIX}/audio/<path:filename>", "ha_audio", serve_audio)
+app.add_url_rule(f"{_HA_PREFIX}/static/<path:filename>", "ha_static", static_files)
+
+
 if __name__ == "__main__":
     import logging
 
