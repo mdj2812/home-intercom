@@ -11,7 +11,10 @@ import os
 import shutil
 import wave
 
-from const import PCM_BPS, WAV_MAGIC
+try:
+    from .const import PCM_BPS, WAV_MAGIC  # HA integration (relative)
+except ImportError:
+    from const import PCM_BPS, WAV_MAGIC  # Docker standalone (absolute)
 
 _LOGGER = logging.getLogger(__name__)
 
