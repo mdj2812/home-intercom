@@ -169,13 +169,6 @@ async def _call_play_media(
         if state is None:
             return PlayResult(ok=False, error="entity_not_found"), None
 
-        # Xiaomi devices use Xiaomi Cloud for metadata lookup via a hardcoded
-        # audio_id — their play_music API shows random cloud metadata on screen.
-        # Use "wav" content type to route through player_play_url instead, which
-        # bypasses the cloud metadata and avoids the "心灵之谜" display.
-        is_xiaomi = bool(state.attributes.get("xiaoai_id"))
-        content_type = "wav" if is_xiaomi else "music"
-
         # Volume boost: save current → set announce volume
         saved_volume = None
         if announce_volume is not None and announce_volume > 0:
@@ -196,7 +189,7 @@ async def _call_play_media(
             {
                 "entity_id": entity_id,
                 "media_content_id": audio_url,
-                "media_content_type": content_type,
+                "media_content_type": "music",
                 "extra": {
                     "announce": True,
                 },
@@ -263,6 +256,15 @@ async def _play_standard(
                 "media_player",
                 "media_stop",
                 {"entity_id": entity_id},
+                blocking=True,
+            )
+
+        # Clear Xiaomi screen speaker display with silent TTS
+        with contextlib.suppress(Exception):
+            await hass.services.async_call(
+                "xiaomi_miot",
+                "intelligent_speaker",
+                {"entity_id": entity_id, "text": " ", "silent": True},
                 blocking=True,
             )
 
@@ -373,5 +375,16 @@ async def _auto_pause(
             "media_player",
             "media_stop",
             {"entity_id": entity_id},
+            blocking=True,
+        )
+
+    # Xiaomi screen speakers: push empty TTS (silent) to clear display metadata.
+    # player_play_music hardcodes audio_id → cloud metadata ("心灵之谜")
+    # persists until the display is refreshed with new content.
+    with contextlib.suppress(Exception):
+        await hass.services.async_call(
+            "xiaomi_miot",
+            "intelligent_speaker",
+            {"entity_id": entity_id, "text": " ", "silent": True},
             blocking=True,
         )
