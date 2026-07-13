@@ -256,6 +256,17 @@ async def _play_standard(
                     blocking=True,
                 )
 
+        # Clear Xiaomi screen speakers (same logic as _auto_pause)
+        state = hass.states.get(entity_id)
+        if state and state.attributes.get("xiaoai_id"):
+            with contextlib.suppress(Exception):
+                await hass.services.async_call(
+                    _XIAOMI_TTS_DOMAIN,
+                    _XIAOMI_TTS_SERVICE,
+                    {"entity_id": entity_id, "text": _XIAOMI_CLEAR_TEXT, "silent": True, "execute": True},
+                    blocking=True,
+                )
+
     hass.async_create_background_task(
         _cleanup_after_playback(), f"home_intercom_cleanup_{entity_id}"
     )
