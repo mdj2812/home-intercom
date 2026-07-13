@@ -119,4 +119,32 @@ else
     exit 1
 fi
 
+# 5. HA-compatible /api/home_intercom/version
+VER_HA=$(curl -sS "${URL}/api/home_intercom/version" 2>/dev/null || echo "")
+if echo "${VER_HA}" | grep -q '"version"'; then
+    echo "  ✅ GET /api/home_intercom/version — ${VER_HA}"
+else
+    echo "  ❌ GET /api/home_intercom/version — unexpected: ${VER_HA}"
+    exit 1
+fi
+
+# 6. HA-compatible /api/home_intercom/rooms
+ROOMS_HA=$(curl -sS "${URL}/api/home_intercom/rooms" 2>/dev/null || echo "")
+if echo "${ROOMS_HA}" | grep -q '"test"'; then
+    echo "  ✅ GET /api/home_intercom/rooms — test room found"
+else
+    echo "  ❌ GET /api/home_intercom/rooms — test room missing"
+    echo "     Response: ${ROOMS_HA}"
+    exit 1
+fi
+
+# 7. HA-compatible /api/home_intercom/static/icon-192.png
+ICON_HA_CODE=$(curl -sS -o /dev/null -w '%{http_code}' "${URL}/api/home_intercom/static/icon-192.png" 2>/dev/null || echo "000")
+if [ "${ICON_HA_CODE}" = "200" ]; then
+    echo "  ✅ GET /api/home_intercom/static/icon-192.png — HTTP 200"
+else
+    echo "  ❌ GET /api/home_intercom/static/icon-192.png — HTTP ${ICON_HA_CODE}"
+    exit 1
+fi
+
 echo "==> All Docker smoke tests passed! 🎉"
