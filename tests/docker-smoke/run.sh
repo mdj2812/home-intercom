@@ -39,14 +39,8 @@ fi
 
 # ── Create minimal rooms.json for testing ────────────────────
 TMPDIR=$(mktemp -d)
-cat > "${TMPDIR}/rooms.json" << 'EOF'
-{
-  "test": {
-    "name": "Test Room",
-    "entity_id": "media_player.test_speaker"
-  }
-}
-EOF
+EXPECTED_ROOMS='{"test":{"name":"Test Room","entity_id":"media_player.test_speaker"}}'
+echo "${EXPECTED_ROOMS}" > "${TMPDIR}/rooms.json"
 
 # ── Start container ─────────────────────────────────────────
 echo "==> Starting intercom container..."
@@ -79,24 +73,25 @@ fi
 # ── Verify endpoints ────────────────────────────────────────
 echo "==> Checking endpoints..."
 
-# 1. /version
+# 1. /version — verify exact fields
 VER=$(curl -sS "${URL}/version" 2>/dev/null || echo "")
-if echo "${VER}" | grep -q '"version"'; then
-    echo "  ✅ GET /version — ${VER}"
-else
-    echo "  ❌ GET /version — unexpected: ${VER}"
-    exit 1
-fi
+echo "${VER}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert 'version' in d and d['version'], 'missing version'
+assert d.get('pcm_rate') == 16000, f'bad pcm_rate: {d.get(\"pcm_rate\")}'
+print(f'ok: version={d[\"version\"]} pcm_rate={d[\"pcm_rate\"]}')
+" 2>&1 && echo "  ✅ GET /version — ${VER}" || { echo "  ❌ GET /version — check failed"; exit 1; }
 
-# 2. /rooms
+# 2. /rooms — verify matches input rooms.json
 ROOMS=$(curl -sS "${URL}/rooms" 2>/dev/null || echo "")
-if echo "${ROOMS}" | grep -q '"test"'; then
-    echo "  ✅ GET /rooms — test room found"
-else
-    echo "  ❌ GET /rooms — test room missing"
-    echo "     Response: ${ROOMS}"
-    exit 1
-fi
+echo "${ROOMS}" | python3 -c "
+import sys, json
+got = json.load(sys.stdin)
+expected = json.loads('${EXPECTED_ROOMS}')
+assert got == expected, f'mismatch\\n  got:      {json.dumps(got)}\\n  expected: {json.dumps(expected)}'
+print('ok: rooms match input')
+" 2>&1 && echo "  ✅ GET /rooms — matches input" || { echo "  ❌ GET /rooms — output mismatch"; exit 1; }
 
 # 3. / — PWA frontend
 INDEX=$(curl -sS "${URL}/" 2>/dev/null || echo "")
@@ -119,22 +114,23 @@ else
     exit 1
 fi
 
-# 5. HA-compatible /api/home_intercom/version
+# 5. HA-compatible /api/home_intercom/version — exact match
 VER_HA=$(curl -sS "${URL}/api/home_intercom/version" 2>/dev/null || echo "")
-if echo "${VER_HA}" | grep -q '"version"'; then
-    echo "  ✅ GET /api/home_intercom/version — ${VER_HA}"
+if [ "${VER_HA}" = "${VER}" ]; then
+    echo "  ✅ GET /api/home_intercom/version — matches /version"
 else
-    echo "  ❌ GET /api/home_intercom/version — unexpected: ${VER_HA}"
+    echo "  ❌ GET /api/home_intercom/version — differs from /version"
+    echo "     /version:                ${VER}"
+    echo "     /api/home_intercom/version: ${VER_HA}"
     exit 1
 fi
 
-# 6. HA-compatible /api/home_intercom/rooms
+# 6. HA-compatible /api/home_intercom/rooms — exact match
 ROOMS_HA=$(curl -sS "${URL}/api/home_intercom/rooms" 2>/dev/null || echo "")
-if echo "${ROOMS_HA}" | grep -q '"test"'; then
-    echo "  ✅ GET /api/home_intercom/rooms — test room found"
+if [ "${ROOMS_HA}" = "${ROOMS}" ]; then
+    echo "  ✅ GET /api/home_intercom/rooms — matches /rooms"
 else
-    echo "  ❌ GET /api/home_intercom/rooms — test room missing"
-    echo "     Response: ${ROOMS_HA}"
+    echo "  ❌ GET /api/home_intercom/rooms — differs from /rooms"
     exit 1
 fi
 
