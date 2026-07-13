@@ -158,6 +158,29 @@ async def _play_ma_announcement(
         return PlayResult(ok=False, error="ma_failed")
 
 
+async def _clear_xiaomi_display(hass: HomeAssistant, entity_id: str) -> None:
+    """Clear screen metadata on Xiaomi devices via silent TTS.
+
+    player_play_music hardcodes audio_id → cloud metadata persists
+    until the display is refreshed with new content.
+    """
+    state = hass.states.get(entity_id)
+    if not state or not state.attributes.get("xiaoai_id"):
+        return
+    with contextlib.suppress(Exception):
+        await hass.services.async_call(
+            _XIAOMI_TTS_DOMAIN,
+            _XIAOMI_TTS_SERVICE,
+            {
+                "entity_id": entity_id,
+                "text": _XIAOMI_CLEAR_TEXT,
+                "silent": True,
+                "execute": True,
+            },
+            blocking=True,
+        )
+
+
 async def _call_play_media(
     hass: HomeAssistant,
     entity_id: str,
@@ -257,15 +280,7 @@ async def _play_standard(
                 )
 
         # Clear Xiaomi screen speakers (same logic as _auto_pause)
-        state = hass.states.get(entity_id)
-        if state and state.attributes.get("xiaoai_id"):
-            with contextlib.suppress(Exception):
-                await hass.services.async_call(
-                    _XIAOMI_TTS_DOMAIN,
-                    _XIAOMI_TTS_SERVICE,
-                    {"entity_id": entity_id, "text": _XIAOMI_CLEAR_TEXT, "silent": True, "execute": True},
-                    blocking=True,
-                )
+        await _clear_xiaomi_display(hass, entity_id)
 
     hass.async_create_background_task(
         _cleanup_after_playback(), f"home_intercom_cleanup_{entity_id}"
@@ -368,21 +383,5 @@ async def _auto_pause(
                 blocking=True,
             )
 
-    # Xiaomi screen speakers: push silent TTS to clear display metadata.
-    # player_play_music hardcodes audio_id → cloud metadata persists
-    # until the display is refreshed with new content.
-    # Detect Xiaomi by xiaoai_id attribute (set by xiaomi_miot integration).
-    state = hass.states.get(entity_id)
-    if state and state.attributes.get("xiaoai_id"):
-        with contextlib.suppress(Exception):
-            await hass.services.async_call(
-                _XIAOMI_TTS_DOMAIN,
-                _XIAOMI_TTS_SERVICE,
-                {
-                    "entity_id": entity_id,
-                    "text": _XIAOMI_CLEAR_TEXT,
-                    "silent": True,
-                    "execute": True,
-                },
-                blocking=True,
-            )
+    # Clear screen metadata on Xiaomi devices via silent TTS
+    await _clear_xiaomi_display(hass, entity_id)
