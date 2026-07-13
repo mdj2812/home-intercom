@@ -9,6 +9,7 @@ import pytest
 
 # src in pythonpath via pyproject.toml
 from const import WAV_HEADER_SIZE
+
 from intercom_server import app
 
 
