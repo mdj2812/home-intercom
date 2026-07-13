@@ -264,7 +264,7 @@ async def _play_standard(
             await hass.services.async_call(
                 "xiaomi_miot",
                 "intelligent_speaker",
-                {"entity_id": entity_id, "text": " ", "silent": True, "execute": True},
+                {"entity_id": entity_id, "text": "关机", "silent": True, "execute": True},
                 blocking=True,
             )
 
@@ -385,6 +385,6 @@ async def _auto_pause(
         await hass.services.async_call(
             "xiaomi_miot",
             "intelligent_speaker",
-            {"entity_id": entity_id, "text": " ", "silent": True, "execute": True},
+            {"entity_id": entity_id, "text": "关机", "silent": True, "execute": True},
             blocking=True,
         )
