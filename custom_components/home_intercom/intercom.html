@@ -21,6 +21,14 @@
   window.API_BASE = isHA ? '/api/home_intercom' : '';
   window.STATIC_BASE = isHA ? '/home_intercom/static' : '/static';
   window.PANEL_BASE = isHA ? '/home_intercom' : '';
+  // HA auth token for /api/ calls (read from localStorage, stored by HA frontend)
+  window.HA_TOKEN = '';
+  if (isHA) {
+    try {
+      var tokens = JSON.parse(localStorage.getItem('hassTokens') || '{}');
+      window.HA_TOKEN = tokens.access_token || '';
+    } catch(e) {}
+  }
 })();
 </script>
 <script>
@@ -69,6 +77,15 @@ const UNAVAILABLE_CLASS = "unavailable";
 
 const GRID = document.getElementById('grid');
 const RECORD_URL = (window.API_BASE || '') + '/record';
+
+// Build headers dict for HA API calls (adds Bearer token when available)
+function authHeaders(extra) {
+  var h = extra || {};
+  if (window.HA_TOKEN) {
+    h['Authorization'] = 'Bearer ' + window.HA_TOKEN;
+  }
+  return h;
+}
 // PCM target rate fetched from /version on startup
 let TARGET_RATE = 16000;  // fallback, overwritten by server
 
@@ -216,7 +233,7 @@ async function loadRooms() {
   GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
   try {
-    const resp = await fetch((window.API_BASE || '') + '/rooms', { credentials: 'same-origin' });
+    const resp = await fetch((window.API_BASE || '') + '/rooms', { credentials: 'same-origin', headers: authHeaders() });
     const rooms = await resp.json();
     for (const [key, room] of Object.entries(rooms)) {
       window._ROOM_DATA[key] = room;
@@ -301,6 +318,7 @@ async function processAndSend() {
     const resp = await fetch(RECORD_URL + '?target=' + currentTarget + '&rate=' + TARGET_RATE, {
       method: 'POST',
       credentials: 'same-origin',
+      headers: authHeaders(),
       body: new Blob([new Uint8Array(pcm.buffer, 0, pcm.byteLength)]),
     });
 
