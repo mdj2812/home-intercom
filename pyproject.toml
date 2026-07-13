@@ -28,5 +28,5 @@ indent-style = "space"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "custom_components/home_intercom"]
 addopts = "-v --tb=short --cov=src --cov-report=term-missing --cov-fail-under=85"

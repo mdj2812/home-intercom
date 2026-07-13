@@ -13,15 +13,18 @@ from __future__ import annotations
 
 import logging
 import os
-import wave
 from pathlib import Path
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PCM_BPS, PCM_RATE, WAV_HEADER_SIZE, WAV_MAGIC
+from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
+from .shared import concat_wavs as _concat_wavs
+from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
+from .shared import handle_wav_passthrough as _handle_wav_passthrough
+from .shared import is_wav
 
 _LOGGER = logging.getLogger(__name__)
 _INTEGRATION_DIR = Path(__file__).parent
@@ -38,91 +41,9 @@ def _guess_base_url(request: web.Request) -> str:
     return f"{scheme}://{host}"
 
 
-def _concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
-    """Prepend chime WAV to audio WAV. Returns total duration (seconds)."""
-    import shutil
-
-    with wave.open(chime_path, "rb") as wf_chime:
-        chime_rate = wf_chime.getframerate()
-        chime_frames = wf_chime.readframes(wf_chime.getnframes())
-        chime_width = wf_chime.getsampwidth()
-        chime_channels = wf_chime.getnchannels()
-
-    with wave.open(audio_path, "rb") as wf_audio:
-        audio_rate = wf_audio.getframerate()
-        audio_frames = wf_audio.readframes(wf_audio.getnframes())
-        audio_width = wf_audio.getsampwidth()
-        audio_channels = wf_audio.getnchannels()
-
-    if (chime_rate, chime_width, chime_channels) != (audio_rate, audio_width, audio_channels):
-        _LOGGER.warning(
-            "chime/audio format mismatch (chime=%dHz/%dB/%dch, audio=%dHz/%dB/%dch) — skipping chime",
-            chime_rate,
-            chime_width,
-            chime_channels,
-            audio_rate,
-            audio_width,
-            audio_channels,
-        )
-        shutil.copy2(audio_path, output_path)
-        return len(audio_frames) / (audio_rate * audio_width)
-
-    total_frames = (len(chime_frames) + len(audio_frames)) // audio_width
-    duration = total_frames / audio_rate
-
-    with wave.open(output_path, "wb") as wf_out:
-        wf_out.setnchannels(audio_channels)
-        wf_out.setsampwidth(audio_width)
-        wf_out.setframerate(audio_rate)
-        wf_out.writeframes(chime_frames + audio_frames)
-
-    _LOGGER.info("chime prepended (%.1fs total)", duration)
-    return duration
-
-
 def _get_hass_data(hass: HomeAssistant) -> dict:
     """Get integration data dict — guaranteed to exist after async_setup."""
     return hass.data.get(DOMAIN, {})
-
-
-def _handle_pcm_to_wav(data: bytes, rate: int, filepath: str) -> float:
-    """Raw 16-bit mono PCM → write WAV file. Returns duration (seconds)."""
-    with wave.open(filepath, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(PCM_BPS)
-        wf.setframerate(rate)
-        wf.writeframes(data)
-    duration = len(data) / (rate * PCM_BPS)
-    file_size = os.path.getsize(filepath)
-    _LOGGER.info(
-        "WAV written: %s (%dB, %.1fs, %dHz)",
-        os.path.basename(filepath),
-        file_size,
-        duration,
-        rate,
-    )
-    return duration
-
-
-def _handle_wav_passthrough(data: bytes, filepath: str) -> tuple[int, float]:
-    """ESP32 hardware button → complete WAV, write as-is.
-
-    Returns (sample_rate, duration_seconds).
-    """
-    with open(filepath, "wb") as f:
-        f.write(data)
-    with wave.open(filepath, "rb") as wf:
-        rate = wf.getframerate()
-        duration = wf.getnframes() / rate
-    _LOGGER.info(
-        "WAV passthrough %dB, %dHz, %dch, %dbit, %.1fs",
-        len(data),
-        rate,
-        wf.getnchannels(),
-        wf.getsampwidth() * 8,
-        duration,
-    )
-    return rate, duration
 
 
 class RecordView(HomeAssistantView):
@@ -164,7 +85,7 @@ class RecordView(HomeAssistantView):
         filename = f"intercom_{target}.wav"
         filepath = os.path.join(audio_dir, filename)
 
-        if data[: len(WAV_MAGIC)] == WAV_MAGIC:
+        if is_wav(data):
             rate, duration = await hass.async_add_executor_job(
                 _handle_wav_passthrough, data, filepath
             )
