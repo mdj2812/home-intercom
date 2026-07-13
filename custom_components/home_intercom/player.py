@@ -190,7 +190,10 @@ async def _call_play_media(
                 "entity_id": entity_id,
                 "media_content_id": audio_url,
                 "media_content_type": "music",
-                "extra": {"announce": True},
+                "extra": {
+                    "announce": True,
+                    "title": "家庭广播",
+                },
             },
             blocking=True,
         )
@@ -218,40 +221,48 @@ async def _play_standard(
     if not result.ok:
         return result
 
-    # Schedule volume restore when playback finishes
-    if saved_volume is not None:
+    # Schedule cleanup when playback finishes (stop + optional volume restore)
+    async def _cleanup_after_playback():
+        import asyncio as _asyncio
 
-        async def _restore_on_change():
-            import asyncio as _asyncio
+        from homeassistant.helpers.event import async_track_state_change_event
 
-            from homeassistant.helpers.event import async_track_state_change_event
+        done_ev = _asyncio.Event()
 
-            done_ev = _asyncio.Event()
+        def _cb(event):
+            if event.data.get("entity_id") == entity_id:
+                ns = event.data.get("new_state")
+                if ns and ns.state != "playing":
+                    done_ev.set()
 
-            def _cb(event):
-                if event.data.get("entity_id") == entity_id:
-                    ns = event.data.get("new_state")
-                    if ns and ns.state != "playing":
-                        done_ev.set()
-
-            unsub = async_track_state_change_event(hass, [entity_id], _cb)
-            try:
-                # Wait for playback to finish before restoring volume.
-                # TODO: derive timeout from audio duration (duration + 10)
-                await _asyncio.wait_for(done_ev.wait(), timeout=120)
-            except TimeoutError:
-                pass
-            finally:
-                unsub()
+        unsub = async_track_state_change_event(hass, [entity_id], _cb)
+        try:
+            await _asyncio.wait_for(done_ev.wait(), timeout=120)
+        except TimeoutError:
+            pass
+        finally:
+            unsub()
+        # Restore volume
+        if saved_volume is not None:
+            with contextlib.suppress(Exception):
+                await hass.services.async_call(
+                    "media_player",
+                    "volume_set",
+                    {"entity_id": entity_id, "volume_level": saved_volume},
+                    blocking=True,
+                )
+        # Stop to clear now-playing display
+        with contextlib.suppress(Exception):
             await hass.services.async_call(
                 "media_player",
-                "volume_set",
-                {"entity_id": entity_id, "volume_level": saved_volume},
+                "media_stop",
+                {"entity_id": entity_id},
+                blocking=True,
             )
 
-        hass.async_create_background_task(
-            _restore_on_change(), f"home_intercom_restore_vol_{entity_id}"
-        )
+    hass.async_create_background_task(
+        _cleanup_after_playback(), f"home_intercom_cleanup_{entity_id}"
+    )
 
     return PlayResult(ok=True)
 
@@ -349,3 +360,12 @@ async def _auto_pause(
                 {"entity_id": entity_id, "volume_level": saved_volume},
                 blocking=True,
             )
+
+    # Stop playback to clear now-playing display on screen devices
+    with contextlib.suppress(Exception):
+        await hass.services.async_call(
+            "media_player",
+            "media_stop",
+            {"entity_id": entity_id},
+            blocking=True,
+        )
