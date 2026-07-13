@@ -110,3 +110,72 @@ def concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
     duration = total_frames / audio_rate
     _LOGGER.info("chime + audio combined: %s (%.1fs)", os.path.basename(output_path), duration)
     return duration
+
+
+def write_wav_metadata(filepath: str, title: str = "家庭广播", artist: str = "") -> None:
+    """Inject LIST INFO metadata into a WAV file.
+
+    Xiaomi screen speakers display metadata from the file itself when
+    playing local audio — this overrides the random cloud metadata they
+    would otherwise show during broadcasts.
+    """
+    import struct as _struct
+
+    # Build LIST INFO chunk
+    info_tags = []
+    if title:
+        title_utf8 = title.encode("utf-8")
+        title_len = len(title_utf8)
+        tag = b"INAM" + _struct.pack("<I", title_len) + title_utf8 + b"\x00"
+        if len(tag) % 2:
+            tag += b"\x00"
+        info_tags.append(tag)
+    if artist:
+        artist_utf8 = artist.encode("utf-8")
+        artist_len = len(artist_utf8)
+        tag = b"IART" + _struct.pack("<I", artist_len) + artist_utf8 + b"\x00"
+        if len(tag) % 2:
+            tag += b"\x00"
+        info_tags.append(tag)
+
+    if not info_tags:
+        return
+
+    info_data = b"".join(info_tags)
+    list_data = b"INFO" + info_data
+    list_chunk = b"LIST" + _struct.pack("<I", len(list_data)) + list_data
+
+    with open(filepath, "r+b") as f:
+        riff = f.read(4)
+        if riff != b"RIFF":
+            _LOGGER.warning("Not a WAV file: %s", filepath)
+            return
+        total_size = _struct.unpack("<I", f.read(4))[0]
+        wave = f.read(4)
+        if wave != b"WAVE":
+            _LOGGER.warning("Not a WAV file (no WAVE marker): %s", filepath)
+            return
+
+        # Find 'data' chunk and its position
+        while True:
+            chunk_id = f.read(4)
+            chunk_size = _struct.unpack("<I", f.read(4))[0]
+            if chunk_id == b"data":
+                data_start = f.tell()
+                break
+            # Skip non-data chunks
+            f.seek(chunk_size + (chunk_size % 2), 1)
+
+        # Read everything from data chunk onwards
+        f.seek(data_start)
+        rest = f.read()
+
+        # Write LIST chunk, then data chunk
+        f.seek(data_start)
+        f.write(list_chunk)
+        f.write(rest)
+
+        # Update RIFF total size
+        new_total = total_size + len(list_chunk)
+        f.seek(4)
+        f.write(_struct.pack("<I", new_total))
