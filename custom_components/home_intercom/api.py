@@ -272,7 +272,11 @@ class PanelView(HomeAssistantView):
                 f'<script>window._HA_API_TOKEN="{api_token}";</script>\n</head>',
             )
 
-        return web.Response(text=html, content_type="text/html")
+        return web.Response(
+            text=html,
+            content_type="text/html",
+            headers={"Cache-Control": "no-store, max-age=0"},
+        )
 
 
 class StaticView(HomeAssistantView):

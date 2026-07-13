@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import timedelta
 
 import voluptuous as vol
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
@@ -106,8 +107,6 @@ async def _create_pwa_token(hass: HomeAssistant) -> str | None:
             return None
 
         # Create a refresh token with 10-year expiration
-        from datetime import timedelta
-
         refresh_token = await hass.auth.async_create_refresh_token(
             owner,
             client_name="Home Intercom PWA",
