@@ -109,6 +109,7 @@ async def _create_pwa_token(hass: HomeAssistant) -> str | None:
         # Create a refresh token with 10-year expiration
         refresh_token = await hass.auth.async_create_refresh_token(
             owner,
+            client_id="https://github.com/mdj2812/home-intercom",
             client_name="Home Intercom PWA",
             access_token_expiration=timedelta(days=3650),
         )
