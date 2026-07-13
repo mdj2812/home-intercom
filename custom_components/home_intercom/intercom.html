@@ -21,14 +21,6 @@
   window.API_BASE = isHA ? '/api/home_intercom' : '';
   window.STATIC_BASE = isHA ? '/home_intercom/static' : '/static';
   window.PANEL_BASE = isHA ? '/home_intercom' : '';
-  // HA auth token for /api/ calls (read from localStorage, stored by HA frontend)
-  window.HA_TOKEN = '';
-  if (isHA) {
-    try {
-      var tokens = JSON.parse(localStorage.getItem('hassTokens') || '{}');
-      window.HA_TOKEN = tokens.access_token || '';
-    } catch(e) {}
-  }
 })();
 </script>
 <script>
@@ -78,11 +70,29 @@ const UNAVAILABLE_CLASS = "unavailable";
 const GRID = document.getElementById('grid');
 const RECORD_URL = (window.API_BASE || '') + '/record';
 
+// Read HA access token from localStorage (lazy — checked on every API call).
+// Supports multiple HA clients: web frontend, Companion App, etc.
+function getHAToken() {
+  try {
+    // Standard HA frontend (desktop/mobile web)
+    var t = JSON.parse(localStorage.getItem('hassTokens') || 'null');
+    if (t && t.access_token) return t.access_token;
+    // HA 2025+ key
+    t = JSON.parse(localStorage.getItem('hass_auth') || 'null');
+    if (t && t.access_token) return t.access_token;
+    // Flat key (some clients)
+    var raw = localStorage.getItem('access_token');
+    if (raw) return raw;
+  } catch(e) {}
+  return '';
+}
+
 // Build headers dict for HA API calls (adds Bearer token when available)
 function authHeaders(extra) {
   var h = extra || {};
-  if (window.HA_TOKEN) {
-    h['Authorization'] = 'Bearer ' + window.HA_TOKEN;
+  var token = getHAToken();
+  if (token) {
+    h['Authorization'] = 'Bearer ' + token;
   }
   return h;
 }
