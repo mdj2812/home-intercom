@@ -244,4 +244,5 @@ def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
             name=name,
             manufacturer="Home Intercom",
             model=entity_id,
+            area_id=room_id,
         )
