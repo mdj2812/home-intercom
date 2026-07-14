@@ -245,6 +245,9 @@ def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
             manufacturer="Home Intercom",
             model=entity_id,
         )
-        # Bind device to the selected HA area
-        if device.area_id != room_id:
+        # Bind device to HA area if room_id matches a valid area
+        from homeassistant.helpers import area_registry as ar
+
+        area_registry = ar.async_get(hass)
+        if area_registry.async_get_area(room_id) and device.area_id != room_id:
             registry.async_update_device(device.id, area_id=room_id)
