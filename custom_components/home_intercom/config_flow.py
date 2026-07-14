@@ -121,6 +121,16 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
+    async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
+        """Import from YAML configuration.yaml."""
+        await self.async_set_unique_id(DOMAIN)
+        self._abort_if_unique_id_configured()
+        rooms = import_data.get(CONF_ROOMS, {})
+        return self.async_create_entry(
+            title="Home Intercom",
+            data={CONF_ROOMS: dict(rooms)},
+        )
+
     @staticmethod
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         """Return the options flow handler."""
