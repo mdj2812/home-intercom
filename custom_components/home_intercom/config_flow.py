@@ -34,8 +34,12 @@ _LOGGER = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 
 
+# SUPPORT_PLAY_MEDIA = 1 << 9 (MediaPlayerEntityFeature.PLAY_MEDIA)
+_PLAY_MEDIA = 1 << 9
+
+
 def _media_player_choices(hass):
-    """Return {entity_id: friendly_name} for all media_player entities.
+    """Return {entity_id: friendly_name} for media_player entities that support play_media.
 
     Sorted by friendly_name. Does NOT filter by area because some
     integrations (e.g. Music Assistant / DLNA) do not populate area info.
@@ -45,6 +49,9 @@ def _media_player_choices(hass):
         hass.states.async_all("media_player"),
         key=lambda s: (s.attributes.get("friendly_name") or s.entity_id).lower(),
     ):
+        supported = state.attributes.get("supported_features", 0)
+        if not (supported & _PLAY_MEDIA):
+            continue
         choices[state.entity_id] = state.attributes.get("friendly_name", state.entity_id)
     return choices
 
@@ -68,6 +75,10 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Step: pick area + media_player + optional params in one form."""
+        # Abort early if already configured — user should use Configure → Options
+        await self.async_set_unique_id(DOMAIN)
+        self._abort_if_unique_id_configured()
+
         errors: dict[str, str] = {}
 
         areas = _area_choices(self.hass)
@@ -80,10 +91,6 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
             area_id = user_input[CONF_AREA_ID]
             entity_id = user_input[CONF_ENTITY_ID]
             area_name = areas.get(area_id, area_id)
-
-            # Prevent duplicate config entries (one per domain is enough)
-            await self.async_set_unique_id(DOMAIN)
-            self._abort_if_unique_id_configured()
 
             return self.async_create_entry(
                 title="Home Intercom",
@@ -113,17 +120,6 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
-
-    async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
-        """Import from YAML configuration.yaml."""
-        await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
-
-        rooms = import_data.get(CONF_ROOMS, {})
-        return self.async_create_entry(
-            title="Home Intercom",
-            data={CONF_ROOMS: dict(rooms)},
-        )
 
 
 # ═══════════════════════════════════════════════════════════════════════

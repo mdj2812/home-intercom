@@ -14,7 +14,7 @@
     },
     "abort": {
       "no_media_players": "Home Assistant 中未找到 media_player 实体。",
-      "already_configured": "Home Intercom 已配置。"
+      "already_configured": "Home Intercom 已配置。请通过「配置」按钮管理房间。"
     }
   },
   "options": {
