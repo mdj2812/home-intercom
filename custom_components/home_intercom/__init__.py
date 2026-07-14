@@ -159,6 +159,7 @@ async def _setup(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
 
     register_api_views(hass)
     _register_services(hass, room_map)
+    _register_devices(hass, room_map)
 
     _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
 
@@ -181,3 +182,30 @@ def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     )
 
     hass.services.async_register(DOMAIN, SERVICE_ANNOUNCE, _handle_announce, schema=schema)
+
+
+def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
+    """Register each room as a Device in HA's device registry.
+
+    Import is lazy (inside function) to avoid crashing HA at module load time.
+    """
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+
+    # Get config entry ID if available (None for YAML-only setup)
+    config_entry = hass.data.get(DOMAIN, {}).get("config_entry")
+    entry_id = config_entry.entry_id if isinstance(config_entry, ConfigEntry) else None
+
+    for room_id, room in room_map.items():
+        entity_id = room.get(CONF_ENTITY_ID, "")
+        name = room.get(CONF_NAME, room_id)
+        if not entity_id:
+            continue
+        registry.async_get_or_create(
+            config_entry_id=entry_id,
+            identifiers={(DOMAIN, room_id)},
+            name=name,
+            manufacturer="Home Intercom",
+            model=entity_id,
+        )
