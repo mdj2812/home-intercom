@@ -1,0 +1,61 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Home Intercom",
+        "description": "Set up your first room. You can add more later via Options.",
+        "data": {
+          "area_id": "Area",
+          "entity_id": "Media Player",
+          "announce_volume": "Announce Volume (1-100)",
+          "pause_buffer": "Pause Buffer (seconds)"
+        }
+      }
+    },
+    "abort": {
+      "no_media_players": "No media_player entities found in Home Assistant.",
+      "already_configured": "Home Intercom is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Rooms",
+        "description": "Manage your intercom rooms.\n\n{room_count} room(s) configured.",
+        "menu_options": {
+          "add_room": "Add Room",
+          "edit_room": "Edit Room",
+          "delete_room": "Delete Room"
+        }
+      },
+      "add_room": {
+        "title": "Add Room",
+        "description": "Add a new room to the intercom system.",
+        "data": {
+          "area_id": "Room ID",
+          "name": "Room Name",
+          "entity_id": "Media Player",
+          "announce_volume": "Announce Volume (1-100)",
+          "pause_buffer": "Pause Buffer (seconds)"
+        },
+        "error": {
+          "room_exists": "A room with this ID already exists."
+        }
+      },
+      "edit_room": {
+        "title": "Edit Room: {room_name}",
+        "description": "Update settings for this room.",
+        "data": {
+          "name": "Room Name",
+          "entity_id": "Media Player",
+          "announce_volume": "Announce Volume (1-100)",
+          "pause_buffer": "Pause Buffer (seconds)"
+        }
+      },
+      "confirm_delete": {
+        "title": "Delete Room",
+        "description": "Are you sure you want to delete \"{room_name}\"?\n\nThis cannot be undone."
+      }
+    }
+  }
+}
