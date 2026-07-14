@@ -140,37 +140,36 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Show room list with add / edit / delete options."""
+        """Show room list with a dropdown to pick an action."""
         if user_input is not None:
-            choice = user_input["next_step_id"]
+            choice = user_input["action"]
             if choice == "add_room":
                 return await self.async_step_add_room()
-            if choice.startswith("edit_"):
-                self._edit_room_id = choice.removeprefix("edit_")
+            if choice.startswith("edit:"):
+                self._edit_room_id = choice.removeprefix("edit:")
                 return await self.async_step_edit_room()
-            if choice.startswith("delete_"):
-                self._delete_room_id = choice.removeprefix("delete_")
+            if choice.startswith("delete:"):
+                self._delete_room_id = choice.removeprefix("delete:")
                 return await self.async_step_confirm_delete()
 
         rooms = self._get_rooms()
-        menu_options = ["add_room"]
-        for room_id, _cfg in rooms.items():
-            menu_options.append(f"edit_{room_id}")
-            menu_options.append(f"delete_{room_id}")
+        actions: dict[str, str] = {"add_room": "➕ Add Room"}
+        for room_id, cfg in rooms.items():
+            name = cfg.get(CONF_NAME, room_id)
+            actions[f"edit:{room_id}"] = f"✏️ Edit: {name}"
+            actions[f"delete:{room_id}"] = f"🗑️ Delete: {name}"
 
-        return self.async_show_menu(
+        return self.async_show_form(
             step_id="init",
-            menu_options=menu_options,
-            # HA renders menu_options as a list; we provide context via description_placeholders
-            description_placeholders={
-                "room_count": str(len(rooms)),
-            },
+            data_schema=vol.Schema({vol.Required("action"): vol.In(actions)}),
+            description_placeholders={"room_count": str(len(rooms))},
         )
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Form for adding a new room."""
         errors: dict[str, str] = {}
         entities = _media_player_choices(self.hass)
+        areas = _area_choices(self.hass)
 
         if not entities:
             return self.async_abort(reason="no_media_players")
@@ -192,7 +191,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_AREA_ID): str,
+                vol.Required(CONF_AREA_ID): vol.In(areas),
                 vol.Required(CONF_NAME): str,
                 vol.Required(CONF_ENTITY_ID): vol.In(entities),
                 vol.Optional(CONF_ANNOUNCE_VOLUME): vol.All(
