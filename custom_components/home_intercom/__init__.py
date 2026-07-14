@@ -75,6 +75,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
     existing = hass.config_entries.async_entries(DOMAIN)
 
+    # Store YAML room IDs in a stable key that survives reloads
+    # (used by async_remove_config_entry_device to block deletion)
+    hass.data[f"{DOMAIN}_yaml_rooms"] = set(yaml_rooms.keys())
+
     if not existing:
         # No entry yet → create SOURCE_IMPORT entry
         hass.async_create_task(
@@ -197,10 +201,9 @@ async def async_remove_config_entry_device(
     if room_id is None:
         return False  # Not our device
 
-    # YAML rooms live in entry.data (imported). Even if edited via UI,
-    # they must not be deletable — YAML is the source of truth.
-    data_rooms = entry.data.get(CONF_ROOMS, {})
-    if room_id in data_rooms:
+    # YAML rooms are read-only — reject deletion with clear error
+    yaml_rooms = hass.data.get(f"{DOMAIN}_yaml_rooms", set())
+    if room_id in yaml_rooms:
         return False
 
     # Remove room from data and options
