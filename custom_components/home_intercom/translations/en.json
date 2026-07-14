@@ -21,9 +21,10 @@
     "step": {
       "add_room": {
         "title": "Add Room",
-        "description": "Select area and media player. Room uses area name.",
+        "description": "Select area and media player. Room name defaults to area name.",
         "data": {
           "area_id": "Area",
+          "name": "Room Name (optional)",
           "entity_id": "Media Player",
           "announce_volume": "Announce Volume (1-100)",
           "pause_buffer": "Pause Buffer (seconds)"

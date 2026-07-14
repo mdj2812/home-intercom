@@ -21,9 +21,10 @@
     "step": {
       "add_room": {
         "title": "添加房间",
-        "description": "选择区域和媒体播放器，房间名自动使用区域名。",
+        "description": "选择区域和媒体播放器。房间名默认为区域名，可自定义。",
         "data": {
           "area_id": "区域",
+          "name": "房间名称（可选）",
           "entity_id": "媒体播放器",
           "announce_volume": "播报音量 (1-100)",
           "pause_buffer": "暂停缓冲 (秒)"

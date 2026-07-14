@@ -169,7 +169,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 errors["base"] = "room_exists"
             else:
                 rooms[room_id] = {
-                    CONF_NAME: areas.get(room_id, room_id),
+                    CONF_NAME: user_input.get(CONF_NAME) or areas.get(room_id, room_id),
                     CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
                     CONF_ANNOUNCE_VOLUME: user_input.get(CONF_ANNOUNCE_VOLUME),
                     CONF_PAUSE_BUFFER: user_input.get(CONF_PAUSE_BUFFER, 0.0),
@@ -180,6 +180,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_AREA_ID): vol.In(areas),
+                vol.Optional(CONF_NAME, default=""): str,
                 vol.Required(CONF_ENTITY_ID): vol.In(entities),
                 vol.Optional(CONF_ANNOUNCE_VOLUME): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=100)
