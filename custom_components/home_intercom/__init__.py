@@ -202,10 +202,12 @@ def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
         name = room.get(CONF_NAME, room_id)
         if not entity_id:
             continue
-        registry.async_get_or_create(
-            config_entry_id=entry_id,
-            identifiers={(DOMAIN, room_id)},
-            name=name,
-            manufacturer="Home Intercom",
-            model=entity_id,
-        )
+        kwargs = {
+            "identifiers": {(DOMAIN, room_id)},
+            "name": name,
+            "manufacturer": "Home Intercom",
+            "model": entity_id,
+        }
+        if entry_id is not None:
+            kwargs["config_entry_id"] = entry_id
+        registry.async_get_or_create(**kwargs)
