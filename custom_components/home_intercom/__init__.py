@@ -70,6 +70,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     SOURCE_IMPORT entries are read-only in HA UI — the user can't delete them.
     """
     if DOMAIN not in config:
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN]["yaml_room_ids"] = set()
         return True
 
     yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
@@ -89,6 +91,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         entry = existing[0]
         merged = {**yaml_rooms, **entry.data.get(CONF_ROOMS, {})}
         hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_ROOMS: merged})
+    # Track which rooms are YAML-managed (can't be deleted from UI)
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["yaml_room_ids"] = set(yaml_rooms.keys())
     return True
 
 
@@ -196,6 +201,11 @@ async def async_remove_config_entry_device(
             break
     if room_id is None:
         return False  # Not our device
+
+    # YAML rooms are immutable — don't allow deletion
+    yaml_room_ids = hass.data.get(DOMAIN, {}).get("yaml_room_ids", set())
+    if room_id in yaml_room_ids:
+        return False  # Hide Delete button for YAML rooms
 
     # Remove room from data and options
     new_data = {**entry.data}
