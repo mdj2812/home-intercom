@@ -238,11 +238,13 @@ def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
         name = room.get(CONF_NAME, room_id)
         if not entity_id:
             continue
-        registry.async_get_or_create(
+        device = registry.async_get_or_create(
             config_entry_id=entry.entry_id,
             identifiers={(DOMAIN, room_id)},
             name=name,
             manufacturer="Home Intercom",
             model=entity_id,
-            area_id=room_id,
         )
+        # Bind device to the selected HA area
+        if device.area_id != room_id:
+            registry.async_update_device(device.id, area_id=room_id)
