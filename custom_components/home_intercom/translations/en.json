@@ -19,16 +19,11 @@
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Manage Rooms",
-        "description": "{room_count} room(s) configured. Use the button below to add a new room.\n\n{room_list}"
-      },
       "add_room": {
         "title": "Add Room",
-        "description": "Select the area and media player for the new room.",
+        "description": "Select area and media player. Room uses area name.",
         "data": {
           "area_id": "Area",
-          "name": "Room Name",
           "entity_id": "Media Player",
           "announce_volume": "Announce Volume (1-100)",
           "pause_buffer": "Pause Buffer (seconds)"

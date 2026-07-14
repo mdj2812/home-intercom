@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Home Intercom",
-        "description": "设置第一个房间。之后可通过「选项」添加更多。",
+        "description": "设置第一个房间。之后可通过「配置」添加更多。",
         "data": {
           "area_id": "区域",
           "entity_id": "媒体播放器",
@@ -19,16 +19,11 @@
   },
   "options": {
     "step": {
-      "init": {
-        "title": "管理房间",
-        "description": "已配置 {room_count} 个房间。点击下方按钮添加新房间。\n\n{room_list}"
-      },
       "add_room": {
         "title": "添加房间",
-        "description": "选择区域和媒体播放器。",
+        "description": "选择区域和媒体播放器，房间名自动使用区域名。",
         "data": {
           "area_id": "区域",
-          "name": "房间名称",
           "entity_id": "媒体播放器",
           "announce_volume": "播报音量 (1-100)",
           "pause_buffer": "暂停缓冲 (秒)"

@@ -150,31 +150,11 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Entry point: Add Room button + room count."""
-        rooms = self._get_rooms()
-
-        if user_input is not None:
-            return await self.async_step_add_room()
-
-        room_list = (
-            "\n".join(
-                f"• {cfg.get(CONF_NAME, rid)} ({cfg.get(CONF_ENTITY_ID, '—')})"
-                for rid, cfg in sorted(rooms.items())
-            )
-            or "暂无房间"
-        )
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema({}),
-            description_placeholders={
-                "room_count": str(len(rooms)),
-                "room_list": room_list,
-            },
-        )
+        """Entry point — jump straight to Add Room form."""
+        return await self.async_step_add_room()
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Form for adding a new room."""
+        """Form for adding a new room. Room name = area name."""
         errors: dict[str, str] = {}
         entities = _media_player_choices(self.hass)
         areas = _area_choices(self.hass)
@@ -189,18 +169,17 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 errors["base"] = "room_exists"
             else:
                 rooms[room_id] = {
-                    CONF_NAME: user_input[CONF_NAME],
+                    CONF_NAME: areas.get(room_id, room_id),
                     CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
                     CONF_ANNOUNCE_VOLUME: user_input.get(CONF_ANNOUNCE_VOLUME),
                     CONF_PAUSE_BUFFER: user_input.get(CONF_PAUSE_BUFFER, 0.0),
                 }
                 self._save_rooms(rooms)
-                return await self.async_step_init()
+                return self.async_create_entry(title="", data=self._entry.data)
 
         schema = vol.Schema(
             {
                 vol.Required(CONF_AREA_ID): vol.In(areas),
-                vol.Required(CONF_NAME): str,
                 vol.Required(CONF_ENTITY_ID): vol.In(entities),
                 vol.Optional(CONF_ANNOUNCE_VOLUME): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=100)
