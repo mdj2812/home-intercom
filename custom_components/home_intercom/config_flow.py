@@ -156,7 +156,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         """Entry point — YAML shows info, UI has single 'Add Room' button."""
         if self._entry.unique_id == YAML_UNIQUE_ID:
             return self.async_show_form(
-                step_id="init",
+                step_id="yaml_info",
                 data_schema=vol.Schema({}),
                 description_placeholders={
                     "room_count": str(len(self._get_rooms())),

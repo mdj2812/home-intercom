@@ -20,6 +20,10 @@
   "options": {
     "step": {
       "init": {
+        "title": "管理房间",
+        "description": "已配置 {room_count} 个房间。点击提交添加新房间。"
+      },
+      "yaml_info": {
         "title": "YAML 配置的房间",
         "description": "从 configuration.yaml 加载了 {room_count} 个房间。要修改请编辑 configuration.yaml 后重启 Home Assistant。"
       },

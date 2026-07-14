@@ -20,6 +20,10 @@
   "options": {
     "step": {
       "init": {
+        "title": "Manage Rooms",
+        "description": "{room_count} room(s) configured. Click Submit to add a new room."
+      },
+      "yaml_info": {
         "title": "YAML Configured Rooms",
         "description": "{room_count} room(s) from configuration.yaml. To modify, edit configuration.yaml and restart Home Assistant."
       },
