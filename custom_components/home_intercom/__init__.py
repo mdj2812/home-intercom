@@ -158,15 +158,26 @@ async def _setup(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     hass.data[DOMAIN]["pwa_token"] = secrets.token_urlsafe(32)
 
     register_api_views(hass)
-    _register_services(hass)
+    _register_services(hass, room_map)
 
     _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
 
 
-def _register_services(hass: HomeAssistant) -> None:
-    """Register home_intercom.announce service."""
+def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
+    """Register home_intercom.announce service with dynamic room list."""
 
     async def _handle_announce(call: ServiceCall):
         await handle_announce_service(hass, call)
 
-    hass.services.async_register(DOMAIN, SERVICE_ANNOUNCE, _handle_announce)
+    # Build dynamic schema with configured room IDs
+    room_keys = ["all"] + sorted(room_map.keys())
+    target_selector = vol.In(room_keys) if room_keys else str
+    schema = vol.Schema(
+        {
+            vol.Required("target", default="all"): target_selector,
+            vol.Required("url"): str,
+            vol.Optional("volume", default=50): int,
+        }
+    )
+
+    hass.services.async_register(DOMAIN, SERVICE_ANNOUNCE, _handle_announce, schema=schema)
