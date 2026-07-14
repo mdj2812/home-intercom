@@ -22,7 +22,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.typing import ConfigType
 
 from .announce import handle_announce_service
@@ -158,8 +157,6 @@ async def _setup(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     # we use a simple bearer token injected into the HTML instead.
     hass.data[DOMAIN]["pwa_token"] = secrets.token_urlsafe(32)
 
-    # Register each room as a Device so it shows up in HA's Devices page
-    _register_devices(hass, room_map)
 
     register_api_views(hass)
     _register_services(hass)
@@ -174,26 +171,3 @@ def _register_services(hass: HomeAssistant) -> None:
         await handle_announce_service(hass, call)
 
     hass.services.async_register(DOMAIN, SERVICE_ANNOUNCE, _handle_announce)
-
-
-def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
-    """Register each room as a device in the device registry.
-
-    Each media_player gets its own device entry showing its entity_id
-    and room configuration.
-    """
-    registry = dr.async_get(hass)
-    for room_id, room in room_map.items():
-        entity_id = room.get(CONF_ENTITY_ID, "")
-        if not entity_id:
-            continue
-        registry.async_get_or_create(
-            config_entry_id=hass.data[DOMAIN].get("config_entry", {}).entry_id
-            if isinstance(hass.data[DOMAIN].get("config_entry"), ConfigEntry)
-            else None,
-            identifiers={(DOMAIN, room_id)},
-            name=room.get(CONF_NAME, room_id),
-            manufacturer="Home Intercom",
-            model=entity_id,
-            entry_type=None,
-        )
