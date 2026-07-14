@@ -37,9 +37,6 @@
           "entity_id": "媒体播放器",
           "announce_volume": "广播音量 (1-100)",
           "pause_buffer": "缓冲暂停 (秒)"
-        },
-        "error": {
-          "room_exists": "该 ID 的房间已存在。"
         }
       },
       "edit_room": {
@@ -56,6 +53,9 @@
         "title": "删除房间",
         "description": "确定要删除 \"{room_name}\" 吗？\n\n此操作不可撤销。"
       }
+    },
+    "error": {
+      "room_exists": "该 ID 的房间已存在。"
     }
   }
 }

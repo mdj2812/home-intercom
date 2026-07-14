@@ -178,7 +178,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             room_id = user_input[CONF_AREA_ID]
             rooms = self._get_rooms()
             if room_id in rooms:
-                errors[CONF_AREA_ID] = "room_exists"
+                errors["base"] = "room_exists"
             else:
                 rooms[room_id] = {
                     CONF_NAME: user_input[CONF_NAME],

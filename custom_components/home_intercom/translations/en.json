@@ -37,9 +37,6 @@
           "entity_id": "Media Player",
           "announce_volume": "Announce Volume (1-100)",
           "pause_buffer": "Pause Buffer (seconds)"
-        },
-        "error": {
-          "room_exists": "A room with this ID already exists."
         }
       },
       "edit_room": {
@@ -56,6 +53,9 @@
         "title": "Delete Room",
         "description": "Are you sure you want to delete \"{room_name}\"?\n\nThis cannot be undone."
       }
+    },
+    "error": {
+      "room_exists": "A room with this ID already exists."
     }
   }
 }
