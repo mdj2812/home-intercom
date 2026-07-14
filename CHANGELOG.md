@@ -7,7 +7,7 @@
 
 ### 🔥 Major Changes
 
-- **Home Assistant Integration** — Moved from standalone Docker Flask server to native HA `custom_component`. Auto-discovers media players, handles `play_media` via `hass.services.async_call()`, `/record` endpoint served by `HomeAssistantView`.
+- **Home Assistant Integration** — Moved from standalone Docker Flask server to native HA `custom_component`. Handles `play_media` via `hass.services.async_call()`, `/record` endpoint served by `HomeAssistantView`. Room configuration via `rooms.json`.
 - **PWA Auth Fix** — Switched from HA token authentication to shared secret (`secrets.token_urlsafe(32)`). Injected into HTML as `window._PWA_TOKEN` and sent via `X-PWA-Token` header. Works reliably from Home Assistant Companion App WebView.
 - **Xiaomi Screen Fix (#33)** — Screen-equipped speakers no longer show random cloud metadata ("心灵之谜"). After playback, silent `xiaomi_miot.intelligent_speaker` TTS clears the display.
 
