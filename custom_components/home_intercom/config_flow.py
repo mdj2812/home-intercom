@@ -45,9 +45,7 @@ def _media_player_choices(hass):
         hass.states.async_all("media_player"),
         key=lambda s: (s.attributes.get("friendly_name") or s.entity_id).lower(),
     ):
-        choices[state.entity_id] = state.attributes.get(
-            "friendly_name", state.entity_id
-        )
+        choices[state.entity_id] = state.attributes.get("friendly_name", state.entity_id)
     return choices
 
 
@@ -205,9 +203,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             }
         )
 
-        return self.async_show_form(
-            step_id="add_room", data_schema=schema, errors=errors
-        )
+        return self.async_show_form(step_id="add_room", data_schema=schema, errors=errors)
 
     async def async_step_edit_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Form for editing an existing room (pre-filled with current values)."""
@@ -229,9 +225,9 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, default=current.get(CONF_NAME, "")): str,
-                vol.Required(
-                    CONF_ENTITY_ID, default=current.get(CONF_ENTITY_ID, "")
-                ): vol.In(entities),
+                vol.Required(CONF_ENTITY_ID, default=current.get(CONF_ENTITY_ID, "")): vol.In(
+                    entities
+                ),
                 vol.Optional(
                     CONF_ANNOUNCE_VOLUME,
                     default={"default": current.get(CONF_ANNOUNCE_VOLUME)},

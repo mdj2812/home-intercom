@@ -44,12 +44,8 @@ ROOM_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_NAME): cv.string,
         vol.Required(CONF_ENTITY_ID): cv.string,
-        vol.Optional(CONF_ANNOUNCE_VOLUME): vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=100)
-        ),
-        vol.Optional(CONF_PAUSE_BUFFER): vol.All(
-            vol.Coerce(float), vol.Range(min=0)
-        ),
+        vol.Optional(CONF_ANNOUNCE_VOLUME): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+        vol.Optional(CONF_PAUSE_BUFFER): vol.All(vol.Coerce(float), vol.Range(min=0)),
     }
 )
 
@@ -160,9 +156,7 @@ async def _setup(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     register_api_views(hass)
     _register_services(hass)
 
-    _LOGGER.info(
-        "Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir
-    )
+    _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
 
 
 def _register_services(hass: HomeAssistant) -> None:
