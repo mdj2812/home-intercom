@@ -19,6 +19,10 @@
   },
   "options": {
     "step": {
+      "init": {
+        "title": "YAML Configured Rooms",
+        "description": "{room_count} room(s) from configuration.yaml. To modify, edit configuration.yaml and restart Home Assistant."
+      },
       "add_room": {
         "title": "Add Room",
         "description": "Select area and media player. Room name defaults to area name.",

@@ -23,3 +23,5 @@ WWW_DIR = "www"
 
 # ——— Config entry ———
 PLATFORMS: list[str] = []
+YAML_UNIQUE_ID = f"{DOMAIN}_yaml"
+UI_UNIQUE_ID = DOMAIN

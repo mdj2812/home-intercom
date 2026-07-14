@@ -19,6 +19,10 @@
   },
   "options": {
     "step": {
+      "init": {
+        "title": "YAML 配置的房间",
+        "description": "从 configuration.yaml 加载了 {room_count} 个房间。要修改请编辑 configuration.yaml 后重启 Home Assistant。"
+      },
       "add_room": {
         "title": "添加房间",
         "description": "选择区域和媒体播放器。房间名默认为区域名，可自定义。",

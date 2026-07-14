@@ -1,13 +1,10 @@
 """Home Intercom — PWA-based family broadcast system for Home Assistant.
 
-Registers HTTP views (HomeAssistantView) for the PWA frontend and API,
-serves static assets, and provides audio recording + playback to any
-media_player entity.
+Two config entries:
+  - YAML (SOURCE_IMPORT): immutable, read-only in UI
+  - UI   (SOURCE_USER):   user-managed, deletable devices
 
-Configuration: YAML, UI, or both. YAML creates a SOURCE_IMPORT entry
-so all rooms can register as HA Devices.
-
-Sidebar: add a Dashboard with Webpage card pointing to /home_intercom.
+Both coexist under the same domain; announce service merges all rooms.
 """
 
 from __future__ import annotations
@@ -59,29 +56,28 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+YAML_UNIQUE_ID = f"{DOMAIN}_yaml"
+UI_UNIQUE_ID = DOMAIN
+
 
 # ═══════════════════════════════════════════════════════════════════════
-# YAML setup — imports config as SOURCE_IMPORT entry
+# YAML → immutable SOURCE_IMPORT entry
 # ═══════════════════════════════════════════════════════════════════════
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """YAML-based setup. Creates or updates a config entry so all rooms get devices.
-
-    SOURCE_IMPORT entries are read-only in HA UI — the user can't delete them.
-    """
+    """Create a read-only YAML config entry. Does NOT merge into UI entry."""
     if DOMAIN not in config:
         return True
 
     yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
-    existing = hass.config_entries.async_entries(DOMAIN)
+    entries = hass.config_entries.async_entries(DOMAIN)
+    yaml_entry = _find_yaml_entry(entries)
 
-    # Store YAML room IDs in a stable key that survives reloads
-    # (used by async_remove_config_entry_device to block deletion)
-    hass.data[f"{DOMAIN}_yaml_rooms"] = set(yaml_rooms.keys())
-
-    if not existing:
-        # No entry yet → create SOURCE_IMPORT entry
+    if yaml_entry:
+        # Update existing YAML entry with current config
+        hass.config_entries.async_update_entry(yaml_entry, data={CONF_ROOMS: yaml_rooms})
+    else:
         hass.async_create_task(
             hass.config_entries.flow.async_init(
                 DOMAIN,
@@ -89,45 +85,46 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 data={CONF_ROOMS: yaml_rooms},
             )
         )
-    else:
-        # Entry exists from UI → merge YAML rooms into entry data
-        entry = existing[0]
-        merged = {**yaml_rooms, **entry.data.get(CONF_ROOMS, {})}
-        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_ROOMS: merged})
     return True
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Config entry setup — unified path for YAML import + UI
+# Config entry setup — per-entry, merged globally
 # ═══════════════════════════════════════════════════════════════════════
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Home Intercom from a config entry.
-
-    Merges entry.data (YAML import or initial UI) with entry.options (UI edits).
-    Options take priority over data.
-    """
+    """Set up or update a config entry. Merges all entries' rooms for services."""
     data_rooms = entry.data.get(CONF_ROOMS, {})
     options_rooms = entry.options.get(CONF_ROOMS, {})
     room_map = {**data_rooms, **options_rooms}
 
-    # Store entry reference BEFORE setup so _register_devices can find it
+    # Store per-entry rooms
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN]["config_entry"] = entry
+    hass.data[DOMAIN].setdefault("entry_rooms", {})
+    hass.data[DOMAIN]["entry_rooms"][entry.entry_id] = room_map
 
-    await _setup(hass, room_map)
+    # Full setup with merged rooms from all entries
+    await _full_setup(hass, entry)
 
-    # Listen for Options flow changes → reload
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
-    hass.data.pop(DOMAIN, None)
+    if DOMAIN in hass.data:
+        hass.data[DOMAIN].setdefault("entry_rooms", {}).pop(entry.entry_id, None)
+        remaining = hass.data[DOMAIN].get("entry_rooms", {})
+        if not remaining:
+            hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
+            hass.data.pop(DOMAIN, None)
+            return True
+        # Reload with remaining rooms
+        next_entry_id = next(iter(remaining))
+        next_entry = hass.config_entries.async_get_entry(next_entry_id)
+        if next_entry:
+            await _full_setup(hass, next_entry)
     return True
 
 
@@ -137,42 +134,47 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Core setup (shared by all entry points)
+# Core setup — merges all entries' rooms
 # ═══════════════════════════════════════════════════════════════════════
 
 
-async def _setup(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
-    """Shared setup: register views, services, devices, audio dir."""
+async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Full setup: merge all entries, register services + devices."""
+    entry_rooms = hass.data.get(DOMAIN, {}).get("entry_rooms", {})
+    all_rooms: dict[str, dict[str, Any]] = {}
+    for rooms in entry_rooms.values():
+        all_rooms.update(rooms)
+
     audio_dir = hass.config.path(WWW_DIR, AUDIO_SUBDIR)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].update(
         {
-            "rooms": room_map,
+            "rooms": all_rooms,
             "audio_dir": audio_dir,
         }
     )
 
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
-
-    # Generate a shared secret token for PWA ↔ backend auth.
-    # The Companion App's WebView doesn't carry HA auth for /api/ calls;
-    # we use a simple bearer token injected into the HTML instead.
-    hass.data[DOMAIN]["pwa_token"] = secrets.token_urlsafe(32)
+    hass.data[DOMAIN].setdefault("pwa_token", secrets.token_urlsafe(32))
 
     register_api_views(hass)
-    _register_services(hass, room_map)
-    _register_devices(hass, room_map)
+    _register_services(hass, all_rooms)
+    _register_devices(hass, entry.entry_id, entry_rooms.get(entry.entry_id, {}))
 
-    _LOGGER.info("Home Intercom set up — %d rooms, audio: %s", len(room_map), audio_dir)
+    _LOGGER.info(
+        "Home Intercom — %d rooms (%d entries), audio: %s",
+        len(all_rooms),
+        len(entry_rooms),
+        audio_dir,
+    )
 
 
 def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
-    """Register home_intercom.announce service with dynamic room list."""
+    """Register home_intercom.announce with dynamic room list."""
 
     async def _handle_announce(call: ServiceCall):
         await handle_announce_service(hass, call)
 
-    # Build dynamic schema with configured room IDs
     room_keys = ["all"] + sorted(room_map.keys())
     target_selector = vol.In(room_keys) if room_keys else str
     schema = vol.Schema(
@@ -183,16 +185,25 @@ def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
         }
     )
 
+    # Remove old service before re-registering (rooms may have changed)
+    if hass.services.has_service(DOMAIN, SERVICE_ANNOUNCE):
+        hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
     hass.services.async_register(DOMAIN, SERVICE_ANNOUNCE, _handle_announce, schema=schema)
 
 
 async def async_remove_config_entry_device(
     hass: HomeAssistant, entry: ConfigEntry, device_entry: Any
 ) -> bool:
-    """Handle device deletion from HA UI (⋮ → Delete).
+    """Allow device deletion only for UI entry, not YAML.
 
-    Removes the corresponding room from the config entry.
+    YAML entry has unique_id=home_intercom_yaml (read-only).
     """
+    if entry.unique_id == YAML_UNIQUE_ID:
+        raise HomeAssistantError(
+            f"「{device_entry.name}」是 YAML 配置的设备，不可通过 UI 删除。"
+            "请修改 configuration.yaml 后重启 HA。"
+        )
+
     # Find which room this device belongs to
     room_id = None
     for domain, rid in device_entry.identifiers:
@@ -200,29 +211,15 @@ async def async_remove_config_entry_device(
             room_id = rid
             break
     if room_id is None:
-        return False  # Not our device
+        return False
 
-    # YAML rooms are read-only — raise descriptive error
-    yaml_rooms = hass.data.get(f"{DOMAIN}_yaml_rooms", set())
-    if room_id in yaml_rooms:
-        raise HomeAssistantError(
-            f"「{device_entry.name}」是 YAML 配置的房间，不可通过 UI 删除。请修改 configuration.yaml 后重启 HA。"
-        )
-
-    # Remove room from data and options
-    new_data = {**entry.data}
-    if room_id in new_data.get(CONF_ROOMS, {}):
-        rooms = dict(new_data.get(CONF_ROOMS, {}))
-        rooms.pop(room_id, None)
-        new_data[CONF_ROOMS] = rooms
-
+    # Remove room from UI entry's options
     new_options = {**entry.options}
     if room_id in new_options.get(CONF_ROOMS, {}):
-        rooms = dict(new_options.get(CONF_ROOMS, {}))
+        rooms = dict(new_options[CONF_ROOMS])
         rooms.pop(room_id, None)
         new_options[CONF_ROOMS] = rooms
-
-    hass.config_entries.async_update_entry(entry, data=new_data, options=new_options)
+    hass.config_entries.async_update_entry(entry, options=new_options)
     return True
 
 
@@ -234,15 +231,13 @@ def _friendly_name(hass: HomeAssistant, entity_id: str) -> str:
     return entity_id
 
 
-def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
-    """Register each room as a Device in HA's device registry.
-
-    Import is lazy (inside function) to avoid crashing HA at module load time.
-    """
+def _register_devices(hass: HomeAssistant, entry_id: str, room_map: dict[str, Any]) -> None:
+    """Register devices for ONE config entry. Import is lazy."""
+    from homeassistant.helpers import area_registry as ar
     from homeassistant.helpers import device_registry as dr
 
     registry = dr.async_get(hass)
-    entry = hass.data[DOMAIN]["config_entry"]
+    area_registry = ar.async_get(hass)
 
     for room_id, room in room_map.items():
         entity_id = room.get(CONF_ENTITY_ID, "")
@@ -250,15 +245,19 @@ def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
         if not entity_id:
             continue
         device = registry.async_get_or_create(
-            config_entry_id=entry.entry_id,
+            config_entry_id=entry_id,
             identifiers={(DOMAIN, room_id)},
             name=name,
             manufacturer="Home Intercom",
             model=_friendly_name(hass, entity_id),
         )
-        # Bind device to HA area if room_id matches a valid area
-        from homeassistant.helpers import area_registry as ar
-
-        area_registry = ar.async_get(hass)
         if area_registry.async_get_area(room_id) and device.area_id != room_id:
             registry.async_update_device(device.id, area_id=room_id)
+
+
+def _find_yaml_entry(entries: list[ConfigEntry]) -> ConfigEntry | None:
+    """Find the YAML (SOURCE_IMPORT) entry among existing entries."""
+    for entry in entries:
+        if entry.unique_id == YAML_UNIQUE_ID:
+            return entry
+    return None

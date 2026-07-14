@@ -24,6 +24,8 @@ from .const import (
     CONF_PAUSE_BUFFER,
     CONF_ROOMS,
     DOMAIN,
+    UI_UNIQUE_ID,
+    YAML_UNIQUE_ID,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -76,7 +78,7 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Step: pick area + media_player + optional params in one form."""
         # Abort early if already configured — user should use Configure → Options
-        await self.async_set_unique_id(DOMAIN)
+        await self.async_set_unique_id(UI_UNIQUE_ID)
         self._abort_if_unique_id_configured()
 
         errors: dict[str, str] = {}
@@ -123,12 +125,13 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
         """Import from YAML configuration.yaml."""
-        await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
-        rooms = import_data.get(CONF_ROOMS, {})
+        await self.async_set_unique_id(YAML_UNIQUE_ID)
+        self._abort_if_unique_id_configured(
+            updates={CONF_ROOMS: dict(import_data.get(CONF_ROOMS, {}))}
+        )
         return self.async_create_entry(
-            title="Home Intercom",
-            data={CONF_ROOMS: dict(rooms)},
+            title="Home Intercom (YAML)",
+            data={CONF_ROOMS: dict(import_data.get(CONF_ROOMS, {}))},
         )
 
     @staticmethod
@@ -150,7 +153,15 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Entry point — jump straight to Add Room form."""
+        """Entry point — YAML shows info, UI jumps to Add Room."""
+        if self._entry.unique_id == YAML_UNIQUE_ID:
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "room_count": str(len(self._get_rooms())),
+                },
+            )
         return await self.async_step_add_room()
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
