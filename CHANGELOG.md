@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.0.0-rc1 (2026-07-13)
+
+> **Breaking**: Docker-centric Flask server replaced by native HA integration.  
+> The integration now lives in `custom_components/home_intercom/`.
+
+### 🔥 Major Changes
+
+- **Home Assistant Integration** — Moved from standalone Docker Flask server to native HA `custom_component`. Auto-discovers media players, handles `play_media` via `hass.services.async_call()`, `/record` endpoint served by `HomeAssistantView`.
+- **PWA Auth Fix** — Switched from HA token authentication to shared secret (`secrets.token_urlsafe(32)`). Injected into HTML as `window._PWA_TOKEN` and sent via `X-PWA-Token` header. Works reliably from Home Assistant Companion App WebView.
+- **Xiaomi Screen Fix (#33)** — Screen-equipped speakers no longer show random cloud metadata ("心灵之谜"). After playback, silent `xiaomi_miot.intelligent_speaker` TTS clears the display.
+
+### ✨ Features
+
+- **Three-tier playback** — Music Assistant → modern player (repeat_set) → basic player with auto-pause timer. Same logic, now running inside HA.
+- **Pre-announce chime** — WAV-level concatenation, `use_pre_announce` for MA players
+- **Configurable announce volume** — per-room `announce_volume` with UI slider
+- **Room status endpoint** — `/rooms/status` returns `{status, friendly_name}`, offline speakers greyed out
+- **i18n** — zh-CN / en with dropdown language selector
+
+### 🔧 Infrastructure
+
+- **GitHub Actions** — CI (lint + test + smoke), Docker build/push, release workflow with HACS ZIP
+- **Docker pre-release tags** — Pre-releases push version tag only (not `latest`); stable releases get `latest`
+- **HACS validation** — `hassfest` + `hacs/action` validate integration structure
+
+### 📦 Versions
+
+| Component | Version |
+|-----------|---------|
+| manifest.json | `2.0.0-rc1` |
+| Docker | `ghcr.io/mdj2812/home-intercom:v2.0.0-rc1` |
+| HA min version | `2026.7.0` |
+
+---
+
 ## v1.6.3 (2026-07-10)
 
 - **Room status & friendly names** — `/rooms/status` now returns `{status, friendly_name}` per room, device names displayed on room cards
