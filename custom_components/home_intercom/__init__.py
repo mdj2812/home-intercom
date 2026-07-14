@@ -157,7 +157,6 @@ async def _setup(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     # we use a simple bearer token injected into the HTML instead.
     hass.data[DOMAIN]["pwa_token"] = secrets.token_urlsafe(32)
 
-
     register_api_views(hass)
     _register_services(hass)
 

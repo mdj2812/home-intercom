@@ -121,6 +121,11 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
+    @staticmethod
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow handler."""
+        return HomeIntercomOptionsFlow(config_entry)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # OptionsFlow
