@@ -107,11 +107,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     options_rooms = entry.options.get(CONF_ROOMS, {})
     room_map = {**data_rooms, **options_rooms}
 
-    await _setup(hass, room_map)
-
-    # Store entry reference for OptionsFlow and device registration
+    # Store entry reference BEFORE setup so _register_devices can find it
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN]["config_entry"] = entry
+
+    await _setup(hass, room_map)
 
     # Listen for Options flow changes → reload
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
