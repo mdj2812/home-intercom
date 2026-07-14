@@ -193,8 +193,10 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                     CONF_ANNOUNCE_VOLUME: user_input.get(CONF_ANNOUNCE_VOLUME),
                     CONF_PAUSE_BUFFER: user_input.get(CONF_PAUSE_BUFFER, 0.0),
                 }
-                self._save_rooms(rooms)
-                return self.async_create_entry(title="", data=self._entry.data)
+                return self.async_create_entry(
+                    title="",
+                    data={CONF_ROOMS: rooms},
+                )
 
         schema = vol.Schema(
             {
