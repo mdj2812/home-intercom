@@ -181,6 +181,39 @@ def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     hass.services.async_register(DOMAIN, SERVICE_ANNOUNCE, _handle_announce, schema=schema)
 
 
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry: Any
+) -> bool:
+    """Handle device deletion from HA UI (⋮ → Delete).
+
+    Removes the corresponding room from the config entry.
+    """
+    # Find which room this device belongs to
+    room_id = None
+    for domain, rid in device_entry.identifiers:
+        if domain == DOMAIN:
+            room_id = rid
+            break
+    if room_id is None:
+        return False  # Not our device
+
+    # Remove room from data and options
+    new_data = {**entry.data}
+    if room_id in new_data.get(CONF_ROOMS, {}):
+        rooms = dict(new_data.get(CONF_ROOMS, {}))
+        rooms.pop(room_id, None)
+        new_data[CONF_ROOMS] = rooms
+
+    new_options = {**entry.options}
+    if room_id in new_options.get(CONF_ROOMS, {}):
+        rooms = dict(new_options.get(CONF_ROOMS, {}))
+        rooms.pop(room_id, None)
+        new_options[CONF_ROOMS] = rooms
+
+    hass.config_entries.async_update_entry(entry, data=new_data, options=new_options)
+    return True
+
+
 def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     """Register each room as a Device in HA's device registry.
 

@@ -150,29 +150,27 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Show room list with a dropdown to pick an action."""
-        if user_input is not None:
-            choice = user_input["action"]
-            if choice == "add_room":
-                return await self.async_step_add_room()
-            if choice.startswith("edit:"):
-                self._edit_room_id = choice.removeprefix("edit:")
-                return await self.async_step_edit_room()
-            if choice.startswith("delete:"):
-                self._delete_room_id = choice.removeprefix("delete:")
-                return await self.async_step_confirm_delete()
-
+        """Entry point: Add Room button + room count."""
         rooms = self._get_rooms()
-        actions: dict[str, str] = {"add_room": "➕ Add Room"}
-        for room_id, cfg in rooms.items():
-            name = cfg.get(CONF_NAME, room_id)
-            actions[f"edit:{room_id}"] = f"✏️ Edit: {name}"
-            actions[f"delete:{room_id}"] = f"🗑️ Delete: {name}"
+
+        if user_input is not None:
+            return await self.async_step_add_room()
+
+        room_list = (
+            "\n".join(
+                f"• {cfg.get(CONF_NAME, rid)} ({cfg.get(CONF_ENTITY_ID, '—')})"
+                for rid, cfg in sorted(rooms.items())
+            )
+            or "none"
+        )
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({vol.Required("action"): vol.In(actions)}),
-            description_placeholders={"room_count": str(len(rooms))},
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "room_count": str(len(rooms)),
+                "room_list": room_list,
+            },
         )
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:

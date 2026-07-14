@@ -20,42 +20,23 @@
   "options": {
     "step": {
       "init": {
-        "title": "Rooms",
-        "description": "Manage your intercom rooms.\n\n{room_count} room(s) configured.",
-        "menu_options": {
-          "add_room": "Add Room",
-          "edit_room": "Edit Room",
-          "delete_room": "Delete Room"
-        }
+        "title": "Manage Rooms",
+        "description": "{room_count} room(s) configured. Use the button below to add a new room. Delete rooms from the device page (⋮ → Delete).\n\n{room_list}"
       },
       "add_room": {
         "title": "Add Room",
-        "description": "Add a new room to the intercom system.",
+        "description": "Select the area and media player for the new room.",
         "data": {
-          "area_id": "Room ID",
+          "area_id": "Area",
           "name": "Room Name",
           "entity_id": "Media Player",
           "announce_volume": "Announce Volume (1-100)",
           "pause_buffer": "Pause Buffer (seconds)"
         }
-      },
-      "edit_room": {
-        "title": "Edit Room: {room_name}",
-        "description": "Update settings for this room.",
-        "data": {
-          "name": "Room Name",
-          "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (1-100)",
-          "pause_buffer": "Pause Buffer (seconds)"
-        }
-      },
-      "confirm_delete": {
-        "title": "Delete Room",
-        "description": "Are you sure you want to delete \"{room_name}\"?\n\nThis cannot be undone."
       }
     },
     "error": {
-      "room_exists": "A room with this ID already exists."
+      "room_exists": "A room with this area is already configured."
     }
   }
 }

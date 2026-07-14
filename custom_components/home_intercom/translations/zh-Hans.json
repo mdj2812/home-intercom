@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Home Intercom",
-        "description": "设置第一个房间，之后可以通过选项添加更多。",
+        "description": "设置第一个房间。之后可通过「选项」添加更多。",
         "data": {
           "area_id": "区域",
           "entity_id": "媒体播放器",
-          "announce_volume": "广播音量 (1-100)",
-          "pause_buffer": "缓冲暂停 (秒)"
+          "announce_volume": "播报音量 (1-100)",
+          "pause_buffer": "暂停缓冲 (秒)"
         }
       }
     },
@@ -20,42 +20,23 @@
   "options": {
     "step": {
       "init": {
-        "title": "房间管理",
-        "description": "管理对讲系统的房间。\n\n已配置 {room_count} 个房间。",
-        "menu_options": {
-          "add_room": "添加房间",
-          "edit_room": "编辑房间",
-          "delete_room": "删除房间"
-        }
+        "title": "管理房间",
+        "description": "已配置 {room_count} 个房间。点击下方按钮添加新房间。删除房间请到设备页面操作（⋮ → 删除）。\n\n{room_list}"
       },
       "add_room": {
         "title": "添加房间",
-        "description": "向对讲系统添加新房间。",
+        "description": "选择区域和媒体播放器。",
         "data": {
-          "area_id": "房间 ID",
+          "area_id": "区域",
           "name": "房间名称",
           "entity_id": "媒体播放器",
-          "announce_volume": "广播音量 (1-100)",
-          "pause_buffer": "缓冲暂停 (秒)"
+          "announce_volume": "播报音量 (1-100)",
+          "pause_buffer": "暂停缓冲 (秒)"
         }
-      },
-      "edit_room": {
-        "title": "编辑房间: {room_name}",
-        "description": "更新房间设置。",
-        "data": {
-          "name": "房间名称",
-          "entity_id": "媒体播放器",
-          "announce_volume": "广播音量 (1-100)",
-          "pause_buffer": "缓冲暂停 (秒)"
-        }
-      },
-      "confirm_delete": {
-        "title": "删除房间",
-        "description": "确定要删除 \"{room_name}\" 吗？\n\n此操作不可撤销。"
       }
     },
     "error": {
-      "room_exists": "该 ID 的房间已存在。"
+      "room_exists": "该区域已配置。"
     }
   }
 }
