@@ -21,6 +21,7 @@ import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -201,10 +202,12 @@ async def async_remove_config_entry_device(
     if room_id is None:
         return False  # Not our device
 
-    # YAML rooms are read-only — reject deletion with clear error
+    # YAML rooms are read-only — raise descriptive error
     yaml_rooms = hass.data.get(f"{DOMAIN}_yaml_rooms", set())
     if room_id in yaml_rooms:
-        return False
+        raise HomeAssistantError(
+            f"「{device_entry.name}」是 YAML 配置的房间，不可通过 UI 删除。请修改 configuration.yaml 后重启 HA。"
+        )
 
     # Remove room from data and options
     new_data = {**entry.data}
