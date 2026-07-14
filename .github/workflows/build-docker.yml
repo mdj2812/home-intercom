@@ -27,14 +27,17 @@ jobs:
         id: meta
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
-            # Release event: use the tag name as version
             TAG="${{ github.ref_name }}"
             VERSION="${TAG#v}"
             IS_PRERELEASE="${{ github.event.release.prerelease }}"
           else
             VERSION=$(cat docker/.docker-image)
             TAG="$VERSION"
-            IS_PRERELEASE="false"
+            # Detect pre-release from version string (e.g. v2.0.0-rc1)
+            case "$VERSION" in
+              *-rc*|*-alpha*|*-beta*|*-pre*|*-dev*) IS_PRERELEASE="true" ;;
+              *) IS_PRERELEASE="false" ;;
+            esac
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -59,17 +62,18 @@ jobs:
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}"
 
           if [ "${{ github.event_name }}" = "release" ]; then
-            # Release event: always push version tag
-            # Only push 'latest' for stable releases (not pre-releases)
             if [ "${{ steps.meta.outputs.is_prerelease }}" != "true" ]; then
               TAGS="$TAGS
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
             fi
           elif [ "${{ github.ref_name }}" = "main" ]; then
-            # Push to main: always update 'main' and 'latest', plus version tag
             TAGS="$TAGS
-          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+            # Only tag 'latest' for stable versions on main
+            if [ "${{ steps.meta.outputs.is_prerelease }}" != "true" ]; then
+              TAGS="$TAGS
           ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            fi
           fi
 
           echo "list<<EOF" >> "$GITHUB_OUTPUT"
