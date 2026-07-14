@@ -226,6 +226,14 @@ async def async_remove_config_entry_device(
     return True
 
 
+def _friendly_name(hass: HomeAssistant, entity_id: str) -> str:
+    """Get friendly name of an entity, fall back to entity_id."""
+    state = hass.states.get(entity_id)
+    if state is not None:
+        return state.attributes.get("friendly_name", entity_id)
+    return entity_id
+
+
 def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
     """Register each room as a Device in HA's device registry.
 
@@ -246,7 +254,7 @@ def _register_devices(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
             identifiers={(DOMAIN, room_id)},
             name=name,
             manufacturer="Home Intercom",
-            model=entity_id,
+            model=_friendly_name(hass, entity_id),
         )
         # Bind device to HA area if room_id matches a valid area
         from homeassistant.helpers import area_registry as ar
