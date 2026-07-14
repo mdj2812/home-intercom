@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'docker/.docker-image'
+  release:
+    types: [published]
   workflow_dispatch:
 
 env:
@@ -21,11 +23,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read version
-        id: version
+      - name: Determine version and pre-release status
+        id: meta
         run: |
-          VERSION=$(cat docker/.docker-image)
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Release event: use the tag name as version
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+            IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          else
+            VERSION=$(cat docker/.docker-image)
+            TAG="$VERSION"
+            IS_PRERELEASE="false"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
       - name: Compute branch tag
         id: branch_tag
@@ -43,12 +56,22 @@ jobs:
       - name: Compute tags
         id: tags
         run: |
-          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.branch_tag.outputs.safe_tag }}"
-          if [ "${{ github.ref_name }}" = "main" ]; then
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}"
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Release event: always push version tag
+            # Only push 'latest' for stable releases (not pre-releases)
+            if [ "${{ steps.meta.outputs.is_prerelease }}" != "true" ]; then
+              TAGS="$TAGS
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            fi
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            # Push to main: always update 'main' and 'latest', plus version tag
             TAGS="$TAGS
-          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           fi
+
           echo "list<<EOF" >> "$GITHUB_OUTPUT"
           echo "$TAGS" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
