@@ -27,7 +27,9 @@
 // Set initial title from saved language before i18n.js loads
 (function(){
   var lang = localStorage.getItem("intercom-lang") || "";
-  var isEn = lang === "en" || (!lang && (navigator.language || "zh-CN").split("-")[0] !== "zh");
+  // Read HA user language from localStorage (same origin)
+  var haLang = localStorage.getItem("selectedLanguage") || "";
+  var isEn = lang === "en" || (!lang && (haLang.includes("en") || haLang.includes("en-")));
   document.title = isEn ? "Home Intercom" : "家庭广播";
 })();
 </script>
