@@ -224,10 +224,13 @@ async def async_remove_config_entry_device(
 
 
 def _friendly_name(hass: HomeAssistant, entity_id: str) -> str:
-    """Get friendly name of an entity, fall back to entity_id."""
-    state = hass.states.get(entity_id)
-    if state is not None:
-        return state.attributes.get("friendly_name", entity_id)
+    """Get friendly name from entity registry, fall back to entity_id."""
+    from homeassistant.helpers import entity_registry as er
+
+    registry = er.async_get(hass)
+    entry = registry.async_get(entity_id)
+    if entry is not None:
+        return entry.original_name or entity_id
     return entity_id
 
 
