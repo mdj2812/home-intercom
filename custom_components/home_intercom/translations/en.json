@@ -21,7 +21,7 @@
     "step": {
       "init": {
         "title": "Manage Rooms",
-        "description": "{room_count} room(s) configured. Use the button below to add a new room. Delete rooms from the device page (⋮ → Delete).\n\n{room_list}"
+        "description": "{room_count} room(s) configured. Use the button below to add a new room.\n\n{room_list}"
       },
       "add_room": {
         "title": "Add Room",

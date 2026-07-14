@@ -21,7 +21,7 @@
     "step": {
       "init": {
         "title": "管理房间",
-        "description": "已配置 {room_count} 个房间。点击下方按钮添加新房间。删除房间请到设备页面操作（⋮ → 删除）。\n\n{room_list}"
+        "description": "已配置 {room_count} 个房间。点击下方按钮添加新房间。\n\n{room_list}"
       },
       "add_room": {
         "title": "添加房间",

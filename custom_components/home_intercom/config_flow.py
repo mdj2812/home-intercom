@@ -161,7 +161,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 f"• {cfg.get(CONF_NAME, rid)} ({cfg.get(CONF_ENTITY_ID, '—')})"
                 for rid, cfg in sorted(rooms.items())
             )
-            or "none"
+            or "暂无房间"
         )
 
         return self.async_show_form(
@@ -278,13 +278,10 @@ class HomeIntercomOptionsFlow(OptionsFlow):
     # ——— helpers ———
 
     def _get_rooms(self) -> dict[str, dict[str, Any]]:
-        """Get current rooms dict from config entry options (or data fallback)."""
-        options = dict(self._entry.options)
-        rooms = options.get(CONF_ROOMS)
-        if rooms is not None:
-            return dict(rooms)
-        # Fall back to entry.data for backward compatibility
-        return dict(self._entry.data.get(CONF_ROOMS, {}))
+        """Get combined rooms from config entry data + options."""
+        data_rooms = dict(self._entry.data.get(CONF_ROOMS, {}))
+        options_rooms = dict(self._entry.options.get(CONF_ROOMS, {}))
+        return {**data_rooms, **options_rooms}
 
     def _save_rooms(self, rooms: dict[str, dict[str, Any]]) -> None:
         """Persist rooms to config entry options."""
