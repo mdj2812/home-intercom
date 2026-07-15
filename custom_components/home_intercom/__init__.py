@@ -199,9 +199,11 @@ async def async_remove_config_entry_device(
     YAML entry has unique_id=home_intercom_yaml (read-only).
     """
     if entry.unique_id == YAML_UNIQUE_ID:
+        is_zh = hass.config.language.startswith("zh")
         raise HomeAssistantError(
-            f"「{device_entry.name}」是 YAML 配置的设备，不可通过 UI 删除。"
-            "请修改 configuration.yaml 后重启 HA。"
+            f"「{device_entry.name}」是 YAML 配置的设备，不可通过 UI 删除。请修改 configuration.yaml 后重启 HA。"
+            if is_zh
+            else f'"{device_entry.name}" is a YAML-configured device and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant.'
         )
 
     # Find which room this device belongs to
