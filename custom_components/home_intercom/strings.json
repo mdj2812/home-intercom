@@ -45,5 +45,10 @@
     "abort": {
       "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant."
     }
+  },
+  "exceptions": {
+    "yaml_device_delete_blocked": {
+      "message": "\"{name}\" is a YAML-configured device and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
+    }
   }
 }

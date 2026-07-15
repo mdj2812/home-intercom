@@ -45,5 +45,10 @@
     "abort": {
       "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。"
     }
+  },
+  "exceptions": {
+    "yaml_device_delete_blocked": {
+      "message": "「{name}」是 YAML 配置的设备，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
+    }
   }
 }

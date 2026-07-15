@@ -200,11 +200,12 @@ async def async_remove_config_entry_device(
     """
     if entry.unique_id == YAML_UNIQUE_ID:
         raise HomeAssistantError(
-            f"「{device_entry.name}」是 YAML 配置的设备，不可通过 UI 删除。\n"
-            f'"{device_entry.name}" is a YAML-configured device and cannot be '
-            "deleted via UI. Edit configuration.yaml and restart Home Assistant."
+            translation_domain=DOMAIN,
+            translation_key="yaml_device_delete_blocked",
+            translation_placeholders={"name": device_entry.name},
         )
 
+    # Find which room this device belongs to
     # Find which room this device belongs to
     room_id = None
     for domain, rid in device_entry.identifiers:
