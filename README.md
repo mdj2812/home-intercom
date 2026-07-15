@@ -46,7 +46,11 @@ MA players support the native `play_announcement` service — playback stops aut
 
 1. Add this repository as a custom repository in HACS
 2. Install "Home Intercom" from HACS
-3. Add to `configuration.yaml`:
+3. Go to **Settings → Devices & Services → Add Integration** → search "Home Intercom"
+4. Fill in the form: select an Area, pick a media player, optionally set announce volume and pause buffer
+5. Repeat Configure → Add Room for each additional room
+
+Alternatively, use YAML (read-only after import):
 
 ```yaml
 home_intercom:
@@ -54,14 +58,15 @@ home_intercom:
     living:
       name: "Living Room"
       entity_id: "media_player.living_room_speaker"
-      announce_volume: 50  # optional
+      announce_volume: 50  # optional, 0-100
     bedroom:
       name: "Bedroom"
       entity_id: "media_player.bedroom_speaker"
 ```
 
-4. Restart Home Assistant
-5. **Add to sidebar**: create a Dashboard → add Webpage card → URL: `/home_intercom`
+YAML rooms appear as a separate config entry labeled "YAML". Use the UI integration for editable management. For YAML rooms, edit `configuration.yaml` and restart HA.
+
+4. **Add to sidebar**: create a Dashboard → add Webpage card → URL: `/home_intercom`
 
 ## Installation (Docker)
 

@@ -1,5 +1,42 @@
 # Changelog
 
+## v2.0.0-rc2 (2026-07-15)
+
+> **Config Flow + Options Flow + Device Management**
+
+### 🔥 Major Changes
+
+- **Config Flow (#36)** — Add Home Intercom via the HA Integrations UI (Settings → Devices & Services → Add Integration). Single-step: pick area, media player, optional announce volume and pause buffer.
+- **Options Flow** — Manage rooms via Configure button: add, edit (change media player, volume, buffer), delete. All changes take effect immediately via `async_reload`.
+- **Dual Config Entry** — YAML (`configuration.yaml`) generates a read-only SOURCE_IMPORT entry (`unique_id: home_intercom_yaml`). UI creates an editable entry (`unique_id: home_intercom`). Rooms from both sources merge; UI rooms override YAML rooms on key collision.
+- **Device Registry** — Each room registers as a HA Device (`identifiers={(DOMAIN, room_id)}`). Auto-links to Area when room_id is a valid HA area UUID. Device names sync with HA Device Edit.
+- **YAML Protection** — Trying to delete YAML entry or device raises `HomeAssistantError` with translated messages (en + zh-Hans). YAML Configure button shows read-only info screen.
+- **Smart Media Player Filter** — Dropdowns only show entities with `SUPPORT_PLAY_MEDIA`, sorted by area name then friendly name.
+- **Translations** — Full English + 中文 (zh-Hans). `HomeAssistantError` messages respect browser language via `Accept-Language`.
+
+### 🔧 Details
+
+- `vol.Optional` fields use `0 = disabled` convention — HA form behavior workaround
+- Config entry data/options merge pattern with `entry_rooms` dict
+- `_apply_optional_fields` helper shared between add/edit flows
+- Room key collision logged as warning
+- `_media_player_choices` sorts by area name (no-area entities sort last)
+
+### 🐛 Fixes
+
+- Fixed: editing room clears optional fields when user sets 0
+- Fixed: Manage Rooms dropdown shows device-level names (from Device Edit)
+
+### 📦 Versions
+
+| Component | Version |
+|-----------|---------|
+| manifest.json | `2.0.0-rc2` |
+| Docker | `ghcr.io/mdj2812/home-intercom:v2.0.0-rc2` |
+| HA min version | `2026.7.0` |
+
+---
+
 ## v2.0.0-rc1 (2026-07-13)
 
 > **Breaking**: Docker-centric Flask server replaced by native HA integration.  

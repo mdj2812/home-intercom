@@ -46,7 +46,11 @@ MA 播放器支持原生 `play_announcement` 服务——播完自动停止。**
 
 1. 在 HACS 中添加自定义仓库
 2. 安装 "Home Intercom"
-3. 在 `configuration.yaml` 中添加：
+3. 前往 **设置 → 设备与服务 → 添加集成** → 搜索 "Home Intercom"
+4. 填写表单：选择区域、媒体播放器，可选设置播报音量和暂停缓冲
+5. 重复 配置 → 添加房间 来添加更多房间
+
+也可以使用 YAML（导入后只读）：
 
 ```yaml
 home_intercom:
@@ -54,14 +58,15 @@ home_intercom:
     living:
       name: "客厅"
       entity_id: "media_player.living_room_speaker"
-      announce_volume: 50  # 可选
+      announce_volume: 50  # 可选, 0-100
     bedroom:
       name: "主卧"
       entity_id: "media_player.bedroom_speaker"
 ```
 
-4. 重启 Home Assistant
-5. **添加到侧边栏**：创建仪表盘 → 添加网页卡片 → URL 填 `/home_intercom`
+YAML 房间会以独立的 "YAML" 配置条目显示。通过 UI 集成管理可编辑的房间；YAML 房间需编辑 `configuration.yaml` 并重启 HA。
+
+4. **添加到侧边栏**：创建仪表盘 → 添加网页卡片 → URL 填 `/home_intercom`
 
 ## 安装（Docker）
 
