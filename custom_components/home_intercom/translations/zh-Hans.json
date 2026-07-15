@@ -49,6 +49,9 @@
   "exceptions": {
     "yaml_device_delete_blocked": {
       "message": "「{name}」是 YAML 配置的设备，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
+    },
+    "yaml_entry_delete_blocked": {
+      "message": "「{title}」是 YAML 配置的集成，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
     }
   }
 }

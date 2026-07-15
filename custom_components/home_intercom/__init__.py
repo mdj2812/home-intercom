@@ -128,6 +128,18 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Block removal of YAML config entry."""
+    if entry.unique_id == YAML_UNIQUE_ID:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="yaml_entry_delete_blocked",
+            translation_placeholders={"title": entry.title},
+        )
+    # UI entry — normal cleanup
+    return None
+
+
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the integration when Options flow saves changes."""
     await hass.config_entries.async_reload(entry.entry_id)

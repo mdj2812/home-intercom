@@ -49,6 +49,9 @@
   "exceptions": {
     "yaml_device_delete_blocked": {
       "message": "\"{name}\" is a YAML-configured device and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
+    },
+    "yaml_entry_delete_blocked": {
+      "message": "\"{title}\" is a YAML-configured integration and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
     }
   }
 }
