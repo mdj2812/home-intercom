@@ -178,6 +178,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({vol.Required("room_choice"): vol.In(room_choices)}),
+            description_placeholders={"room_count": str(len(rooms))},
         )
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
