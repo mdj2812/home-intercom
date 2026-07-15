@@ -237,13 +237,13 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 **current,
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
             }
-            # Optional fields: only persist when present in user_input
-            # (HA form omits keys for cleared Optional fields)
-            if CONF_ANNOUNCE_VOLUME in user_input:
+            # Optional fields: only persist when user actually provided a value
+            # (HA form may include key with None/"" when toggle is unchecked)
+            if user_input.get(CONF_ANNOUNCE_VOLUME) is not None:
                 new_room[CONF_ANNOUNCE_VOLUME] = user_input[CONF_ANNOUNCE_VOLUME]
             else:
                 new_room.pop(CONF_ANNOUNCE_VOLUME, None)
-            if CONF_PAUSE_BUFFER in user_input:
+            if user_input.get(CONF_PAUSE_BUFFER) is not None:
                 new_room[CONF_PAUSE_BUFFER] = user_input[CONF_PAUSE_BUFFER]
             else:
                 new_room.pop(CONF_PAUSE_BUFFER, None)
