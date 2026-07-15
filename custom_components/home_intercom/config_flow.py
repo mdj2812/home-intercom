@@ -55,7 +55,9 @@ def _media_player_choices(hass):
     er_reg = er.async_get(hass)
     ar_reg = ar.async_get(hass)
 
-    entries: list[tuple[str, str, str, str]] = []  # (area_key, friendly_key, entity_id, friendly_display)
+    entries: list[
+        tuple[str, str, str, str]
+    ] = []  # (area_key, friendly_key, entity_id, friendly_display)
     for state in hass.states.async_all("media_player"):
         supported = state.attributes.get("supported_features", 0)
         if not (supported & _PLAY_MEDIA):
@@ -231,12 +233,12 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 vol.Required(CONF_AREA_ID): vol.In(areas),
                 vol.Optional(CONF_NAME, default=""): str,
                 vol.Required(CONF_ENTITY_ID): vol.In(entities),
-                vol.Required(
-                    CONF_ANNOUNCE_VOLUME, default=0
-                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
-                vol.Required(
-                    CONF_PAUSE_BUFFER, default=0
-                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=10)),
+                vol.Required(CONF_ANNOUNCE_VOLUME, default=0): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=100)
+                ),
+                vol.Required(CONF_PAUSE_BUFFER, default=0): vol.All(
+                    vol.Coerce(float), vol.Range(min=0, max=10)
+                ),
             }
         )
 
@@ -326,9 +328,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self.hass.config_entries.async_update_entry(self._entry, options=options)
 
     @staticmethod
-    def _apply_optional_fields(
-        room: dict[str, Any], user_input: dict[str, Any]
-    ) -> None:
+    def _apply_optional_fields(room: dict[str, Any], user_input: dict[str, Any]) -> None:
         """Apply announce_volume / pause_buffer. 0 = remove from config."""
         vol_val = user_input.get(CONF_ANNOUNCE_VOLUME)
         if vol_val not in (None, 0):
