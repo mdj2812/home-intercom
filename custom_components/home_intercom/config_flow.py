@@ -153,7 +153,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Entry point — YAML shows info, UI has single 'Add Room' button."""
+        """Entry point — YAML shows info, UI goes straight to Add Room."""
         if self._entry.unique_id == YAML_UNIQUE_ID:
             return self.async_show_form(
                 step_id="yaml_info",
@@ -162,15 +162,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                     "room_count": str(len(self._get_rooms())),
                 },
             )
-        if user_input is not None:
-            return await self.async_step_add_room()
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema({}),
-            description_placeholders={
-                "room_count": str(len(self._get_rooms())),
-            },
-        )
+        return await self.async_step_add_room()
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Form for adding a new room. Room name = area name."""
