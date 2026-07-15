@@ -43,7 +43,7 @@
       },
       "edit_room": {
         "title": "编辑房间 — {room_name}",
-        "description": "更换此房间的媒体播放器。",
+        "description": "当前值: {current_values}。勾选字段并输入新值来修改，取消勾选来清除。",
         "data": {
           "entity_id": "媒体播放器",
           "announce_volume": "播报音量 (1-100)",

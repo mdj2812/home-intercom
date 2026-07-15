@@ -233,7 +233,6 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         current = rooms.get(self._edit_room_id, {})
 
         if user_input is not None:
-            _LOGGER.info("edit_room user_input: %s", user_input)
             new_room: dict[str, Any] = {
                 **current,
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
@@ -260,28 +259,24 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 default=current.get(CONF_ENTITY_ID, ""),
             ): vol.In(entities),
         }
-        # Announce volume: pre-filled only if currently set
-        cur_vol = current.get(CONF_ANNOUNCE_VOLUME)
-        if cur_vol is not None:
-            schema_fields[vol.Optional(CONF_ANNOUNCE_VOLUME, default=cur_vol)] = (
-                vol.All(vol.Coerce(int), vol.Range(min=1, max=100))
-            )
-        else:
-            schema_fields[vol.Optional(CONF_ANNOUNCE_VOLUME)] = vol.All(
-                vol.Coerce(int), vol.Range(min=1, max=100)
-            )
-        # Pause buffer: pre-filled only if > 0
-        cur_buf = current.get(CONF_PAUSE_BUFFER, 0)
-        if cur_buf and cur_buf > 0:
-            schema_fields[vol.Optional(CONF_PAUSE_BUFFER, default=cur_buf)] = (
-                vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
-            )
-        else:
-            schema_fields[vol.Optional(CONF_PAUSE_BUFFER)] = vol.All(
-                vol.Coerce(float), vol.Range(min=0, max=10)
-            )
+        # Optional fields: NEVER use default — HA form sends defaults even when
+        # the user unchecks the toggle.
+        schema_fields[vol.Optional(CONF_ANNOUNCE_VOLUME)] = vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=100)
+        )
+        schema_fields[vol.Optional(CONF_PAUSE_BUFFER)] = vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=10)
+        )
 
         schema = vol.Schema(schema_fields)
+
+        cur_vol = current.get(CONF_ANNOUNCE_VOLUME)
+        cur_buf = current.get(CONF_PAUSE_BUFFER)
+        current_hint: list[str] = []
+        if cur_vol is not None:
+            current_hint.append(f"announce_volume={cur_vol}")
+        if cur_buf is not None:
+            current_hint.append(f"pause_buffer={cur_buf}s")
 
         return self.async_show_form(
             step_id="edit_room",
@@ -289,6 +284,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             errors=errors,
             description_placeholders={
                 "room_name": current.get(CONF_NAME, self._edit_room_id),
+                "current_values": ", ".join(current_hint) if current_hint else "none",
             },
         )
 

@@ -43,7 +43,7 @@
       },
       "edit_room": {
         "title": "Edit Room — {room_name}",
-        "description": "Change the media player entity for this room.",
+        "description": "Current: {current_values}. Check a field and enter a value to change it. Uncheck to clear.",
         "data": {
           "entity_id": "Media Player",
           "announce_volume": "Announce Volume (1-100)",
