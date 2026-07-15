@@ -20,7 +20,6 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 
 from .const import (
@@ -160,10 +159,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Entry point — YAML shows info, UI goes straight to Add Room."""
         if self._entry.unique_id == YAML_UNIQUE_ID:
-            raise HomeAssistantError(
-                f"「{self._entry.title}」是 YAML 配置的集成，不可通过 UI 修改。"
-                "请编辑 configuration.yaml 后重启 Home Assistant。"
-            )
+            return self.async_abort(reason="yaml_read_only")
         return await self.async_step_add_room()
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:

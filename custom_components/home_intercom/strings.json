@@ -41,6 +41,9 @@
     },
     "error": {
       "room_exists": "A room with this area is already configured."
+    },
+    "abort": {
+      "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant."
     }
   }
 }

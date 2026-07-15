@@ -41,6 +41,9 @@
     },
     "error": {
       "room_exists": "该区域已配置。"
+    },
+    "abort": {
+      "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。"
     }
   }
 }
