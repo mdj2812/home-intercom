@@ -233,6 +233,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         current = rooms.get(self._edit_room_id, {})
 
         if user_input is not None:
+            _LOGGER.info("edit_room user_input: %s", user_input)
             new_room: dict[str, Any] = {
                 **current,
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
