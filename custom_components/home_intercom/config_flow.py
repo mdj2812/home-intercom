@@ -173,7 +173,17 @@ class HomeIntercomOptionsFlow(OptionsFlow):
 
         room_choices = {"__new__": "➕ Add Room..."}
         for rid, room in rooms.items():
-            room_choices[rid] = room.get(CONF_NAME, rid)
+            entity_id = room.get(CONF_ENTITY_ID)
+            # Prefer device-friendly name from entity registry (kept in sync
+            # with HA's Device Edit), fall back to config name.
+            from homeassistant.helpers import entity_registry as er
+
+            er_reg = er.async_get(self.hass)
+            e_entry = er_reg.async_get(entity_id) if entity_id else None
+            display_name = e_entry.name or e_entry.original_name if e_entry else None
+            if not display_name:
+                display_name = room.get(CONF_NAME, rid)
+            room_choices[rid] = display_name
 
         return self.async_show_form(
             step_id="init",
