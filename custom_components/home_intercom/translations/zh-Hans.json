@@ -7,7 +7,7 @@
         "data": {
           "area_id": "区域",
           "entity_id": "媒体播放器",
-          "announce_volume": "播报音量 (1-100)",
+          "announce_volume": "播报音量 (0-100, 0=默认)",
           "pause_buffer": "暂停缓冲 (秒)"
         }
       }
@@ -37,16 +37,16 @@
           "area_id": "区域",
           "name": "房间名称（可选）",
           "entity_id": "媒体播放器",
-          "announce_volume": "播报音量 (1-100)",
+          "announce_volume": "播报音量 (0-100, 0=默认)",
           "pause_buffer": "暂停缓冲 (秒)"
         }
       },
       "edit_room": {
         "title": "编辑房间 — {room_name}",
-        "description": "当前值: {current_values}。勾选字段并输入新值来修改，取消勾选来清除。",
+        "description": "更换媒体播放器。音量/缓冲设为 0 表示使用默认值。",
         "data": {
           "entity_id": "媒体播放器",
-          "announce_volume": "播报音量 (1-100)",
+          "announce_volume": "播报音量 (0-100, 0=默认)",
           "pause_buffer": "暂停缓冲 (秒)"
         }
       }

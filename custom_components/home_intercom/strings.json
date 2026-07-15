@@ -7,7 +7,7 @@
         "data": {
           "area_id": "Area",
           "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (1-100)",
+          "announce_volume": "Announce Volume (0-100, 0=default)",
           "pause_buffer": "Pause Buffer (seconds)"
         }
       }
@@ -37,16 +37,16 @@
           "area_id": "Area",
           "name": "Room Name (optional)",
           "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (1-100)",
+          "announce_volume": "Announce Volume (0-100, 0=default)",
           "pause_buffer": "Pause Buffer (seconds)"
         }
       },
       "edit_room": {
         "title": "Edit Room — {room_name}",
-        "description": "Current: {current_values}. Check a field and enter a value to change it. Uncheck to clear.",
+        "description": "Change the media player entity for this room. Set volume/buffer to 0 to use defaults.",
         "data": {
           "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (1-100)",
+          "announce_volume": "Announce Volume (0-100, 0=default)",
           "pause_buffer": "Pause Buffer (seconds)"
         }
       }

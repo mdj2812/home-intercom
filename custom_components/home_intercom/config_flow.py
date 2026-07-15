@@ -224,7 +224,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         return self.async_show_form(step_id="add_room", data_schema=schema, errors=errors)
 
     async def async_step_edit_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Form for editing an existing room (pre-filled with current values)."""
+        """Form for editing a room — entity, volume, buffer. 0 = use default."""
         errors: dict[str, str] = {}
         entities = _media_player_choices(self.hass)
 
@@ -237,14 +237,15 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 **current,
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
             }
-            # Optional fields: only persist when user actually provided a value
-            # (HA form may include key with None/"" when toggle is unchecked)
-            if user_input.get(CONF_ANNOUNCE_VOLUME) is not None:
-                new_room[CONF_ANNOUNCE_VOLUME] = user_input[CONF_ANNOUNCE_VOLUME]
+            # 0 = "not configured" → remove from config
+            vol_val = user_input.get(CONF_ANNOUNCE_VOLUME)
+            if vol_val not in (None, 0):
+                new_room[CONF_ANNOUNCE_VOLUME] = vol_val
             else:
                 new_room.pop(CONF_ANNOUNCE_VOLUME, None)
-            if user_input.get(CONF_PAUSE_BUFFER) is not None:
-                new_room[CONF_PAUSE_BUFFER] = user_input[CONF_PAUSE_BUFFER]
+            buf_val = user_input.get(CONF_PAUSE_BUFFER)
+            if buf_val not in (None, 0.0, 0):
+                new_room[CONF_PAUSE_BUFFER] = buf_val
             else:
                 new_room.pop(CONF_PAUSE_BUFFER, None)
             rooms[self._edit_room_id] = new_room
@@ -253,30 +254,24 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 data={CONF_ROOMS: rooms},
             )
 
-        schema_fields = {
-            vol.Required(
-                CONF_ENTITY_ID,
-                default=current.get(CONF_ENTITY_ID, ""),
-            ): vol.In(entities),
-        }
-        # Optional fields: NEVER use default — HA form sends defaults even when
-        # the user unchecks the toggle.
-        schema_fields[vol.Optional(CONF_ANNOUNCE_VOLUME)] = vol.All(
-            vol.Coerce(int), vol.Range(min=1, max=100)
+        # Use Required (not Optional) — HA Optional+default always sends default
+        # even when unchecked. Required always sends the value: 0 = use default.
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_ENTITY_ID,
+                    default=current.get(CONF_ENTITY_ID, ""),
+                ): vol.In(entities),
+                vol.Required(
+                    CONF_ANNOUNCE_VOLUME,
+                    default=current.get(CONF_ANNOUNCE_VOLUME) or 0,
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+                vol.Required(
+                    CONF_PAUSE_BUFFER,
+                    default=current.get(CONF_PAUSE_BUFFER) or 0,
+                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=10)),
+            }
         )
-        schema_fields[vol.Optional(CONF_PAUSE_BUFFER)] = vol.All(
-            vol.Coerce(float), vol.Range(min=0, max=10)
-        )
-
-        schema = vol.Schema(schema_fields)
-
-        cur_vol = current.get(CONF_ANNOUNCE_VOLUME)
-        cur_buf = current.get(CONF_PAUSE_BUFFER)
-        current_hint: list[str] = []
-        if cur_vol is not None:
-            current_hint.append(f"announce_volume={cur_vol}")
-        if cur_buf is not None:
-            current_hint.append(f"pause_buffer={cur_buf}s")
 
         return self.async_show_form(
             step_id="edit_room",
@@ -284,7 +279,6 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             errors=errors,
             description_placeholders={
                 "room_name": current.get(CONF_NAME, self._edit_room_id),
-                "current_values": ", ".join(current_hint) if current_hint else "none",
             },
         )
 
