@@ -172,21 +172,15 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             return await self.async_step_edit_room()
 
         room_choices = {"__new__": "➕ Add Room..."}
-        for rid, room in rooms.items():
-            entity_id = room.get(CONF_ENTITY_ID)
-            # Prefer device name (synced with HA's Device Edit), fall back to config.
-            from homeassistant.helpers import device_registry as dr
-            from homeassistant.helpers import entity_registry as er
+        from homeassistant.helpers import device_registry as dr
 
+        dev_reg = dr.async_get(self.hass)
+        for rid, room in rooms.items():
+            # Look up OUR device (home_intercom, room_id), not the entity's device.
             display_name = room.get(CONF_NAME, rid)
-            if entity_id:
-                er_reg = er.async_get(self.hass)
-                e_entry = er_reg.async_get(entity_id)
-                if e_entry and e_entry.device_id:
-                    dev_reg = dr.async_get(self.hass)
-                    dev = dev_reg.async_get(e_entry.device_id)
-                    if dev:
-                        display_name = dev.name_by_user or dev.name or display_name
+            dev = dev_reg.async_get_device(identifiers={(DOMAIN, rid)})
+            if dev:
+                display_name = dev.name_by_user or dev.name or display_name
             room_choices[rid] = display_name
 
         return self.async_show_form(
