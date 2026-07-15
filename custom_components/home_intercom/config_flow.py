@@ -244,22 +244,34 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 data={CONF_ROOMS: rooms},
             )
 
-        schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_ENTITY_ID,
-                    default=current.get(CONF_ENTITY_ID, ""),
-                ): vol.In(entities),
-                vol.Optional(
-                    CONF_ANNOUNCE_VOLUME,
-                    default={"default": current.get(CONF_ANNOUNCE_VOLUME)},
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
-                vol.Optional(
-                    CONF_PAUSE_BUFFER,
-                    default=current.get(CONF_PAUSE_BUFFER, 0.0),
-                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=10)),
-            }
-        )
+        schema_fields = {
+            vol.Required(
+                CONF_ENTITY_ID,
+                default=current.get(CONF_ENTITY_ID, ""),
+            ): vol.In(entities),
+        }
+        # Announce volume: pre-filled only if currently set
+        cur_vol = current.get(CONF_ANNOUNCE_VOLUME)
+        if cur_vol is not None:
+            schema_fields[vol.Optional(CONF_ANNOUNCE_VOLUME, default=cur_vol)] = (
+                vol.All(vol.Coerce(int), vol.Range(min=1, max=100))
+            )
+        else:
+            schema_fields[vol.Optional(CONF_ANNOUNCE_VOLUME)] = vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=100)
+            )
+        # Pause buffer: pre-filled only if > 0
+        cur_buf = current.get(CONF_PAUSE_BUFFER, 0)
+        if cur_buf and cur_buf > 0:
+            schema_fields[vol.Optional(CONF_PAUSE_BUFFER, default=cur_buf)] = (
+                vol.All(vol.Coerce(float), vol.Range(min=0, max=10))
+            )
+        else:
+            schema_fields[vol.Optional(CONF_PAUSE_BUFFER)] = vol.All(
+                vol.Coerce(float), vol.Range(min=0, max=10)
+            )
+
+        schema = vol.Schema(schema_fields)
 
         return self.async_show_form(
             step_id="edit_room",
