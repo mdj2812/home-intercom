@@ -135,8 +135,10 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """Return the options flow handler."""
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow | None:
+        """Return the options flow handler. None for YAML (read-only)."""
+        if config_entry.unique_id == YAML_UNIQUE_ID:
+            return None
         return HomeIntercomOptionsFlow(config_entry)
 
 
