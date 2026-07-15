@@ -233,12 +233,21 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         current = rooms.get(self._edit_room_id, {})
 
         if user_input is not None:
-            rooms[self._edit_room_id] = {
+            new_room: dict[str, Any] = {
                 **current,
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
-                CONF_ANNOUNCE_VOLUME: user_input.get(CONF_ANNOUNCE_VOLUME),
-                CONF_PAUSE_BUFFER: user_input.get(CONF_PAUSE_BUFFER, 0.0),
             }
+            # Optional fields: only persist when present in user_input
+            # (HA form omits keys for cleared Optional fields)
+            if CONF_ANNOUNCE_VOLUME in user_input:
+                new_room[CONF_ANNOUNCE_VOLUME] = user_input[CONF_ANNOUNCE_VOLUME]
+            else:
+                new_room.pop(CONF_ANNOUNCE_VOLUME, None)
+            if CONF_PAUSE_BUFFER in user_input:
+                new_room[CONF_PAUSE_BUFFER] = user_input[CONF_PAUSE_BUFFER]
+            else:
+                new_room.pop(CONF_PAUSE_BUFFER, None)
+            rooms[self._edit_room_id] = new_room
             return self.async_create_entry(
                 title="",
                 data={CONF_ROOMS: rooms},
