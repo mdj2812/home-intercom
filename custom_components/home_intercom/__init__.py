@@ -155,6 +155,13 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     entry_rooms = hass.data.get(DOMAIN, {}).get("entry_rooms", {})
     all_rooms: dict[str, dict[str, Any]] = {}
     for rooms in entry_rooms.values():
+        for rid in rooms:
+            if rid in all_rooms:
+                _LOGGER.warning(
+                    "Room key collision: '%s' defined in multiple config entries — "
+                    "last entry wins (non-deterministic ordering).",
+                    rid,
+                )
         all_rooms.update(rooms)
 
     audio_dir = hass.config.path(WWW_DIR, AUDIO_SUBDIR)
@@ -217,7 +224,6 @@ async def async_remove_config_entry_device(
             translation_placeholders={"name": device_entry.name},
         )
 
-    # Find which room this device belongs to
     # Find which room this device belongs to
     room_id = None
     for domain, rid in device_entry.identifiers:
