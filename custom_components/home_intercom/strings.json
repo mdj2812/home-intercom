@@ -21,7 +21,10 @@
     "step": {
       "init": {
         "title": "Manage Rooms",
-        "description": "{room_count} room(s) configured. Click Submit to add a new room."
+        "description": "{room_count} room(s) configured. Choose a room to edit or add a new one.",
+        "data": {
+          "room_choice": "Room"
+        }
       },
       "yaml_info": {
         "title": "YAML Configured Rooms",
@@ -33,6 +36,15 @@
         "data": {
           "area_id": "Area",
           "name": "Room Name (optional)",
+          "entity_id": "Media Player",
+          "announce_volume": "Announce Volume (1-100)",
+          "pause_buffer": "Pause Buffer (seconds)"
+        }
+      },
+      "edit_room": {
+        "title": "Edit Room — {room_name}",
+        "description": "Change the media player entity for this room.",
+        "data": {
           "entity_id": "Media Player",
           "announce_volume": "Announce Volume (1-100)",
           "pause_buffer": "Pause Buffer (seconds)"

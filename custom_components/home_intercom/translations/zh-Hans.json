@@ -21,7 +21,10 @@
     "step": {
       "init": {
         "title": "管理房间",
-        "description": "已配置 {room_count} 个房间。点击提交添加新房间。"
+        "description": "已配置 {room_count} 个房间。选择房间编辑或添加新房间。",
+        "data": {
+          "room_choice": "房间"
+        }
       },
       "yaml_info": {
         "title": "YAML 配置的房间",
@@ -33,6 +36,15 @@
         "data": {
           "area_id": "区域",
           "name": "房间名称（可选）",
+          "entity_id": "媒体播放器",
+          "announce_volume": "播报音量 (1-100)",
+          "pause_buffer": "暂停缓冲 (秒)"
+        }
+      },
+      "edit_room": {
+        "title": "编辑房间 — {room_name}",
+        "description": "更换此房间的媒体播放器。",
+        "data": {
           "entity_id": "媒体播放器",
           "announce_volume": "播报音量 (1-100)",
           "pause_buffer": "暂停缓冲 (秒)"

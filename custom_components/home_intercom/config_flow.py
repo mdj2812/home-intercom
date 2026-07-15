@@ -157,10 +157,28 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Entry point — YAML shows info, UI goes straight to Add Room."""
+        """Entry point — pick Add Room or select a room to edit."""
         if self._entry.unique_id == YAML_UNIQUE_ID:
             return self.async_abort(reason="yaml_read_only")
-        return await self.async_step_add_room()
+
+        rooms = dict(self._entry.data.get(CONF_ROOMS, {}))
+        rooms.update(self._entry.options.get(CONF_ROOMS, {}))
+
+        if user_input is not None:
+            choice = user_input["room_choice"]
+            if choice == "__new__":
+                return await self.async_step_add_room()
+            self._edit_room_id = choice
+            return await self.async_step_edit_room()
+
+        room_choices = {"__new__": "➕ Add Room..."}
+        for rid, room in rooms.items():
+            room_choices[rid] = room.get(CONF_NAME, rid)
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({vol.Required("room_choice"): vol.In(room_choices)}),
+        )
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Form for adding a new room. Room name = area name."""
@@ -208,25 +226,29 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         """Form for editing an existing room (pre-filled with current values)."""
         errors: dict[str, str] = {}
         entities = _media_player_choices(self.hass)
-        rooms = self._get_rooms()
+
+        rooms = dict(self._entry.data.get(CONF_ROOMS, {}))
+        rooms.update(self._entry.options.get(CONF_ROOMS, {}))
         current = rooms.get(self._edit_room_id, {})
 
         if user_input is not None:
             rooms[self._edit_room_id] = {
-                CONF_NAME: user_input[CONF_NAME],
+                **current,
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
                 CONF_ANNOUNCE_VOLUME: user_input.get(CONF_ANNOUNCE_VOLUME),
                 CONF_PAUSE_BUFFER: user_input.get(CONF_PAUSE_BUFFER, 0.0),
             }
-            self._save_rooms(rooms)
-            return await self.async_step_init()
+            return self.async_create_entry(
+                title="",
+                data={CONF_ROOMS: rooms},
+            )
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_NAME, default=current.get(CONF_NAME, "")): str,
-                vol.Required(CONF_ENTITY_ID, default=current.get(CONF_ENTITY_ID, "")): vol.In(
-                    entities
-                ),
+                vol.Required(
+                    CONF_ENTITY_ID,
+                    default=current.get(CONF_ENTITY_ID, ""),
+                ): vol.In(entities),
                 vol.Optional(
                     CONF_ANNOUNCE_VOLUME,
                     default={"default": current.get(CONF_ANNOUNCE_VOLUME)},
