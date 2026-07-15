@@ -182,7 +182,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         )
 
     async def async_step_add_room(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Form for adding a new room. Room name = area name."""
+        """Form for adding a new room. Room name = area name. 0 = use default."""
         errors: dict[str, str] = {}
         entities = _media_player_choices(self.hass)
         areas = _area_choices(self.hass)
@@ -196,12 +196,12 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             if room_id in rooms:
                 errors["base"] = "room_exists"
             else:
-                rooms[room_id] = {
+                room: dict[str, Any] = {
                     CONF_NAME: user_input.get(CONF_NAME) or areas.get(room_id, room_id),
                     CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
-                    CONF_ANNOUNCE_VOLUME: user_input.get(CONF_ANNOUNCE_VOLUME),
-                    CONF_PAUSE_BUFFER: user_input.get(CONF_PAUSE_BUFFER, 0.0),
                 }
+                self._apply_optional_fields(room, user_input)
+                rooms[room_id] = room
                 return self.async_create_entry(
                     title="",
                     data={CONF_ROOMS: rooms},
@@ -212,12 +212,12 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 vol.Required(CONF_AREA_ID): vol.In(areas),
                 vol.Optional(CONF_NAME, default=""): str,
                 vol.Required(CONF_ENTITY_ID): vol.In(entities),
-                vol.Optional(CONF_ANNOUNCE_VOLUME): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=100)
-                ),
-                vol.Optional(CONF_PAUSE_BUFFER): vol.All(
-                    vol.Coerce(float), vol.Range(min=0, max=10)
-                ),
+                vol.Required(
+                    CONF_ANNOUNCE_VOLUME, default=0
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
+                vol.Required(
+                    CONF_PAUSE_BUFFER, default=0
+                ): vol.All(vol.Coerce(float), vol.Range(min=0, max=10)),
             }
         )
 
@@ -238,16 +238,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
                 CONF_ENTITY_ID: user_input[CONF_ENTITY_ID],
             }
             # 0 = "not configured" → remove from config
-            vol_val = user_input.get(CONF_ANNOUNCE_VOLUME)
-            if vol_val not in (None, 0):
-                new_room[CONF_ANNOUNCE_VOLUME] = vol_val
-            else:
-                new_room.pop(CONF_ANNOUNCE_VOLUME, None)
-            buf_val = user_input.get(CONF_PAUSE_BUFFER)
-            if buf_val not in (None, 0.0, 0):
-                new_room[CONF_PAUSE_BUFFER] = buf_val
-            else:
-                new_room.pop(CONF_PAUSE_BUFFER, None)
+            self._apply_optional_fields(new_room, user_input)
             rooms[self._edit_room_id] = new_room
             return self.async_create_entry(
                 title="",
@@ -314,3 +305,19 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         options = dict(self._entry.options)
         options[CONF_ROOMS] = rooms
         self.hass.config_entries.async_update_entry(self._entry, options=options)
+
+    @staticmethod
+    def _apply_optional_fields(
+        room: dict[str, Any], user_input: dict[str, Any]
+    ) -> None:
+        """Apply announce_volume / pause_buffer. 0 = remove from config."""
+        vol_val = user_input.get(CONF_ANNOUNCE_VOLUME)
+        if vol_val not in (None, 0):
+            room[CONF_ANNOUNCE_VOLUME] = vol_val
+        else:
+            room.pop(CONF_ANNOUNCE_VOLUME, None)
+        buf_val = user_input.get(CONF_PAUSE_BUFFER)
+        if buf_val not in (None, 0.0, 0):
+            room[CONF_PAUSE_BUFFER] = buf_val
+        else:
+            room.pop(CONF_PAUSE_BUFFER, None)

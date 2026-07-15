@@ -7,7 +7,7 @@
         "data": {
           "area_id": "Area",
           "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (0-100, 0=default)",
+          "announce_volume": "Announce Volume (0-100, 0=disabled)",
           "pause_buffer": "Pause Buffer (seconds)"
         }
       }
@@ -37,7 +37,7 @@
           "area_id": "Area",
           "name": "Room Name (optional)",
           "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (0-100, 0=default)",
+          "announce_volume": "Announce Volume (0-100, 0=disabled)",
           "pause_buffer": "Pause Buffer (seconds)"
         }
       },
@@ -46,7 +46,7 @@
         "description": "Change the media player entity for this room. Set volume/buffer to 0 to use defaults.",
         "data": {
           "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (0-100, 0=default)",
+          "announce_volume": "Announce Volume (0-100, 0=disabled)",
           "pause_buffer": "Pause Buffer (seconds)"
         }
       }
