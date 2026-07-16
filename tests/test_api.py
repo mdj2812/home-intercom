@@ -85,8 +85,7 @@ sys.modules["homeassistant.helpers.typing"] = _ha.helpers.typing
 
 WAV_DATA = (
     b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"
-    b"@\x1f\x00\x00\x80>\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
-    + b"\x00" * 1024
+    b"@\x1f\x00\x00\x80>\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00" + b"\x00" * 1024
 )
 PCM_DATA = b"\x00" * 1024
 PWA_TOKEN = "test-shared-secret-abc123"
@@ -120,7 +119,9 @@ def _make_hass(rooms: dict | None = None) -> MagicMock:
 
     hass.data = {
         "home_intercom": {
-            "rooms": rooms if rooms is not None else {
+            "rooms": rooms
+            if rooms is not None
+            else {
                 "living_room": {
                     "name": "Living Room",
                     "entity_id": "media_player.living_speaker",
