@@ -293,6 +293,27 @@ class TestDeviceRecordView:
         assert DeviceRecordView.name == "api:home_intercom:device-record"
         assert DeviceRecordView.requires_auth is True
 
+    @pytest.mark.asyncio
+    async def test_post_delegates_to_handle_record(self):
+        from custom_components.home_intercom.api import DeviceRecordView
+
+        view = DeviceRecordView()
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+
+        with patch(
+            "custom_components.home_intercom.api._handle_record",
+            new=AsyncMock(
+                return_value=MagicMock(
+                    status=200,
+                    text='{"ok": true, "name": "Living Room"}',
+                )
+            ),
+        ):
+            resp = await view.post(req)
+            body = json.loads(resp.text)
+        assert body["ok"] is True
+
 
 # ——— register_api_views tests ———
 
