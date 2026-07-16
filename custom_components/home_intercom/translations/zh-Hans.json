@@ -65,5 +65,20 @@
     "yaml_entry_delete_blocked": {
       "message": "「{title}」是 YAML 配置的集成，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
     }
+  },
+  "entity": {
+    "sensor": {
+      "error": { "name": "错误" },
+      "state": { "name": "状态" },
+      "volume": { "name": "音量" },
+      "media": { "name": "正在播放" }
+    },
+    "binary_sensor": {
+      "connected": { "name": "已连接" }
+    },
+    "number": {
+      "announce_volume": { "name": "播报音量" },
+      "pause_buffer": { "name": "暂停缓冲" }
+    }
   }
 }

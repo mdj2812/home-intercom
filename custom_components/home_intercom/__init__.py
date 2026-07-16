@@ -30,6 +30,7 @@ from .const import (
     CONF_PAUSE_BUFFER,
     CONF_ROOMS,
     DOMAIN,
+    PLATFORMS,
     SERVICE_ANNOUNCE,
     WWW_DIR,
 )
@@ -176,9 +177,16 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
     hass.data[DOMAIN].setdefault("pwa_token", secrets.token_urlsafe(32))
 
+    # Initialize error/state tracking
+    hass.data[DOMAIN].setdefault("errors", {})
+    hass.data[DOMAIN].setdefault("states", {})
+
     register_api_views(hass)
     _register_services(hass, all_rooms)
     _register_devices(hass, entry.entry_id, entry_rooms.get(entry.entry_id, {}))
+
+    # Forward to sensor/number/binary_sensor platforms
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _LOGGER.info(
         "Home Intercom — %d rooms (%d entries), audio: %s",
