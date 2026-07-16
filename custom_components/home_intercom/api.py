@@ -1,7 +1,8 @@
 """HomeAssistantView endpoints for Home Intercom.
 
 Maps the Flask routes from intercom_server.py to HomeAssistantView:
-  /record        → RecordView  (POST audio → WAV → play)
+  /record        → RecordView        (PWA token; POST audio → WAV → play)
+  /device/record → DeviceRecordView  (HA auth; POST audio → WAV → play)
   /rooms/status  → StatusView  (GET speaker online status)
   /version       → VersionView (GET version + pcm_rate)
   /rooms         → RoomsView   (GET room config)
@@ -46,11 +47,101 @@ def _get_hass_data(hass: HomeAssistant) -> dict:
     return hass.data.get(DOMAIN, {})
 
 
-class RecordView(HomeAssistantView):
-    """POST /api/home_intercom/record — receive audio → write WAV → play.
+async def _handle_record(request: web.Request) -> web.Response:
+    """Receive audio, write it as WAV, and play it on the requested targets."""
+    hass = request.app["hass"]
+    data = await request.read()
+    target = request.query.get("target", "")
 
-    Replaces Flask's @app.route("/record", methods=["POST"]).
-    """
+    if not target:
+        return web.json_response({"ok": False, "error": "missing target"}, status=400)
+
+    room_map = _get_hass_data(hass).get("rooms", {})
+
+    if target == "all":
+        targets = [(k, v) for k, v in room_map.items() if v.get("entity_id")]
+        if not targets:
+            return web.json_response({"ok": False, "error": "no rooms configured"}, status=500)
+    else:
+        room = room_map.get(target)
+        if not room or not room.get("entity_id"):
+            return web.json_response(
+                {"ok": False, "error": f"unknown target: {target}"}, status=400
+            )
+        targets = [(target, room)]
+
+    if len(data) < WAV_HEADER_SIZE:
+        return web.json_response({"ok": False, "error": "no audio data"}, status=400)
+
+    audio_dir = _get_hass_data(hass).get("audio_dir", "")
+    filename = f"intercom_{target}.wav"
+    filepath = os.path.join(audio_dir, filename)
+
+    if is_wav(data):
+        _rate, duration = await hass.async_add_executor_job(_handle_wav_passthrough, data, filepath)
+    else:
+        rate_obj = int(request.query.get("rate", PCM_RATE))
+        duration = await hass.async_add_executor_job(_handle_pcm_to_wav, data, rate_obj, filepath)
+
+    # Build public URL — absolute URL needed for DLNA/MiOT players.
+    # Priority: configured external_url > internal_url > request host.
+    base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
+    audio_url = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename}"
+
+    # Chime prepend (same logic as Flask version)
+    chime_path = str(_INTEGRATION_DIR / "static" / "pre_announce.wav")
+    audio_url_with_chime = None
+    duration_with_chime = None
+    if os.path.exists(chime_path):
+        filename_chime = f"intercom_{target}_chime.wav"
+        filepath_chime = os.path.join(audio_dir, filename_chime)
+        try:
+            duration_with_chime = await hass.async_add_executor_job(
+                _concat_wavs, chime_path, filepath, filepath_chime
+            )
+            audio_url_with_chime = (
+                f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename_chime}"
+            )
+        except Exception as exc:
+            _LOGGER.warning("Failed to prepend chime: %s", exc)
+
+    # Play on each target room
+    ok_count = 0
+    errors: list[dict] = []
+    for _tgt_key, tgt_room in targets:
+        announce_volume = tgt_room.get("announce_volume")
+        pause_buffer = tgt_room.get("pause_buffer", 0.0)
+        result = await play_announcement(
+            hass,
+            tgt_room["entity_id"],
+            audio_url,
+            duration if not duration_with_chime else 0,
+            announce_volume=announce_volume,
+            audio_url_with_chime=audio_url_with_chime,
+            duration_with_chime=duration_with_chime,
+            pause_buffer=pause_buffer,
+        )
+        if result.ok:
+            ok_count += 1
+        else:
+            errors.append({"entity_id": tgt_room["entity_id"], "error": result.error or "unknown"})
+
+    name = room_map[target]["name"] if target != "all" else "All Rooms"
+    _LOGGER.info("played on %d/%d rooms for %s", ok_count, len(targets), name)
+
+    return web.json_response(
+        {
+            "ok": True,
+            "name": name,
+            "rooms_sent": ok_count,
+            "rooms_total": len(targets),
+            "url": audio_url,
+        }
+    )
+
+
+class RecordView(HomeAssistantView):
+    """POST /api/home_intercom/record using the PWA shared token."""
 
     url = "/api/home_intercom/record"
     name = "api:home_intercom:record"
@@ -58,8 +149,6 @@ class RecordView(HomeAssistantView):
 
     async def post(self, request: web.Request) -> web.Response:
         hass = request.app["hass"]
-        data = await request.read()
-        target = request.query.get("target", "")
 
         # Verify shared secret token (injected into PWA HTML by PanelView)
         pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
@@ -67,97 +156,18 @@ class RecordView(HomeAssistantView):
             _LOGGER.warning("RecordView: invalid or missing X-PWA-Token")
             return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
 
-        if not target:
-            return web.json_response({"ok": False, "error": "missing target"}, status=400)
+        return await _handle_record(request)
 
-        room_map = _get_hass_data(hass).get("rooms", {})
 
-        if target == "all":
-            targets = [(k, v) for k, v in room_map.items() if v.get("entity_id")]
-            if not targets:
-                return web.json_response({"ok": False, "error": "no rooms configured"}, status=500)
-        else:
-            room = room_map.get(target)
-            if not room or not room.get("entity_id"):
-                return web.json_response(
-                    {"ok": False, "error": f"unknown target: {target}"}, status=400
-                )
-            targets = [(target, room)]
+class DeviceRecordView(HomeAssistantView):
+    """POST /api/home_intercom/device/record using standard HA authentication."""
 
-        if len(data) < WAV_HEADER_SIZE:
-            return web.json_response({"ok": False, "error": "no audio data"}, status=400)
+    url = "/api/home_intercom/device/record"
+    name = "api:home_intercom:device-record"
+    requires_auth = True
 
-        audio_dir = _get_hass_data(hass).get("audio_dir", "")
-        filename = f"intercom_{target}.wav"
-        filepath = os.path.join(audio_dir, filename)
-
-        if is_wav(data):
-            rate, duration = await hass.async_add_executor_job(
-                _handle_wav_passthrough, data, filepath
-            )
-        else:
-            rate_obj = int(request.query.get("rate", PCM_RATE))
-            duration = await hass.async_add_executor_job(
-                _handle_pcm_to_wav, data, rate_obj, filepath
-            )
-
-        # Build public URL — absolute URL needed for DLNA/MiOT players.
-        # Priority: configured external_url > internal_url > request host.
-        base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
-        audio_url = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename}"
-
-        # Chime prepend (same logic as Flask version)
-        chime_path = str(_INTEGRATION_DIR / "static" / "pre_announce.wav")
-        audio_url_with_chime = None
-        duration_with_chime = None
-        if os.path.exists(chime_path):
-            filename_chime = f"intercom_{target}_chime.wav"
-            filepath_chime = os.path.join(audio_dir, filename_chime)
-            try:
-                duration_with_chime = await hass.async_add_executor_job(
-                    _concat_wavs, chime_path, filepath, filepath_chime
-                )
-                audio_url_with_chime = (
-                    f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename_chime}"
-                )
-            except Exception as exc:
-                _LOGGER.warning("Failed to prepend chime: %s", exc)
-
-        # Play on each target room
-        ok_count = 0
-        errors: list[dict] = []
-        for _tgt_key, tgt_room in targets:
-            announce_volume = tgt_room.get("announce_volume")
-            pause_buffer = tgt_room.get("pause_buffer", 0.0)
-            result = await play_announcement(
-                hass,
-                tgt_room["entity_id"],
-                audio_url,
-                duration if not duration_with_chime else 0,
-                announce_volume=announce_volume,
-                audio_url_with_chime=audio_url_with_chime,
-                duration_with_chime=duration_with_chime,
-                pause_buffer=pause_buffer,
-            )
-            if result.ok:
-                ok_count += 1
-            else:
-                errors.append(
-                    {"entity_id": tgt_room["entity_id"], "error": result.error or "unknown"}
-                )
-
-        name = room_map[target]["name"] if target != "all" else "All Rooms"
-        _LOGGER.info("played on %d/%d rooms for %s", ok_count, len(targets), name)
-
-        return web.json_response(
-            {
-                "ok": True,
-                "name": name,
-                "rooms_sent": ok_count,
-                "rooms_total": len(targets),
-                "url": audio_url,
-            }
-        )
+    async def post(self, request: web.Request) -> web.Response:
+        return await _handle_record(request)
 
 
 class StatusView(HomeAssistantView):
@@ -329,6 +339,7 @@ class StaticView(HomeAssistantView):
 def register_api_views(hass: HomeAssistant) -> None:
     """Register all HomeAssistantView endpoints."""
     hass.http.register_view(RecordView)
+    hass.http.register_view(DeviceRecordView)
     hass.http.register_view(StatusView)
     hass.http.register_view(VersionView)
     hass.http.register_view(RoomsView)

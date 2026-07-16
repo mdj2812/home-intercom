@@ -68,6 +68,20 @@ YAML rooms appear as a separate config entry labeled "YAML". Use the UI integrat
 
 4. **Add to sidebar**: create a Dashboard → add Webpage card → URL: `/home_intercom`
 
+### Authenticated device upload
+
+Hardware clients can upload audio through Home Assistant's standard authentication:
+
+```http
+POST /api/home_intercom/device/record?target=living
+Authorization: Bearer <HA_LONG_LIVED_ACCESS_TOKEN>
+Content-Type: audio/wav
+```
+
+Create a Long-Lived Access Token from the Home Assistant user profile and send it over HTTPS.
+Unlike the PWA's short-lived shared token, this endpoint continues to work after Home Assistant
+restarts. The existing `/api/home_intercom/record` endpoint remains available to the bundled PWA.
+
 ## Installation (Docker)
 
 ```bash
