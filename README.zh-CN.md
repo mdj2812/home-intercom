@@ -68,6 +68,8 @@ YAML 房间会以独立的 "YAML" 配置条目显示。通过 UI 集成管理可
 
 4. **添加到侧边栏**：创建仪表盘 → 添加网页卡片 → URL 填 `/home_intercom`
 
+> **自动化调用**：`/api/home_intercom/device/record` 端点支持 HA 标准认证，可供 n8n/自动化直接 POST 音频。
+
 ## 安装（Docker）
 
 ```bash
