@@ -74,19 +74,21 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
 
     # Monkey-patch config_entries.async_remove to block YAML entry deletion
-    _orig_async_remove = hass.config_entries.async_remove
+    if not hasattr(hass.config_entries, "_hi_patched"):
+        _orig_async_remove = hass.config_entries.async_remove
 
-    async def _patched_async_remove(entry_id: str) -> dict:
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if entry and entry.domain == DOMAIN and entry.unique_id == YAML_UNIQUE_ID:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="yaml_entry_delete_blocked",
-                translation_placeholders={"title": entry.title},
-            )
-        return await _orig_async_remove(entry_id)
+        async def _patched_async_remove(entry_id: str) -> dict:
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry and entry.domain == DOMAIN and entry.unique_id == YAML_UNIQUE_ID:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="yaml_entry_delete_blocked",
+                    translation_placeholders={"title": entry.title},
+                )
+            return await _orig_async_remove(entry_id)
 
-    hass.config_entries.async_remove = _patched_async_remove  # type: ignore[method-assign]
+        hass.config_entries.async_remove = _patched_async_remove  # type: ignore[method-assign]
+        hass.config_entries._hi_patched = True
 
     entries = hass.config_entries.async_entries(DOMAIN)
     yaml_entry = _find_yaml_entry(entries)

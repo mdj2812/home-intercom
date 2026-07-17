@@ -150,7 +150,7 @@ class ErrorSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ERROR_OPTIONS
-    _attr_name = "错误"
+    _attr_name = "Error"
     _attr_icon = "mdi:alert-circle-outline"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
@@ -189,7 +189,7 @@ class StateSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = STATE_OPTIONS
-    _attr_name = "状态"
+    _attr_name = "State"
     _attr_icon = "mdi:information-outline"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
@@ -219,7 +219,7 @@ class VolumeSensor(SensorEntity):
     """Sensor polling the media_player's current volume level."""
 
     _attr_has_entity_name = True
-    _attr_name = "音量"
+    _attr_name = "Volume"
     _attr_icon = "mdi:volume-high"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -296,7 +296,7 @@ class PlayerTypeSensor(SensorEntity):
     """Diagnostic sensor showing the player type (music_assistant/standard/basic)."""
 
     _attr_has_entity_name = True
-    _attr_name = "类别"
+    _attr_name = "Now Playing"
     _attr_icon = "mdi:cast-audio"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
@@ -358,7 +358,9 @@ class ConfigSensor(SensorEntity):
             entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v3"
-        self._attr_name = "播报音量" if config_key == CONF_ANNOUNCE_VOLUME else "暂停缓冲"
+        self._attr_name = (
+            "Announce Volume" if config_key == CONF_ANNOUNCE_VOLUME else "Pause Buffer"
+        )
         self._attr_icon = "mdi:tune" if config_key == CONF_ANNOUNCE_VOLUME else "mdi:timer-sand"
         self.entity_id = f"sensor.{room_key}_{config_key}"
 
