@@ -313,17 +313,13 @@ class PlayerTypeSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v5"
         self.entity_id = f"sensor.{room_key}_player_type"
 
-    @property
-    def device_info(self) -> dict:
-        return _device_info(self._room_key)
-
-    @property
-    def native_value(self) -> str | None:
-        """Determine player type from media_player attributes."""
+    async def async_added_to_hass(self) -> None:
+        """Set static player type once."""
+        await super().async_added_to_hass()
         state = self.hass.states.get(self._source_entity)
-        if state is None:
-            return None
-        return _get_player_type(dict(state.attributes))
+        if state is not None:
+            self._attr_native_value = _get_player_type(dict(state.attributes))
+        self.async_write_ha_state()
 
 
 class ConfigSensor(SensorEntity):
