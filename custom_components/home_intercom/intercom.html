@@ -180,6 +180,12 @@ function makeCard(target, name, isBroadcast) {
   btn.addEventListener('touchstart', e => e.preventDefault());
   btn.addEventListener('contextmenu', e => e.preventDefault());
 
+  if (window._INSECURE_ORIGIN) {
+    btn.disabled = true;
+    card.classList.add(UNAVAILABLE_CLASS);
+    card.querySelector('.status').textContent = I18N.t('secInsecureTitle');
+  }
+
   return card;
 }
 
@@ -218,22 +224,28 @@ function applyRoomStatus(status) {
     const btn = card.querySelector('.ptt-btn');
     if (roomState === EntityStatus.ONLINE) {
       if (dot) dot.className = 'dot dot-online';
-      card.classList.remove(UNAVAILABLE_CLASS);
-      if (btn) btn.disabled = false;
-      const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusReady');
+      if (!window._INSECURE_ORIGIN) {
+        card.classList.remove(UNAVAILABLE_CLASS);
+        if (btn) btn.disabled = false;
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusReady');
+      }
     } else if (roomState === EntityStatus.NO_PLAY_MEDIA) {
       if (dot) dot.className = 'dot dot-error';
-      card.classList.add(UNAVAILABLE_CLASS);
-      if (btn) btn.disabled = true;
-      const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusSkipped');
+      if (!window._INSECURE_ORIGIN) {
+        card.classList.add(UNAVAILABLE_CLASS);
+        if (btn) btn.disabled = true;
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusSkipped');
+      }
     } else {
       if (dot) dot.className = 'dot dot-error';
-      card.classList.add(UNAVAILABLE_CLASS);
-      if (btn) btn.disabled = true;
-      const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusUnavailable');
+      if (!window._INSECURE_ORIGIN) {
+        card.classList.add(UNAVAILABLE_CLASS);
+        if (btn) btn.disabled = true;
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusUnavailable');
+      }
     }
   }
 }
@@ -390,6 +402,24 @@ async function pollSpeakerStatus() {
     if (!haStatusLoaded) applyPreviewFallback();
   }
 }
+
+// Detect insecure context (HTTP without localhost) — getUserMedia requires HTTPS
+(function checkSecureContext() {
+  if (!window.isSecureContext) {
+    window._INSECURE_ORIGIN = true;
+
+    var banner = document.createElement('div');
+    banner.className = 'insecure-banner';
+    banner.innerHTML =
+      '<div class="insecure-icon" aria-hidden="true">🔒</div>' +
+      '<div>' +
+        '<div class="insecure-title" data-i18n="secInsecureTitle">' + I18N.t('secInsecureTitle') + '</div>' +
+        '<div class="insecure-hint" data-i18n="secInsecureHint">' + I18N.t('secInsecureHint') + '</div>' +
+      '</div>';
+    var grid = document.getElementById('grid');
+    if (grid) grid.parentNode.insertBefore(banner, grid);
+  }
+})();
 
 loadRooms().then(() => pollSpeakerStatus());
 setInterval(pollSpeakerStatus, 30000);

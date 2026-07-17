@@ -27,6 +27,8 @@ const I18N = (() => {
       statusNetworkError: "网络错误",
       statusLoadFailed: "加载失败",
       micError: "麦克风: ",
+      secInsecureTitle: "麦克风不可用",
+      secInsecureHint: "浏览器安全策略要求 HTTPS 连接才能使用麦克风。请通过外部 HTTPS 地址访问 Home Assistant。",
     },
     en: {
       appTitle: "Home Intercom",
@@ -44,6 +46,8 @@ const I18N = (() => {
       statusNetworkError: "Network error",
       statusLoadFailed: "Load failed",
       micError: "Mic: ",
+      secInsecureTitle: "Microphone Unavailable",
+      secInsecureHint: "Browser security requires HTTPS for microphone access. Please use the external HTTPS address to access Home Assistant.",
     },
   };
 
@@ -143,6 +147,10 @@ const I18N = (() => {
       const room = window._ROOM_DATA ? window._ROOM_DATA[key] : null;
       if (!room) return;
       el.textContent = lang === "en" && room.name_en ? room.name_en : room.name;
+    });
+
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = t(el.getAttribute("data-i18n"));
     });
 
     document.title = t("appTitle");
