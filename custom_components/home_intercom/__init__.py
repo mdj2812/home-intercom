@@ -15,11 +15,7 @@ import secrets
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import (
-    EVENT_CONFIG_ENTRY_REMOVED,
-    SOURCE_IMPORT,
-    ConfigEntry,
-)
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -91,7 +87,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 )
             )
 
-    hass.bus.async_listen(EVENT_CONFIG_ENTRY_REMOVED, _guard_yaml_removal)
+    hass.bus.async_listen("config_entry_removed", _guard_yaml_removal)
 
     entries = hass.config_entries.async_entries(DOMAIN)
     yaml_entry = _find_yaml_entry(entries)
