@@ -73,21 +73,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
 
-    # Guard: auto-recover YAML entry if deleted via UI
-    @callback
-    def _guard_yaml_removal(event: Event) -> None:
-        eid = event.data.get("entry_id")
-        if eid and not hass.config_entries.async_get_entry(eid):
-            _LOGGER.warning("YAML entry removed — re-importing from configuration.yaml")
-            hass.async_create_task(
-                hass.config_entries.flow.async_init(
-                    DOMAIN,
-                    context={"source": SOURCE_IMPORT},
-                    data={CONF_ROOMS: yaml_rooms},
-                )
-            )
+    # Monkey-patch config_entries.async_remove to block YAML entry deletion
+    _orig_async_remove = hass.config_entries.async_remove
 
-    hass.bus.async_listen("config_entry_removed", _guard_yaml_removal)
+    async def _patched_async_remove(entry_id: str) -> dict:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry and entry.domain == DOMAIN and entry.unique_id == YAML_UNIQUE_ID:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="yaml_entry_delete_blocked",
+                translation_placeholders={"title": entry.title},
+            )
+        return await _orig_async_remove(entry_id)
+
+    hass.config_entries.async_remove = _patched_async_remove  # type: ignore[method-assign]
 
     entries = hass.config_entries.async_entries(DOMAIN)
     yaml_entry = _find_yaml_entry(entries)
