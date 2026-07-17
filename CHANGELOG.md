@@ -1,5 +1,47 @@
 # Changelog
 
+## v2.0.0 (2026-07-16)
+
+> **Native HA Integration + Config Flow + Device Registry**
+
+### 🔥 Major Changes
+
+- **HA Integration** — Moved from standalone Docker Flask server to native `custom_component`. Now lives in `custom_components/home_intercom/`. Handles `play_media` via `hass.services.async_call()`, `/record` served by `HomeAssistantView`.
+- **Config Flow (#36)** — Add Home Intercom via the HA Integrations UI (Settings → Devices & Services → Add Integration). Single-step: pick area, media player, optional announce volume and pause buffer.
+- **Options Flow** — Manage rooms via Configure button: add, edit (change media player, volume, buffer), delete. All changes take effect immediately.
+- **Dual Config Entry** — YAML (`configuration.yaml`) generates a read-only SOURCE_IMPORT entry. UI creates an editable entry. Rooms from both sources merge; UI rooms override YAML rooms on key collision.
+- **Device Registry** — Each room registers as a HA Device with auto-linking to Area. Device names sync with HA Device Edit.
+- **PWA Auth Fix** — Shared secret (`secrets.token_urlsafe(32)`) injected as `window._PWA_TOKEN` + `X-PWA-Token` header. Works reliably from HA Companion App WebView.
+- **Xiaomi Screen Fix (#33)** — Screen-equipped speakers no longer show random cloud metadata after announcements. Silent `xiaomi_miot.intelligent_speaker` TTS clears the display.
+
+### ✨ Features
+
+- **Three-tier playback** — Music Assistant `play_announcement` → modern player `repeat_set(off)` → basic player with auto-pause timer
+- **Pre-announce chime** — WAV-level concatenation, `use_pre_announce` for MA players
+- **Configurable announce volume** — per-room `announce_volume` with UI slider
+- **Room status endpoint** — `/rooms/status` returns `{status, friendly_name}`, offline speakers greyed out
+- **Smart Media Player Filter** — Dropdowns only show entities with `SUPPORT_PLAY_MEDIA`, sorted by area name then friendly name
+- **i18n** — Full English + 中文 (zh-Hans), dropdown language selector
+- **Insecure Context Warning (#42, #45)** — HTTP (non-HTTPS) access shows a red warning banner explaining microphone requires HTTPS. All PTT buttons disabled until user switches to external HTTPS URL.
+
+### 🔧 Infrastructure
+
+- **GitHub Actions** — CI (lint + test + smoke), Docker build/push, release workflow with HACS ZIP
+- **HACS validation** — `hassfest` + `hacs/action` validate integration structure
+- **Docker pre-release tags** — Pre-releases push version tag only (not `latest`); stable releases get `latest`
+- **YAML Protection** — Trying to delete YAML entry raises `HomeAssistantError` with translated messages
+- **Translations** — Full English + 中文 (zh-Hans). Error messages respect browser language via `Accept-Language`
+
+### 📦 Versions
+
+| Component | Version |
+|-----------|---------|
+| manifest.json | `2.0.0` |
+| Docker | `ghcr.io/mdj2812/home-intercom:v2.0.0` |
+| HA min version | `2026.7.0` |
+
+---
+
 ## v2.0.0-rc2 (2026-07-15)
 
 > **Config Flow + Options Flow + Device Management**
