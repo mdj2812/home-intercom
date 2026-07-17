@@ -149,6 +149,7 @@ class ErrorSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ERROR_OPTIONS
+    _attr_name = "错误"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
         self._entry = entry
@@ -186,6 +187,7 @@ class StateSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = STATE_OPTIONS
+    _attr_name = "状态"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
         self._entry = entry
@@ -214,6 +216,7 @@ class VolumeSensor(SensorEntity):
     """Sensor polling the media_player's current volume level."""
 
     _attr_has_entity_name = True
+    _attr_name = "音量"
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_should_poll = True
@@ -289,6 +292,7 @@ class PlayerTypeSensor(SensorEntity):
     """Diagnostic sensor showing the player type (music_assistant/standard/basic)."""
 
     _attr_has_entity_name = True
+    _attr_name = "类别"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = PLAYER_TYPE_OPTIONS
@@ -341,6 +345,7 @@ class ConfigSensor(SensorEntity):
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v3"
         self._attr_native_value = value if value is not None else 0
+        self._attr_name = "播报音量" if config_key == CONF_ANNOUNCE_VOLUME else "暂停缓冲"
         self.entity_id = f"sensor.{room_key}_{config_key}"
 
     @property
