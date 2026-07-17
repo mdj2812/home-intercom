@@ -369,7 +369,6 @@ class ConfigSensor(SensorEntity):
     @callback
     def _on_config_update(self) -> None:
         """Handle config update signal."""
-        _LOGGER.info("ConfigSensor update: room=%s key=%s", self._room_key, self._config_key)
         self.async_write_ha_state()
 
     @property
