@@ -113,9 +113,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry. Block YAML entry unloading."""
+    """Unload a config entry. YAML entries cannot be unloaded."""
     if entry.unique_id == YAML_UNIQUE_ID:
-        return False  # Keep YAML entry loaded
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="yaml_entry_delete_blocked",
+            translation_placeholders={"title": entry.title},
+        )
     if DOMAIN in hass.data:
         hass.data[DOMAIN].setdefault("entry_rooms", {}).pop(entry.entry_id, None)
         remaining = hass.data[DOMAIN].get("entry_rooms", {})
