@@ -17,6 +17,7 @@ from homeassistant.components.number import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -150,3 +151,6 @@ class HomeIntercomNumber(NumberEntity):
                 all_rooms[self._room_key].pop(config_key, None)
             else:
                 all_rooms[self._room_key][config_key] = value
+
+        # Force config sensors to re-read
+        async_dispatcher_send(self.hass, f"{DOMAIN}_config_update")

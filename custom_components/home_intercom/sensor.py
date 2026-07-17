@@ -18,6 +18,7 @@ from homeassistant.const import (
     EntityCategory,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -342,6 +343,13 @@ class ConfigSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v3"
         self._attr_name = "播报音量" if config_key == CONF_ANNOUNCE_VOLUME else "暂停缓冲"
         self.entity_id = f"sensor.{room_key}_{config_key}"
+
+    async def async_added_to_hass(self) -> None:
+        """Register for config update signals."""
+        await super().async_added_to_hass()
+        async_dispatcher_connect(
+            self.hass, f"{DOMAIN}_config_update", self.async_write_ha_state
+        )
 
     @property
     def device_info(self) -> dict:
