@@ -288,6 +288,7 @@ class MediaSensor(SensorEntity):
 class PlayerTypeSensor(SensorEntity):
     """Diagnostic sensor showing the player type (music_assistant/standard/basic)."""
 
+    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = PLAYER_TYPE_OPTIONS
@@ -304,7 +305,7 @@ class PlayerTypeSensor(SensorEntity):
             device_class=SensorDeviceClass.ENUM,
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v4"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v5"
         self.entity_id = f"sensor.{room_key}_player_type"
 
     @property
