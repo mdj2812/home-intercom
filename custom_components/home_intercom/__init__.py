@@ -16,8 +16,12 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
-from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.const import (
+    CONF_ENTITY_ID,
+    CONF_NAME,
+    EVENT_CONFIG_ENTRY_REMOVED,
+)
+from homeassistant.core import Event, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
@@ -72,6 +76,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return True
 
     yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
+
+    # Guard: auto-recover YAML entry if deleted via UI
+    @callback
+    def _guard_yaml_removal(event: Event) -> None:
+        eid = event.data.get("entry_id")
+        if eid and not hass.config_entries.async_get_entry(eid):
+            _LOGGER.warning("YAML entry removed — re-importing from configuration.yaml")
+            hass.async_create_task(
+                hass.config_entries.flow.async_init(
+                    DOMAIN,
+                    context={"source": SOURCE_IMPORT},
+                    data={CONF_ROOMS: yaml_rooms},
+                )
+            )
+
+    hass.bus.async_listen(EVENT_CONFIG_ENTRY_REMOVED, _guard_yaml_removal)
+
     entries = hass.config_entries.async_entries(DOMAIN)
     yaml_entry = _find_yaml_entry(entries)
 
