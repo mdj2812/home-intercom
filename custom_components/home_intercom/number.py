@@ -127,18 +127,11 @@ class HomeIntercomNumber(NumberEntity):
         """Set the value, persist to config, update in-memory state."""
         self._attr_native_value = value
 
-        config_key = self.entity_description.config_key
-        _LOGGER.info(
-            "Number entity set: room=%s key=%s value=%s",
-            self._room_key,
-            config_key,
-            value,
-        )
-
         # Persist to config entry options
         options = dict(self._entry.options)
         rooms: dict = options.setdefault(CONF_ROOMS, {})
         room = dict(rooms.get(self._room_key, {}))
+        config_key = self.entity_description.config_key
         if value == 0:
             room.pop(config_key, None)
         else:
