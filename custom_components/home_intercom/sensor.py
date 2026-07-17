@@ -323,7 +323,6 @@ class PlayerTypeSensor(SensorEntity):
 class ConfigSensor(SensorEntity):
     """Diagnostic sensor displaying a configured value from the entry."""
 
-    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, entry: ConfigEntry, room_key: str, config_key: str, room_name: str) -> None:
@@ -342,6 +341,8 @@ class ConfigSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}"
         self._attr_translation_placeholders = {"room": room_name}
         self._attr_native_value = value if value is not None else 0
+        # Consistent entity_id across locales
+        self.entity_id = f"sensor.{room_key}_{config_key}"
 
     @property
     def device_info(self) -> dict:
