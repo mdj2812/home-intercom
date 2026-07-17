@@ -324,8 +324,8 @@ class ConfigSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     _CONFIG_NAME_MAP = {
-        CONF_ANNOUNCE_VOLUME: "Announce Volume",
-        CONF_PAUSE_BUFFER: "Pause Buffer",
+        CONF_ANNOUNCE_VOLUME: "播报音量",
+        CONF_PAUSE_BUFFER: "暂停缓冲",
     }
 
     def __init__(
@@ -343,10 +343,9 @@ class ConfigSensor(SensorEntity):
             translation_key=f"config_{config_key}",
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v2"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v3"
         self._attr_native_value = value if value is not None else 0
-        # Fixed English name → entity_id slugifies to {room}_announce_volume
-        self._attr_name = self._CONFIG_NAME_MAP.get(config_key, config_key)
+        self.entity_id = f"sensor.{room_key}_{config_key}"
 
     @property
     def device_info(self) -> dict:
