@@ -93,6 +93,7 @@ Content-Type: audio/wav
 
 - [HA 社区（英文）](https://community.home-assistant.io/t/home-intercom-push-to-talk-pwa-for-any-smart-speaker-via-home-assistant/1016027)
 - [Hassbian（中文）](https://bbs.hassbian.com/thread-32686-1-1.html)
+- [Hassbian 硬件帖（中文）](https://bbs.hassbian.com/thread-32765-1-1.html)
 
 ## 安装（Docker）
 
