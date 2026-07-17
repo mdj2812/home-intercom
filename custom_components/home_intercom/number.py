@@ -154,4 +154,5 @@ class HomeIntercomNumber(NumberEntity):
                 all_rooms[self._room_key][config_key] = value
 
         # Force config sensors to re-read
+        _LOGGER.info("Dispatching config_update for room=%s key=%s value=%s", self._room_key, config_key, value)
         async_dispatcher_send(self.hass, f"{DOMAIN}_config_update")
