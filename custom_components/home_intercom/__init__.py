@@ -30,6 +30,7 @@ from .const import (
     CONF_PAUSE_BUFFER,
     CONF_ROOMS,
     DOMAIN,
+    PLATFORMS,
     SERVICE_ANNOUNCE,
     WWW_DIR,
 )
@@ -71,6 +72,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return True
 
     yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
+
+    # Monkey-patch config_entries.async_remove to block YAML entry deletion
+    if not hasattr(hass.config_entries, "_hi_patched"):
+        _orig_async_remove = hass.config_entries.async_remove
+
+        async def _patched_async_remove(entry_id: str) -> dict:
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry and entry.domain == DOMAIN and entry.unique_id == YAML_UNIQUE_ID:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="yaml_entry_delete_blocked",
+                    translation_placeholders={"title": entry.title},
+                )
+            return await _orig_async_remove(entry_id)
+
+        hass.config_entries.async_remove = _patched_async_remove  # type: ignore[method-assign]
+        hass.config_entries._hi_patched = True
+
     entries = hass.config_entries.async_entries(DOMAIN)
     yaml_entry = _find_yaml_entry(entries)
 
@@ -112,7 +131,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Unload a config entry. YAML entries cannot be unloaded."""
+    if entry.unique_id == YAML_UNIQUE_ID:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="yaml_entry_delete_blocked",
+            translation_placeholders={"title": entry.title},
+        )
     if DOMAIN in hass.data:
         hass.data[DOMAIN].setdefault("entry_rooms", {}).pop(entry.entry_id, None)
         remaining = hass.data[DOMAIN].get("entry_rooms", {})
@@ -176,9 +201,16 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
     hass.data[DOMAIN].setdefault("pwa_token", secrets.token_urlsafe(32))
 
+    # Initialize error/state tracking
+    hass.data[DOMAIN].setdefault("errors", {})
+    hass.data[DOMAIN].setdefault("states", {})
+
     register_api_views(hass)
     _register_services(hass, all_rooms)
     _register_devices(hass, entry.entry_id, entry_rooms.get(entry.entry_id, {}))
+
+    # Forward to sensor/number/binary_sensor platforms
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _LOGGER.info(
         "Home Intercom — %d rooms (%d entries), audio: %s",

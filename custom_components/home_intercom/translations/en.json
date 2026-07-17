@@ -65,5 +65,23 @@
     "yaml_entry_delete_blocked": {
       "message": "\"{title}\" is a YAML-configured integration and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
     }
+  },
+  "entity": {
+    "sensor": {
+      "error": { "name": "Error" },
+      "state": { "name": "State" },
+      "volume": { "name": "Volume" },
+      "media": { "name": "Now Playing" },
+      "player_type": { "name": "Player Type" },
+      "config_announce_volume": { "name": "Announce Volume" },
+      "config_pause_buffer": { "name": "Pause Buffer" }
+    },
+    "binary_sensor": {
+      "connected": { "name": "Connected" }
+    },
+    "number": {
+      "announce_volume": { "name": "Announce Volume" },
+      "pause_buffer": { "name": "Pause Buffer" }
+    }
   }
 }
