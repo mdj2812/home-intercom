@@ -187,6 +187,12 @@ function makeCard(target, name, isBroadcast) {
   btn.addEventListener('touchstart', e => e.preventDefault());
   btn.addEventListener('contextmenu', e => e.preventDefault());
 
+  if (window._INSECURE_ORIGIN) {
+    btn.disabled = true;
+    card.classList.add(UNAVAILABLE_CLASS);
+    card.querySelector('.status').textContent = I18N.t('secInsecureTitle');
+  }
+
   return card;
 }
 
@@ -225,22 +231,28 @@ function applyRoomStatus(status) {
     const btn = card.querySelector('.ptt-btn');
     if (roomState === EntityStatus.ONLINE) {
       if (dot) dot.className = 'dot dot-online';
-      card.classList.remove(UNAVAILABLE_CLASS);
-      if (btn) btn.disabled = false;
-      const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusReady');
+      if (!window._INSECURE_ORIGIN) {
+        card.classList.remove(UNAVAILABLE_CLASS);
+        if (btn) btn.disabled = false;
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusReady');
+      }
     } else if (roomState === EntityStatus.NO_PLAY_MEDIA) {
       if (dot) dot.className = 'dot dot-error';
-      card.classList.add(UNAVAILABLE_CLASS);
-      if (btn) btn.disabled = true;
-      const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusSkipped');
+      if (!window._INSECURE_ORIGIN) {
+        card.classList.add(UNAVAILABLE_CLASS);
+        if (btn) btn.disabled = true;
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusSkipped');
+      }
     } else {
       if (dot) dot.className = 'dot dot-error';
-      card.classList.add(UNAVAILABLE_CLASS);
-      if (btn) btn.disabled = true;
-      const st = card.querySelector('.status');
-      if (st) st.textContent = I18N.t('statusUnavailable');
+      if (!window._INSECURE_ORIGIN) {
+        card.classList.add(UNAVAILABLE_CLASS);
+        if (btn) btn.disabled = true;
+        const st = card.querySelector('.status');
+        if (st) st.textContent = I18N.t('statusUnavailable');
+      }
     }
   }
 }
@@ -401,12 +413,9 @@ async function pollSpeakerStatus() {
 // Detect insecure context (HTTP without localhost) — getUserMedia requires HTTPS
 (function checkSecureContext() {
   if (!window.isSecureContext) {
+    window._INSECURE_ORIGIN = true;
     var banner = document.getElementById('insecure-banner');
     if (banner) banner.classList.remove('hidden');
-    var title = document.getElementById('insecure-title');
-    if (title) title.textContent = I18N.t('secInsecureTitle');
-    var hint = document.getElementById('insecure-hint');
-    if (hint) hint.textContent = I18N.t('secInsecureHint');
   }
 })();
 
