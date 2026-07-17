@@ -162,6 +162,7 @@ class ErrorSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_error"
         self._attr_translation_placeholders = {"room": room_name}
         self._attr_native_value = ERROR_OK
+        self.entity_id = f"sensor.{room_key}_error"
 
     @property
     def device_info(self) -> dict:
@@ -198,6 +199,7 @@ class StateSensor(SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_state"
         self._attr_translation_placeholders = {"room": room_name}
         self._attr_native_value = STATE_IDLE
+        self.entity_id = f"sensor.{room_key}_state"
 
     @property
     def device_info(self) -> dict:
@@ -232,6 +234,7 @@ class VolumeSensor(SensorEntity):
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_volume"
         self._attr_translation_placeholders = {"room": room_name}
+        self.entity_id = f"sensor.{room_key}_volume"
 
     @property
     def device_info(self) -> dict:
@@ -267,6 +270,7 @@ class MediaSensor(SensorEntity):
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_media"
         self._attr_translation_placeholders = {"room": room_name}
+        self.entity_id = f"sensor.{room_key}_media"
 
     @property
     def device_info(self) -> dict:
