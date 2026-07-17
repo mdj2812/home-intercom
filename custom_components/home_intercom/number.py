@@ -69,6 +69,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up number entities from a config entry."""
+    # YAML rooms are read-only — no interactive config entities
+    if entry.unique_id == YAML_UNIQUE_ID:
+        return
+
     rooms: dict[str, dict] = {}
     rooms.update(entry.data.get(CONF_ROOMS, {}))
     rooms.update(entry.options.get(CONF_ROOMS, {}))
@@ -112,8 +116,6 @@ class HomeIntercomNumber(NumberEntity):
         self._attr_native_value = current_value if current_value is not None else 0
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_{description.key}"
         self._attr_translation_placeholders = {"room": room_name}
-        self._yaml_entry = entry.unique_id == YAML_UNIQUE_ID
-        self._yaml_value = current_value if current_value is not None else 0
 
     @property
     def device_info(self):
@@ -122,14 +124,8 @@ class HomeIntercomNumber(NumberEntity):
         return {"identifiers": {(DOMAIN, self._room_key)}}
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set the value and update the config entry (UI entries only)."""
+        """Set the value and update the config entry."""
         self._attr_native_value = value
-
-        # YAML entries are read-only — snap back to config value
-        if self._yaml_entry:
-            self._attr_native_value = self._yaml_value
-            self.async_write_ha_state()
-            return
 
         # Update config entry options
         options = dict(self._entry.options)
