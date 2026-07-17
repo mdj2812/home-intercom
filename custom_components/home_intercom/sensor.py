@@ -159,7 +159,7 @@ class ErrorSensor(SensorEntity):
             device_class=SensorDeviceClass.ENUM,
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_error"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_error_v1"
         self._attr_native_value = ERROR_OK
         self.entity_id = f"sensor.{room_key}_error"
 
@@ -195,7 +195,7 @@ class StateSensor(SensorEntity):
             translation_key="state",
             device_class=SensorDeviceClass.ENUM,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_state"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_state_v1"
         self._attr_native_value = STATE_IDLE
         self.entity_id = f"sensor.{room_key}_state"
 
@@ -230,7 +230,7 @@ class VolumeSensor(SensorEntity):
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_volume"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_volume_v1"
         self.entity_id = f"sensor.{room_key}_volume"
 
     @property
@@ -265,7 +265,7 @@ class MediaSensor(SensorEntity):
             key="media",
             translation_key="media",
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_media"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_media_v1"
         self.entity_id = f"sensor.{room_key}_media"
 
     @property
@@ -304,7 +304,7 @@ class PlayerTypeSensor(SensorEntity):
             device_class=SensorDeviceClass.ENUM,
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v2"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v3"
         self.entity_id = f"sensor.{room_key}_player_type"
 
     @property

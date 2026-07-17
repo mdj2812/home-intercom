@@ -77,7 +77,7 @@ class ConnectedSensor(BinarySensorEntity):
             key="connected",
             translation_key="connected",
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_connected"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_connected_v1"
         self.entity_id = f"binary_sensor.{room_key}_connected"
 
     @property
