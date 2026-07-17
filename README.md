@@ -72,14 +72,27 @@ YAML rooms appear as a separate config entry labeled "YAML". Use the UI integrat
 Hardware clients can upload audio through Home Assistant's standard authentication:
 
 ```http
-POST /api/home_intercom/device/record?target=living
-Authorization: Bearer <HA_LONG_LIVED_ACCESS_TOKEN>
+POST /api/home_intercom/record?target=living
+Authorization: Bearer <HA_LO...KEN>
 Content-Type: audio/wav
 ```
 
 Create a Long-Lived Access Token from the Home Assistant user profile and send it over HTTPS.
-Unlike the PWA's short-lived shared token, this endpoint continues to work after Home Assistant
-restarts. The existing `/api/home_intercom/record` endpoint remains available to the bundled PWA.
+When `Authorization` is present, the request is authenticated through HA's standard token mechanism;
+without it, the endpoint falls back to X-PWA-Token for the bundled PWA.
+
+### Hardware companion: intercom-button
+
+A physical push-to-talk button for your desk — no phone needed.
+
+[intercom-button](https://github.com/mdj2812/intercom-button) is an ESP32-S3 firmware that connects a MAX9814 microphone + button via WiFi to Home Intercom. Press, speak, release — your voice plays in the target room.
+
+> **Stage:** Both Home Intercom and intercom-button are actively developed. The button hardware is currently a demo/prototype; future iterations may include a **smart knob** form factor (rotary encoder + push-to-talk + volume + display).
+
+### Community
+
+- [HA Community (English)](https://community.home-assistant.io/t/home-intercom-push-to-talk-pwa-for-any-smart-speaker-via-home-assistant/1016027)
+- [Hassbian (中文)](https://bbs.hassbian.com/thread-32686-1-1.html)
 
 ## Installation (Docker)
 

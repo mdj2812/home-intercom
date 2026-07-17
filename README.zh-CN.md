@@ -72,14 +72,27 @@ YAML 房间会以独立的 "YAML" 配置条目显示。通过 UI 集成管理可
 硬件设备可通过 Home Assistant 标准认证上传音频：
 
 ```http
-POST /api/home_intercom/device/record?target=living
-Authorization: Bearer <HA_长...令牌>
+POST /api/home_intercom/record?target=living
+Authorization: Bearer ***
 Content-Type: audio/wav
 ```
 
 在 Home Assistant 用户资料中创建长期访问令牌，通过 HTTPS 发送。
-与 PWA 的短期共享令牌不同，此端点在 HA 重启后仍然有效。
-原有的 `/api/home_intercom/record` 端点仍可供 PWA 使用。
+当请求携带 `Authorization` 头时，通过 HA 标准令牌机制认证；
+不带时回退到 PWA 的 X-PWA-Token 认证。
+
+### 硬件伴侣：intercom-button
+
+放在桌面的物理对讲按键——不用掏手机。
+
+[intercom-button](https://github.com/mdj2812/intercom-button) 是基于 ESP32-S3 的固件，通过 WiFi 将 MAX9814 麦克风 + 按键连接到 Home Intercom。按住说话，松开播放到目标房间。
+
+> **开发阶段：** Home Intercom 和 intercom-button 都在积极开发中。按键硬件目前为演示/原型阶段；后续计划升级为**智能旋钮**形态（旋转编码器 + 按下对讲 + 音量调节 + 显示屏）。
+
+### 社区
+
+- [HA 社区（英文）](https://community.home-assistant.io/t/home-intercom-push-to-talk-pwa-for-any-smart-speaker-via-home-assistant/1016027)
+- [Hassbian（中文）](https://bbs.hassbian.com/thread-32686-1-1.html)
 
 ## 安装（Docker）
 
