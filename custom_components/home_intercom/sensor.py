@@ -46,6 +46,25 @@ STATE_PLAYING = "playing"
 
 STATE_OPTIONS = [STATE_IDLE, STATE_ANNOUNCING, STATE_PLAYING]
 
+# Player types
+PLAYER_TYPE_MA = "music_assistant"
+PLAYER_TYPE_STANDARD = "standard"
+PLAYER_TYPE_BASIC = "basic"
+
+PLAYER_TYPE_OPTIONS = [PLAYER_TYPE_MA, PLAYER_TYPE_STANDARD, PLAYER_TYPE_BASIC]
+
+# Bit flags
+SUPPORT_REPEAT_SET = 1 << 18
+
+
+def _get_player_type(attrs: dict) -> str:
+    """Determine player type from entity attributes."""
+    if attrs.get("app_id") == "music_assistant":
+        return PLAYER_TYPE_MA
+    if attrs.get("supported_features", 0) & SUPPORT_REPEAT_SET:
+        return PLAYER_TYPE_STANDARD
+    return PLAYER_TYPE_BASIC
+
 
 @dataclass(frozen=True, kw_only=True)
 class HomeIntercomSensorDescription(SensorEntityDescription):
@@ -101,6 +120,15 @@ async def async_setup_entry(
         # Media info sensor — polls now playing
         entities.append(
             MediaSensor(
+                entry=entry,
+                room_key=room_id,
+                source_entity=entity_id,
+                room_name=room_name,
+            )
+        )
+        # Player type diagnostic
+        entities.append(
+            PlayerTypeSensor(
                 entry=entry,
                 room_key=room_id,
                 source_entity=entity_id,
@@ -256,3 +284,39 @@ class MediaSensor(SensorEntity):
         if title or artist:
             return f"{title} - {artist}" if title and artist else (title or artist)
         return state.attributes.get("app_name") or None
+
+
+class PlayerTypeSensor(SensorEntity):
+    """Diagnostic sensor showing the player type (music_assistant/standard/basic)."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = PLAYER_TYPE_OPTIONS
+
+    def __init__(
+        self, entry: ConfigEntry, room_key: str, source_entity: str, room_name: str
+    ) -> None:
+        self._entry = entry
+        self._room_key = room_key
+        self._source_entity = source_entity
+        self.entity_description = SensorEntityDescription(
+            key="player_type",
+            translation_key="player_type",
+            device_class=SensorDeviceClass.ENUM,
+            entity_category=EntityCategory.DIAGNOSTIC,
+        )
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type"
+        self._attr_translation_placeholders = {"room": room_name}
+
+    @property
+    def device_info(self) -> dict:
+        return _device_info(self._room_key)
+
+    @property
+    def native_value(self) -> str | None:
+        """Determine player type from media_player attributes."""
+        state = self.hass.states.get(self._source_entity)
+        if state is None:
+            return None
+        return _get_player_type(dict(state.attributes))

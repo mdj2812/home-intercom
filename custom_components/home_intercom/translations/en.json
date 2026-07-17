@@ -71,7 +71,8 @@
       "error": { "name": "Error" },
       "state": { "name": "State" },
       "volume": { "name": "Volume" },
-      "media": { "name": "Now Playing" }
+      "media": { "name": "Now Playing" },
+      "player_type": { "name": "Player Type" }
     },
     "binary_sensor": {
       "connected": { "name": "Connected" }

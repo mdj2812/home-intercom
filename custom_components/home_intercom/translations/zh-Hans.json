@@ -71,7 +71,8 @@
       "error": { "name": "错误" },
       "state": { "name": "状态" },
       "volume": { "name": "音量" },
-      "media": { "name": "正在播放" }
+      "media": { "name": "正在播放" },
+      "player_type": { "name": "播放器类型" }
     },
     "binary_sensor": {
       "connected": { "name": "已连接" }
