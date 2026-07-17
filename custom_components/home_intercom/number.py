@@ -112,6 +112,8 @@ class HomeIntercomNumber(NumberEntity):
         self._attr_native_value = current_value if current_value is not None else 0
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_{description.key}"
         self._attr_translation_placeholders = {"room": room_name}
+        self._yaml_entry = entry.unique_id == YAML_UNIQUE_ID
+        self._yaml_value = current_value if current_value is not None else 0
 
     @property
     def device_info(self):
@@ -123,8 +125,9 @@ class HomeIntercomNumber(NumberEntity):
         """Set the value and update the config entry (UI entries only)."""
         self._attr_native_value = value
 
-        # YAML entries are read-only — don't persist
-        if self._entry.unique_id == YAML_UNIQUE_ID:
+        # YAML entries are read-only — snap back to config value
+        if self._yaml_entry:
+            self._attr_native_value = self._yaml_value
             self.async_write_ha_state()
             return
 
