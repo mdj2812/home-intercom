@@ -360,9 +360,17 @@ class ConfigSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Register for config update signals."""
         await super().async_added_to_hass()
-        async_dispatcher_connect(
-            self.hass, f"{DOMAIN}_config_update", self.async_write_ha_state
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass, f"{DOMAIN}_config_update", self._on_config_update
+            )
         )
+
+    @callback
+    def _on_config_update(self) -> None:
+        """Handle config update signal."""
+        _LOGGER.info("ConfigSensor update: room=%s key=%s", self._room_key, self._config_key)
+        self.async_write_ha_state()
 
     @property
     def device_info(self) -> dict:
