@@ -69,10 +69,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up number entities from a config entry."""
-    # YAML rooms are read-only — skip number entities
-    if entry.unique_id == YAML_UNIQUE_ID:
-        return
-
     rooms: dict[str, dict] = {}
     rooms.update(entry.data.get(CONF_ROOMS, {}))
     rooms.update(entry.options.get(CONF_ROOMS, {}))
@@ -124,8 +120,13 @@ class HomeIntercomNumber(NumberEntity):
         return {"identifiers": {(DOMAIN, self._room_key)}}
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set the value and update the config entry."""
+        """Set the value and update the config entry (UI entries only)."""
         self._attr_native_value = value
+
+        # YAML entries are read-only — don't persist
+        if self._entry.unique_id == YAML_UNIQUE_ID:
+            self.async_write_ha_state()
+            return
 
         # Update config entry options
         options = dict(self._entry.options)
