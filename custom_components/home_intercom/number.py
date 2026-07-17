@@ -126,6 +126,7 @@ class HomeIntercomNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the value, persist to config, update in-memory state."""
         self._attr_native_value = value
+        self.async_write_ha_state()
 
         # Persist to config entry options
         options = dict(self._entry.options)
