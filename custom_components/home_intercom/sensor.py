@@ -157,7 +157,6 @@ class StateSensor(SensorEntity):
     """Sensor showing current state (idle/announcing/playing)."""
 
     _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = STATE_OPTIONS
 
@@ -168,7 +167,6 @@ class StateSensor(SensorEntity):
             key="state",
             translation_key="state",
             device_class=SensorDeviceClass.ENUM,
-            entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_state"
         self._attr_translation_placeholders = {"room": room_name}
@@ -189,7 +187,6 @@ class VolumeSensor(SensorEntity):
     """Sensor polling the media_player's current volume level."""
 
     _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_should_poll = True
@@ -205,7 +202,6 @@ class VolumeSensor(SensorEntity):
             translation_key="volume",
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
-            entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_volume"
         self._attr_translation_placeholders = {"room": room_name}
@@ -230,7 +226,6 @@ class MediaSensor(SensorEntity):
     """Sensor showing now playing media title/artist."""
 
     _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_should_poll = True
 
     def __init__(
@@ -242,7 +237,6 @@ class MediaSensor(SensorEntity):
         self.entity_description = SensorEntityDescription(
             key="media",
             translation_key="media",
-            entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_media"
         self._attr_translation_placeholders = {"room": room_name}
