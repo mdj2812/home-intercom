@@ -160,7 +160,6 @@ class ErrorSensor(SensorEntity):
             entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_error"
-        self._attr_translation_placeholders = {"room": room_name}
         self._attr_native_value = ERROR_OK
         self.entity_id = f"sensor.{room_key}_error"
 
@@ -197,7 +196,6 @@ class StateSensor(SensorEntity):
             device_class=SensorDeviceClass.ENUM,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_state"
-        self._attr_translation_placeholders = {"room": room_name}
         self._attr_native_value = STATE_IDLE
         self.entity_id = f"sensor.{room_key}_state"
 
@@ -233,7 +231,6 @@ class VolumeSensor(SensorEntity):
             state_class=SensorStateClass.MEASUREMENT,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_volume"
-        self._attr_translation_placeholders = {"room": room_name}
         self.entity_id = f"sensor.{room_key}_volume"
 
     @property
@@ -269,7 +266,6 @@ class MediaSensor(SensorEntity):
             translation_key="media",
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_media"
-        self._attr_translation_placeholders = {"room": room_name}
         self.entity_id = f"sensor.{room_key}_media"
 
     @property
@@ -343,7 +339,6 @@ class ConfigSensor(SensorEntity):
             entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}"
-        self._attr_translation_placeholders = {"room": room_name}
         self._attr_native_value = value if value is not None else 0
         # Consistent entity_id across locales
         self.entity_id = f"sensor.{room_key}_{config_key}"

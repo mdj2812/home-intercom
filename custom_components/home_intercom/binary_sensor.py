@@ -78,7 +78,7 @@ class ConnectedSensor(BinarySensorEntity):
             translation_key="connected",
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_connected"
-        self._attr_translation_placeholders = {"room": room_name}
+        self.entity_id = f"binary_sensor.{room_key}_connected"
 
     @property
     def device_info(self):
