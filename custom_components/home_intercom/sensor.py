@@ -149,6 +149,7 @@ class ErrorSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ERROR_OPTIONS
+    _attr_name = "错误"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
         self._entry = entry
@@ -186,6 +187,7 @@ class StateSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = STATE_OPTIONS
+    _attr_name = "状态"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
         self._entry = entry
@@ -345,6 +347,7 @@ class ConfigSensor(SensorEntity):
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v3"
         self._attr_native_value = value if value is not None else 0
+        self._attr_name = self._CONFIG_NAME_MAP.get(config_key, config_key)
         self.entity_id = f"sensor.{room_key}_{config_key}"
 
     @property
