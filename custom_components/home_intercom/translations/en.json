@@ -72,7 +72,9 @@
       "state": { "name": "State" },
       "volume": { "name": "Volume" },
       "media": { "name": "Now Playing" },
-      "player_type": { "name": "Player Type" }
+      "player_type": { "name": "Player Type" },
+      "config_announce_volume": { "name": "Announce Volume" },
+      "config_pause_buffer": { "name": "Pause Buffer" }
     },
     "binary_sensor": {
       "connected": { "name": "Connected" }

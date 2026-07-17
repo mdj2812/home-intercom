@@ -72,7 +72,9 @@
       "state": { "name": "状态" },
       "volume": { "name": "音量" },
       "media": { "name": "正在播放" },
-      "player_type": { "name": "类别" }
+      "player_type": { "name": "类别" },
+      "config_announce_volume": { "name": "播报音量" },
+      "config_pause_buffer": { "name": "暂停缓冲" }
     },
     "binary_sensor": {
       "connected": { "name": "已连接" }

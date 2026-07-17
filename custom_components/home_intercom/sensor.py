@@ -1,4 +1,4 @@
-"""Sensor platform — per-room diagnostic sensors (error, state, volume, media)."""
+"""Sensor platform — per-room diagnostic sensors (error, state, volume, media, player_type, config)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,12 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_ROOMS, DOMAIN
+from .const import (
+    CONF_ANNOUNCE_VOLUME,
+    CONF_PAUSE_BUFFER,
+    CONF_ROOMS,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,45 +98,39 @@ async def async_setup_entry(
             continue
 
         # Error sensor
-        entities.append(
-            ErrorSensor(
-                entry=entry,
-                room_key=room_id,
-                room_name=room_name,
-            )
-        )
+        entities.append(ErrorSensor(entry=entry, room_key=room_id, room_name=room_name))
         # State sensor
-        entities.append(
-            StateSensor(
-                entry=entry,
-                room_key=room_id,
-                room_name=room_name,
-            )
-        )
-        # Volume sensor — polls media_player volume_level
+        entities.append(StateSensor(entry=entry, room_key=room_id, room_name=room_name))
+        # Volume sensor
         entities.append(
             VolumeSensor(
-                entry=entry,
-                room_key=room_id,
-                source_entity=entity_id,
-                room_name=room_name,
+                entry=entry, room_key=room_id, source_entity=entity_id, room_name=room_name
             )
         )
-        # Media info sensor — polls now playing
+        # Media info sensor
         entities.append(
-            MediaSensor(
-                entry=entry,
-                room_key=room_id,
-                source_entity=entity_id,
-                room_name=room_name,
-            )
+            MediaSensor(entry=entry, room_key=room_id, source_entity=entity_id, room_name=room_name)
         )
         # Player type diagnostic
         entities.append(
             PlayerTypeSensor(
+                entry=entry, room_key=room_id, source_entity=entity_id, room_name=room_name
+            )
+        )
+        # Config value sensors (read-only display for all rooms)
+        entities.append(
+            ConfigSensor(
                 entry=entry,
                 room_key=room_id,
-                source_entity=entity_id,
+                config_key=CONF_ANNOUNCE_VOLUME,
+                room_name=room_name,
+            )
+        )
+        entities.append(
+            ConfigSensor(
+                entry=entry,
+                room_key=room_id,
+                config_key=CONF_PAUSE_BUFFER,
                 room_name=room_name,
             )
         )
@@ -306,8 +305,6 @@ class PlayerTypeSensor(SensorEntity):
             entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v2"
-        self._attr_name = "类别"
-        # Force entity_id to include player_type suffix across locales
         self.entity_id = f"sensor.{room_key}_player_type"
 
     @property
@@ -321,3 +318,31 @@ class PlayerTypeSensor(SensorEntity):
         if state is None:
             return None
         return _get_player_type(dict(state.attributes))
+
+
+class ConfigSensor(SensorEntity):
+    """Diagnostic sensor displaying a configured value from the entry."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, entry: ConfigEntry, room_key: str, config_key: str, room_name: str) -> None:
+        self._entry = entry
+        self._room_key = room_key
+        self._config_key = config_key
+        # Read configured value from entry data + options
+        rooms = {**entry.data.get(CONF_ROOMS, {}), **entry.options.get(CONF_ROOMS, {})}
+        cfg = rooms.get(room_key, {})
+        value = cfg.get(config_key, 0)
+        self.entity_description = SensorEntityDescription(
+            key=f"config_{config_key}",
+            translation_key=f"config_{config_key}",
+            entity_category=EntityCategory.DIAGNOSTIC,
+        )
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}"
+        self._attr_translation_placeholders = {"room": room_name}
+        self._attr_native_value = value if value is not None else 0
+
+    @property
+    def device_info(self) -> dict:
+        return _device_info(self._room_key)
