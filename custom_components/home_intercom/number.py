@@ -131,18 +131,16 @@ class HomeIntercomNumber(NumberEntity):
 
         config_key = self.entity_description.config_key
         # Persist to config entry options (bypass update_listener to avoid reload)
-        rooms_data: dict = self._entry.options.setdefault(CONF_ROOMS, {})
+        options = dict(self._entry.options)
+        rooms_data: dict = options.setdefault(CONF_ROOMS, {})
         room_config = rooms_data.setdefault(self._room_key, {})
         if value == 0:
             room_config.pop(config_key, None)
         else:
             room_config[config_key] = value
-        # Write directly to disk without triggering update_listener reload
-        self._entry.options = {
-            **self._entry.options,
-            CONF_ROOMS: rooms_data,
-        }
-        self.hass.config_entries._async_schedule_save()
+        self.hass.config_entries.async_update_entry(
+            self._entry, options={**options, CONF_ROOMS: rooms_data}
+        )
 
         # Update in-memory state without full reload
         hass_data = self.hass.data.get(DOMAIN, {})
