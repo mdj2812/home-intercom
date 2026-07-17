@@ -149,6 +149,10 @@ const I18N = (() => {
       el.textContent = lang === "en" && room.name_en ? room.name_en : room.name;
     });
 
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = t(el.getAttribute("data-i18n"));
+    });
+
     document.title = t("appTitle");
 
     document.querySelectorAll(".room-card .status").forEach((el) => {
