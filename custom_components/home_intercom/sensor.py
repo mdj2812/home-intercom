@@ -366,9 +366,7 @@ class ConfigSensor(SensorEntity):
         """Register for config update signals."""
         await super().async_added_to_hass()
         self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass, f"{DOMAIN}_config_update", self._on_config_update
-            )
+            async_dispatcher_connect(self.hass, f"{DOMAIN}_config_update", self._on_config_update)
         )
 
     @callback
