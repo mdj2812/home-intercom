@@ -129,19 +129,20 @@ class HomeIntercomNumber(NumberEntity):
         self._attr_native_value = value
         self.async_write_ha_state()
 
-        # Persist to config entry options
-        options = dict(self._entry.options)
-        rooms: dict = options.setdefault(CONF_ROOMS, {})
-        room = dict(rooms.get(self._room_key, {}))
         config_key = self.entity_description.config_key
+        # Persist to config entry options (bypass update_listener to avoid reload)
+        rooms_data: dict = self._entry.options.setdefault(CONF_ROOMS, {})
+        room_config = rooms_data.setdefault(self._room_key, {})
         if value == 0:
-            room.pop(config_key, None)
+            room_config.pop(config_key, None)
         else:
-            room[config_key] = value
-        rooms[self._room_key] = room
-        self.hass.config_entries.async_update_entry(
-            self._entry, options={**options, CONF_ROOMS: rooms}
-        )
+            room_config[config_key] = value
+        # Write directly to disk without triggering update_listener reload
+        self._entry.options = {
+            **self._entry.options,
+            CONF_ROOMS: rooms_data,
+        }
+        self.hass.config_entries._async_schedule_save()
 
         # Update in-memory state without full reload
         hass_data = self.hass.data.get(DOMAIN, {})
