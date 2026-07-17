@@ -321,6 +321,10 @@ class PlayerTypeSensor(SensorEntity):
             self._attr_native_value = _get_player_type(dict(state.attributes))
         self.async_write_ha_state()
 
+    @property
+    def device_info(self) -> dict:
+        return _device_info(self._room_key)
+
 
 class ConfigSensor(SensorEntity):
     """Diagnostic sensor displaying a configured value from the entry."""
