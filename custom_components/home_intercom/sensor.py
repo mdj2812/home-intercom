@@ -334,20 +334,23 @@ class ConfigSensor(SensorEntity):
         self._entry = entry
         self._room_key = room_key
         self._config_key = config_key
-        # Read configured value from entry data + options
-        rooms = {**entry.data.get(CONF_ROOMS, {}), **entry.options.get(CONF_ROOMS, {})}
-        cfg = rooms.get(room_key, {})
-        value = cfg.get(config_key, 0)
         self.entity_description = SensorEntityDescription(
             key=f"config_{config_key}",
             translation_key=f"config_{config_key}",
             entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v3"
-        self._attr_native_value = value if value is not None else 0
         self._attr_name = "播报音量" if config_key == CONF_ANNOUNCE_VOLUME else "暂停缓冲"
         self.entity_id = f"sensor.{room_key}_{config_key}"
 
     @property
     def device_info(self) -> dict:
         return _device_info(self._room_key)
+
+    @property
+    def native_value(self) -> float:
+        """Read current value from in-memory config."""
+        hass_data = self.hass.data.get(DOMAIN, {})
+        rooms = hass_data.get("rooms", {})
+        cfg = rooms.get(self._room_key, {})
+        return cfg.get(self._config_key, 0)
