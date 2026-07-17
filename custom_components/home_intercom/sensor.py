@@ -318,20 +318,24 @@ class PlayerTypeSensor(SensorEntity):
         """Set static player type once, retry until player is available."""
         await super().async_added_to_hass()
 
+    async def async_update(self) -> None:
+        """Poll until player type is available."""
+        # native_value is read by async_write_ha_state via the property
+        self.async_write_ha_state()
+
     @property
     def device_info(self) -> dict:
         return _device_info(self._room_key)
 
     @property
     def native_value(self) -> str | None:
-        """Lazy-load player type, cache after first successful read."""
-        if hasattr(self, "_cached_player_type"):
-            return self._cached_player_type
+        """Read player type once, then return cached value."""
+        if self._attr_native_value is not None:
+            return self._attr_native_value
         state = self.hass.states.get(self._source_entity)
         if state is not None:
-            self._cached_player_type = _get_player_type(dict(state.attributes))
-            if self._cached_player_type is not None:
-                return self._cached_player_type
+            self._attr_native_value = _get_player_type(dict(state.attributes))
+            return self._attr_native_value
         return None
 
 
