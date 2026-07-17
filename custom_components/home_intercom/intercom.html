@@ -44,13 +44,6 @@
     </div>
   </div>
 
-  <div class="insecure-banner hidden" id="insecure-banner">
-    <div class="insecure-icon" aria-hidden="true">🔒</div>
-    <div>
-      <div class="insecure-title" id="insecure-title" data-i18n="secInsecureTitle"></div>
-      <div class="insecure-hint" id="insecure-hint" data-i18n="secInsecureHint"></div>
-    </div>
-  </div>
   <div class="grid" id="grid"></div>
 
   <footer class="footer">
@@ -414,8 +407,17 @@ async function pollSpeakerStatus() {
 (function checkSecureContext() {
   if (!window.isSecureContext) {
     window._INSECURE_ORIGIN = true;
-    var banner = document.getElementById('insecure-banner');
-    if (banner) banner.classList.remove('hidden');
+
+    var banner = document.createElement('div');
+    banner.className = 'insecure-banner';
+    banner.innerHTML =
+      '<div class="insecure-icon" aria-hidden="true">🔒</div>' +
+      '<div>' +
+        '<div class="insecure-title" data-i18n="secInsecureTitle">' + I18N.t('secInsecureTitle') + '</div>' +
+        '<div class="insecure-hint" data-i18n="secInsecureHint">' + I18N.t('secInsecureHint') + '</div>' +
+      '</div>';
+    var grid = document.getElementById('grid');
+    if (grid) grid.parentNode.insertBefore(banner, grid);
   }
 })();
 

@@ -161,10 +161,6 @@ body {
   margin-bottom: 10px;
 }
 
-.insecure-banner.hidden {
-  display: none;
-}
-
 .insecure-icon {
   font-size: 1.4rem;
   flex-shrink: 0;
