@@ -149,6 +149,41 @@ body {
   color: #ccc;
 }
 
+/* ──── Insecure context banner ──── */
+.insecure-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #2a1a1a;
+  border: 1px solid #c0392b;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+
+.insecure-banner.hidden {
+  display: none;
+}
+
+.insecure-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.insecure-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e74c3c;
+  margin-bottom: 4px;
+}
+
+.insecure-hint {
+  font-size: 0.75rem;
+  color: #999;
+  line-height: 1.4;
+}
+
 /* ──── Grid ──── */
 .grid {
   display: grid;

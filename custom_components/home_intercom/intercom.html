@@ -44,6 +44,13 @@
     </div>
   </div>
 
+  <div class="insecure-banner hidden" id="insecure-banner">
+    <div class="insecure-icon" aria-hidden="true">🔒</div>
+    <div>
+      <div class="insecure-title" id="insecure-title"></div>
+      <div class="insecure-hint" id="insecure-hint"></div>
+    </div>
+  </div>
   <div class="grid" id="grid"></div>
 
   <footer class="footer">
@@ -390,6 +397,18 @@ async function pollSpeakerStatus() {
     if (!haStatusLoaded) applyPreviewFallback();
   }
 }
+
+// Detect insecure context (HTTP without localhost) — getUserMedia requires HTTPS
+(function checkSecureContext() {
+  if (!window.isSecureContext) {
+    var banner = document.getElementById('insecure-banner');
+    if (banner) banner.classList.remove('hidden');
+    var title = document.getElementById('insecure-title');
+    if (title) title.textContent = I18N.t('secInsecureTitle');
+    var hint = document.getElementById('insecure-hint');
+    if (hint) hint.textContent = I18N.t('secInsecureHint');
+  }
+})();
 
 loadRooms().then(() => pollSpeakerStatus());
 setInterval(pollSpeakerStatus, 30000);
