@@ -305,7 +305,10 @@ class PlayerTypeSensor(SensorEntity):
             device_class=SensorDeviceClass.ENUM,
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v2"
+        self._attr_name = "类别"
+        # Force entity_id to include player_type suffix across locales
+        self.entity_id = f"sensor.{room_key}_player_type"
 
     @property
     def device_info(self) -> dict:
