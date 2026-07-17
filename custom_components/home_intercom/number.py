@@ -124,24 +124,28 @@ class HomeIntercomNumber(NumberEntity):
         return {"identifiers": {(DOMAIN, self._room_key)}}
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set the value and update the config entry."""
+        """Set the value, persist to config, update in-memory state."""
         self._attr_native_value = value
 
-        # Update config entry options
+        # Persist to config entry options
         options = dict(self._entry.options)
         rooms: dict = options.setdefault(CONF_ROOMS, {})
-        for _rid_key in rooms:
-            # Copy existing data rooms so we don't lose YAML rooms in options
-            pass
-        room = rooms.get(self._room_key, {})
+        room = dict(rooms.get(self._room_key, {}))
         config_key = self.entity_description.config_key
         if value == 0:
             room.pop(config_key, None)
         else:
             room[config_key] = value
         rooms[self._room_key] = room
-
         self.hass.config_entries.async_update_entry(
             self._entry, options={**options, CONF_ROOMS: rooms}
         )
-        await self.hass.config_entries.async_reload(self._entry.entry_id)
+
+        # Update in-memory state without full reload
+        hass_data = self.hass.data.get(DOMAIN, {})
+        all_rooms = hass_data.get("rooms", {})
+        if self._room_key in all_rooms:
+            if value == 0:
+                all_rooms[self._room_key].pop(config_key, None)
+            else:
+                all_rooms[self._room_key][config_key] = value
