@@ -318,14 +318,19 @@ class PlayerTypeSensor(SensorEntity):
         if state is None:
             return None
         return _get_player_type(dict(state.attributes))
-
-
 class ConfigSensor(SensorEntity):
     """Diagnostic sensor displaying a configured value from the entry."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, entry: ConfigEntry, room_key: str, config_key: str, room_name: str) -> None:
+    _CONFIG_NAME_MAP = {
+        CONF_ANNOUNCE_VOLUME: "Announce Volume",
+        CONF_PAUSE_BUFFER: "Pause Buffer",
+    }
+
+    def __init__(
+        self, entry: ConfigEntry, room_key: str, config_key: str, room_name: str
+    ) -> None:
         self._entry = entry
         self._room_key = room_key
         self._config_key = config_key
@@ -338,10 +343,10 @@ class ConfigSensor(SensorEntity):
             translation_key=f"config_{config_key}",
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v2"
         self._attr_native_value = value if value is not None else 0
-        # Consistent entity_id across locales
-        self.entity_id = f"sensor.{room_key}_{config_key}"
+        # Fixed English name → entity_id slugifies to {room}_announce_volume
+        self._attr_name = self._CONFIG_NAME_MAP.get(config_key, config_key)
 
     @property
     def device_info(self) -> dict:
