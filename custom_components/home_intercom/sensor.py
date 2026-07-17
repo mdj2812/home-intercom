@@ -307,7 +307,6 @@ class PlayerTypeSensor(SensorEntity):
             entity_category=EntityCategory.DIAGNOSTIC,
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type"
-        self._attr_translation_placeholders = {"room": room_name}
 
     @property
     def device_info(self) -> dict:
