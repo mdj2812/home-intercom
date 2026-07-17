@@ -149,7 +149,6 @@ class ErrorSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ERROR_OPTIONS
-    _attr_name = "错误"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
         self._entry = entry
@@ -160,7 +159,7 @@ class ErrorSensor(SensorEntity):
             device_class=SensorDeviceClass.ENUM,
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_error_v1"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_error_v2"
         self._attr_native_value = ERROR_OK
         self.entity_id = f"sensor.{room_key}_error"
 
@@ -187,7 +186,6 @@ class StateSensor(SensorEntity):
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = STATE_OPTIONS
-    _attr_name = "状态"
 
     def __init__(self, entry: ConfigEntry, room_key: str, room_name: str) -> None:
         self._entry = entry
@@ -197,7 +195,7 @@ class StateSensor(SensorEntity):
             translation_key="state",
             device_class=SensorDeviceClass.ENUM,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_state_v1"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_state_v2"
         self._attr_native_value = STATE_IDLE
         self.entity_id = f"sensor.{room_key}_state"
 
@@ -232,7 +230,7 @@ class VolumeSensor(SensorEntity):
             native_unit_of_measurement=PERCENTAGE,
             state_class=SensorStateClass.MEASUREMENT,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_volume_v1"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_volume_v2"
         self.entity_id = f"sensor.{room_key}_volume"
 
     @property
@@ -267,7 +265,7 @@ class MediaSensor(SensorEntity):
             key="media",
             translation_key="media",
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_media_v1"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_media_v2"
         self.entity_id = f"sensor.{room_key}_media"
 
     @property
@@ -306,7 +304,7 @@ class PlayerTypeSensor(SensorEntity):
             device_class=SensorDeviceClass.ENUM,
             entity_category=EntityCategory.DIAGNOSTIC,
         )
-        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v3"
+        self._attr_unique_id = f"{entry.entry_id}_{room_key}_player_type_v4"
         self.entity_id = f"sensor.{room_key}_player_type"
 
     @property
@@ -320,19 +318,14 @@ class PlayerTypeSensor(SensorEntity):
         if state is None:
             return None
         return _get_player_type(dict(state.attributes))
+
+
 class ConfigSensor(SensorEntity):
     """Diagnostic sensor displaying a configured value from the entry."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    _CONFIG_NAME_MAP = {
-        CONF_ANNOUNCE_VOLUME: "播报音量",
-        CONF_PAUSE_BUFFER: "暂停缓冲",
-    }
-
-    def __init__(
-        self, entry: ConfigEntry, room_key: str, config_key: str, room_name: str
-    ) -> None:
+    def __init__(self, entry: ConfigEntry, room_key: str, config_key: str, room_name: str) -> None:
         self._entry = entry
         self._room_key = room_key
         self._config_key = config_key
@@ -347,7 +340,6 @@ class ConfigSensor(SensorEntity):
         )
         self._attr_unique_id = f"{entry.entry_id}_{room_key}_config_{config_key}_v3"
         self._attr_native_value = value if value is not None else 0
-        self._attr_name = self._CONFIG_NAME_MAP.get(config_key, config_key)
         self.entity_id = f"sensor.{room_key}_{config_key}"
 
     @property
