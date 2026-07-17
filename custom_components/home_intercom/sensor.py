@@ -297,6 +297,7 @@ class PlayerTypeSensor(SensorEntity):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = PLAYER_TYPE_OPTIONS
+    _attr_should_poll = True
 
     def __init__(
         self, entry: ConfigEntry, room_key: str, source_entity: str, room_name: str
@@ -314,16 +315,24 @@ class PlayerTypeSensor(SensorEntity):
         self.entity_id = f"sensor.{room_key}_player_type"
 
     async def async_added_to_hass(self) -> None:
-        """Set static player type once."""
+        """Set static player type once, retry until player is available."""
         await super().async_added_to_hass()
-        state = self.hass.states.get(self._source_entity)
-        if state is not None:
-            self._attr_native_value = _get_player_type(dict(state.attributes))
-        self.async_write_ha_state()
 
     @property
     def device_info(self) -> dict:
         return _device_info(self._room_key)
+
+    @property
+    def native_value(self) -> str | None:
+        """Lazy-load player type, cache after first successful read."""
+        if hasattr(self, "_cached_player_type"):
+            return self._cached_player_type
+        state = self.hass.states.get(self._source_entity)
+        if state is not None:
+            self._cached_player_type = _get_player_type(dict(state.attributes))
+            if self._cached_player_type is not None:
+                return self._cached_player_type
+        return None
 
 
 class ConfigSensor(SensorEntity):
