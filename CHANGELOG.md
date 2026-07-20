@@ -38,7 +38,7 @@
 |-----------|---------|
 | manifest.json | `2.0.0` |
 | Docker | `ghcr.io/mdj2812/home-intercom:v2.0.0` |
-| HA min version | `2026.7.0` |
+| HA min version | `2025.7.0` |
 
 ---
 
@@ -75,7 +75,7 @@
 |-----------|---------|
 | manifest.json | `2.0.0-rc2` |
 | Docker | `ghcr.io/mdj2812/home-intercom:v2.0.0-rc2` |
-| HA min version | `2026.7.0` |
+| HA min version | `2025.7.0` |
 
 ---
 
@@ -110,7 +110,7 @@
 |-----------|---------|
 | manifest.json | `2.0.0-rc1` |
 | Docker | `ghcr.io/mdj2812/home-intercom:v2.0.0-rc1` |
-| HA min version | `2026.7.0` |
+| HA min version | `2025.7.0` |
 
 ---
 
