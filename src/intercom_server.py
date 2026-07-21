@@ -7,7 +7,13 @@ import sys
 
 from const import DEVICE_REGISTRY_DEFAULT_PATH, PCM_RATE, WAV_HEADER_SIZE
 from flask import Flask, jsonify, request, send_from_directory
-from shared import concat_wavs, handle_pcm_to_wav, handle_wav_passthrough, is_wav
+from shared import (
+    concat_wavs,
+    device_hello_payload,
+    handle_pcm_to_wav,
+    handle_wav_passthrough,
+    is_wav,
+)
 
 from device_store import DeviceStore
 from ha_client import DEFAULT_STATE_TIMEOUT, HAClient
@@ -188,10 +194,38 @@ def record():
     )
 
 
+@app.route("/devices/hello", methods=["POST"])
+def devices_hello():
+    """ESP32 boot registration + config delivery (issue #37).
+
+    Trust-on-first-use: unknown MACs auto-register with a default name.
+    Revoked devices are rejected. No secrets on the device — MAC identity only.
+    """
+    mac = request.headers.get("X-Device-ID", "")
+    if not mac:
+        return jsonify({"status": "error", "error": "missing X-Device-ID header"}), 400
+
+    body = request.get_json(silent=True) or {}
+    firmware_version = body.get("firmware_version", "") if isinstance(body, dict) else ""
+
+    existing = device_store.get(mac)
+    if existing and existing.get("revoked"):
+        app.logger.warning(f"[intercom] hello from revoked device {mac} — rejected")
+        return jsonify({"status": "error", "error": "device revoked"}), 403
+
+    try:
+        device = device_store.register_or_update(mac, firmware_version)
+    except ValueError:
+        return jsonify({"status": "error", "error": "invalid X-Device-ID (MAC)"}), 400
+
+    return jsonify(device_hello_payload(device))
+
+
 # ── HA-compatible `/api/home_intercom/…` aliases ─────────────────────────
 # Registered before __main__ so both `python intercom_server.py` and
 # `gunicorn intercom_server:app` pick up the extra routes.
 _HA_PREFIX = "/api/home_intercom"
+app.add_url_rule(f"{_HA_PREFIX}/devices/hello", "ha_devices_hello", devices_hello, methods=["POST"])
 app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
 app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
 app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)

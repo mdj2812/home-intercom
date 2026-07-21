@@ -24,7 +24,9 @@ try:
         DEVICE_NAME_PREFIX,
         DEVICE_UPDATEABLE_FIELDS,
         MAC_PATTERN,
+        MAX_RECORD_SECS,
         PCM_BPS,
+        PCM_RATE,
         WAV_MAGIC,
     )
 except ImportError:
@@ -32,7 +34,9 @@ except ImportError:
         DEVICE_NAME_PREFIX,
         DEVICE_UPDATEABLE_FIELDS,
         MAC_PATTERN,
+        MAX_RECORD_SECS,
         PCM_BPS,
+        PCM_RATE,
         WAV_MAGIC,
     )
 
@@ -224,3 +228,18 @@ class DeviceStoreBase:
             return None
         device["revoked"] = True
         return dict(device)
+
+
+def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
+    """Build the POST /devices/hello response payload (issue #37).
+
+    Delivers everything an ESP32 needs at boot: its name/room binding
+    plus the global audio parameters.
+    """
+    return {
+        "status": "ok",
+        "device_name": device["name"],
+        "room": device.get("room", ""),
+        "sample_rate": PCM_RATE,
+        "max_record_secs": MAX_RECORD_SECS,
+    }
