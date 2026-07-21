@@ -25,3 +25,11 @@ WWW_DIR = "www"
 PLATFORMS: list[str] = ["number", "sensor", "binary_sensor"]
 YAML_UNIQUE_ID = f"{DOMAIN}_yaml"
 UI_UNIQUE_ID = DOMAIN
+
+# ——— Device registry (ESP32 intercom buttons, issue #40) ———
+DEVICE_STORAGE_KEY = f"{DOMAIN}.devices"  # HA .storage key
+DEVICE_STORAGE_VERSION = 1
+DEVICE_NAME_PREFIX = "Device"  # auto-register: "Device EE:FF"
+DEVICE_UPDATEABLE_FIELDS = frozenset({"name", "room", "revoked"})
+MAC_PATTERN = r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$"  # normalized uppercase form
+DEVICE_REGISTRY_DEFAULT_PATH = "/data/device_registry.json"  # Docker default

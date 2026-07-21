@@ -5,10 +5,11 @@ import json
 import os
 import sys
 
-from const import PCM_RATE, WAV_HEADER_SIZE
+from const import DEVICE_REGISTRY_DEFAULT_PATH, PCM_RATE, WAV_HEADER_SIZE
 from flask import Flask, jsonify, request, send_from_directory
 from shared import concat_wavs, handle_pcm_to_wav, handle_wav_passthrough, is_wav
 
+from device_store import DeviceStore
 from ha_client import DEFAULT_STATE_TIMEOUT, HAClient
 
 app = Flask(__name__)
@@ -62,6 +63,10 @@ except Exception:
 ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
 with open(ROOMS_FILE) as f:
     ROOM_MAP = json.load(f)
+
+# Device registry for ESP32 intercom buttons (issue #40)
+DEVICE_REGISTRY_FILE = os.environ.get("DEVICE_REGISTRY_FILE", DEVICE_REGISTRY_DEFAULT_PATH)
+device_store = DeviceStore(DEVICE_REGISTRY_FILE)
 
 
 @app.route("/")

@@ -10,6 +10,7 @@ jobs:
 
     env:
       AUDIO_DIR: /tmp/audio
+      DEVICE_REGISTRY_FILE: /tmp/device_registry.json
 
     steps:
       - uses: actions/checkout@v4

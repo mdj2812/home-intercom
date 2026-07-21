@@ -6,7 +6,7 @@ COPY src/requirements.txt .
 RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
 # Docker-specific files
-COPY src/intercom_server.py src/ha_client.py src/rooms.json ./
+COPY src/intercom_server.py src/ha_client.py src/device_store.py src/rooms.json ./
 COPY src/site.webmanifest ./static/manifest.json
 COPY docker/.docker-image /app/.docker-image
 

@@ -1,20 +1,40 @@
-"""Shared audio processing — imported by both Docker (Flask) and HA integration.
+"""Shared modules — imported by both Docker (Flask) and HA integration.
 
-Both deployment modes use the same PCM→WAV conversion and WAV concatenation.
-Audio constants (PCM_RATE, PCM_BPS, WAV_MAGIC, WAV_HEADER_SIZE) come from const.py.
+Audio: both deployment modes use the same PCM→WAV conversion and WAV
+concatenation. Audio constants (PCM_RATE, PCM_BPS, WAV_MAGIC,
+WAV_HEADER_SIZE) come from const.py.
+
+Devices: DeviceStoreBase holds the MAC registry CRUD logic shared by the
+HA integration (persistence via helpers.storage.Store) and the Docker
+server (persistence via a JSON file) — see device_store.py on each side.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import wave
+from datetime import UTC, datetime
+from typing import Any
 
 try:
-    from .const import PCM_BPS, WAV_MAGIC  # HA integration (relative)
+    from .const import (  # HA integration (relative)
+        DEVICE_NAME_PREFIX,
+        DEVICE_UPDATEABLE_FIELDS,
+        MAC_PATTERN,
+        PCM_BPS,
+        WAV_MAGIC,
+    )
 except ImportError:
-    from const import PCM_BPS, WAV_MAGIC  # Docker standalone (absolute)
+    from const import (  # Docker standalone (absolute)
+        DEVICE_NAME_PREFIX,
+        DEVICE_UPDATEABLE_FIELDS,
+        MAC_PATTERN,
+        PCM_BPS,
+        WAV_MAGIC,
+    )
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -110,3 +130,97 @@ def concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
     duration = total_frames / audio_rate
     _LOGGER.info("chime + audio combined: %s (%.1fs)", os.path.basename(output_path), duration)
     return duration
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Device registry — shared CRUD (issue #40, PR review)
+# ═══════════════════════════════════════════════════════════════════════
+
+_MAC_RE = re.compile(MAC_PATTERN)
+
+
+def normalize_mac(mac: str) -> str:
+    """Normalize a MAC address to the uppercase colon-separated form."""
+    return mac.strip().upper()
+
+
+def default_device_name(mac: str) -> str:
+    """Default name for auto-registered devices: "Device EE:FF"."""
+    return f"{DEVICE_NAME_PREFIX} {':'.join(mac.split(':')[-2:])}"
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+class DeviceStoreBase:
+    """MAC → device-config CRUD, shared by the HA and Docker device stores.
+
+    Subclasses provide persistence: they override the public
+    register_or_update / update_field / revoke methods to call the
+    protected _-prefixed implementation here, then save.
+
+    Note on revoke(): devices are flagged "revoked", not deleted. Deleting
+    would be pointless — /devices/hello auto-registers unknown MACs
+    (trust-on-first-use), so a deleted device would simply re-register on
+    its next boot. The flag is what actually blocks future hellos (#37)
+    and record calls (#47).
+    """
+
+    def __init__(self) -> None:
+        self._devices: dict[str, dict[str, Any]] = {}
+
+    def get(self, mac: str) -> dict[str, Any] | None:
+        """Return a copy of the device info for a MAC, or None if unknown."""
+        device = self._devices.get(normalize_mac(mac))
+        return dict(device) if device is not None else None
+
+    @property
+    def devices(self) -> dict[str, dict[str, Any]]:
+        """Snapshot of all registered devices (MAC → info)."""
+        return {mac: dict(d) for mac, d in self._devices.items()}
+
+    def _register_or_update(
+        self, mac: str, firmware_version: str = ""
+    ) -> tuple[dict[str, Any], bool]:
+        """Shared register/update logic. Returns (device_copy, created)."""
+        mac = normalize_mac(mac)
+        if not _MAC_RE.match(mac):
+            raise ValueError(f"invalid MAC address: {mac!r}")
+
+        now = _now_iso()
+        device = self._devices.get(mac)
+        created = device is None
+        if created:
+            device = {
+                "name": default_device_name(mac),
+                "room": "",
+                "created_at": now,
+                "last_seen": now,
+                "firmware_version": firmware_version,
+                "revoked": False,
+            }
+            self._devices[mac] = device
+        else:
+            device["last_seen"] = now
+            if firmware_version:
+                device["firmware_version"] = firmware_version
+        return dict(device), created
+
+    def _update_field(self, mac: str, key: str, value: Any) -> dict[str, Any] | None:
+        """Shared update logic. Raises ValueError on a non-updateable field."""
+        if key not in DEVICE_UPDATEABLE_FIELDS:
+            raise ValueError(f"field not updateable: {key!r}")
+        device = self._devices.get(normalize_mac(mac))
+        if device is None:
+            return None
+        device[key] = value
+        return dict(device)
+
+    def _revoke(self, mac: str) -> dict[str, Any] | None:
+        """Shared revoke logic: flags "revoked", never deletes."""
+        device = self._devices.get(normalize_mac(mac))
+        if device is None:
+            return None
+        device["revoked"] = True
+        return dict(device)
