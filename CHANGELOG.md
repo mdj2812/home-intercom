@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.0.1 (2026-07-20)
+
+> **Patch: lower min HA version to 2025.7.0**
+
+- Lower `homeassistant` minimum version in `hacs.json` from `2026.7.0` to `2025.7.0` — no 2026.7-specific APIs are used.
+
+---
+
 ## v2.0.0 (2026-07-16)
 
 > **Native HA Integration + Config Flow + Device Registry**
