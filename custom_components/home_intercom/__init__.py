@@ -34,6 +34,7 @@ from .const import (
     SERVICE_ANNOUNCE,
     WWW_DIR,
 )
+from .device_store import DeviceStore
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -200,6 +201,11 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
     hass.data[DOMAIN].setdefault("pwa_token", secrets.token_urlsafe(32))
+
+    # Device registry for ESP32 intercom buttons (issue #40)
+    device_store = DeviceStore(hass)
+    await device_store.async_load()
+    hass.data[DOMAIN]["device_store"] = device_store
 
     # Initialize error/state tracking
     hass.data[DOMAIN].setdefault("errors", {})
