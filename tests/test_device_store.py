@@ -11,8 +11,9 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+from shared import default_device_name
 
-import device_store as docker_module
+import device_store as docker_module  # noqa: F401 — ensures Docker module imports cleanly
 from device_store import DeviceStore as DockerDeviceStore
 
 from .ha_fakes import FakeStore, install_fake_homeassistant
@@ -137,7 +138,7 @@ class TestDockerDeviceStore:
         store = _fresh_docker_store(tmp_path)
         store.register_or_update(MAC)
         store.register_or_update(MAC2)
-        assert docker_module.default_device_name(MAC2) == "Device 55:66"
+        assert default_device_name(MAC2) == "Device 55:66"
         assert len(store.devices) == 2
 
 
