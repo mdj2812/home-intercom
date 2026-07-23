@@ -195,4 +195,38 @@ else
     exit 1
 fi
 
+# 12. Device registry persisted to disk
+if docker exec "${CONTAINER_NAME}" grep -q "AA:BB:CC:DD:EE:FF" /data/device_registry.json 2>/dev/null; then
+    echo "  ✅ device registry persisted to /data/device_registry.json"
+else
+    echo "  ❌ /data/device_registry.json missing the registered MAC"
+    docker exec "${CONTAINER_NAME}" cat /data/device_registry.json 2>&1 || true
+    exit 1
+fi
+
+# 13. Registry survives a container restart — record without re-hello
+docker restart "${CONTAINER_NAME}" >/dev/null
+echo "==> Container restarted, waiting for server (persistence check)..."
+ELAPSED=0
+until curl -sS "${URL}/version" -o /dev/null 2>/dev/null; do
+    sleep "${POLL_INTERVAL}"
+    ELAPSED=$((ELAPSED + POLL_INTERVAL))
+    if [ "${ELAPSED}" -ge "${MAX_WAIT}" ]; then
+        echo "  ❌ Server did not come back after restart"
+        exit 1
+    fi
+done
+REC_RESTART=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+    --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test" 2>/dev/null || echo "000")
+if [ "${REC_RESTART}" = "200" ]; then
+    echo "  ✅ POST /record after restart (no re-hello) — registry reloaded from disk → 200"
+else
+    echo "  ❌ POST /record after restart gave HTTP ${REC_RESTART}, want 200 (registry not persisted?)"
+    echo "  --- registry file after restart:"
+    docker exec "${CONTAINER_NAME}" cat /data/device_registry.json 2>&1 || true
+    echo "  --- container logs (tail):"
+    docker logs "${CONTAINER_NAME}" --tail 20 2>&1 || true
+    exit 1
+fi
+
 echo "==> All Docker smoke tests passed! 🎉"
