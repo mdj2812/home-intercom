@@ -69,6 +69,8 @@ const UNAVAILABLE_CLASS = "unavailable";
 
 const GRID = document.getElementById('grid');
 const RECORD_URL = (window.API_BASE || '') + '/record';
+// sessionStorage flag: auto-reload at most once per tab session on 401 (issue #54)
+const RELOAD_ONCE_KEY = 'hi401reload';
 
 // Build headers dict for HA API calls.
 // Priority: server-injected PWA token → HA localStorage token
@@ -377,6 +379,12 @@ async function processAndSend() {
         }
       }
       if (sentCurrent) setCardState(currentCard, 'sent', I18N.t('statusSent'));
+    } else if (resp.status === 401 && !sessionStorage.getItem(RELOAD_ONCE_KEY)) {
+      // Issue #54: page holds a stale token (HA restarted, .storage reset,
+      // backup restored) — reload once to pick up the fresh injected token.
+      sessionStorage.setItem(RELOAD_ONCE_KEY, '1');
+      location.reload();
+      return;
     } else {
       setCardState(currentCard, '', I18N.t('statusFailed') + ' ' + resp.status);
     }

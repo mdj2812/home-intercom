@@ -20,6 +20,7 @@ from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .announce import handle_announce_service
@@ -31,6 +32,8 @@ from .const import (
     CONF_ROOMS,
     DOMAIN,
     PLATFORMS,
+    PWA_TOKEN_STORAGE_KEY,
+    PWA_TOKEN_STORAGE_VERSION,
     SERVICE_ANNOUNCE,
     WWW_DIR,
 )
@@ -176,6 +179,24 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 # ═══════════════════════════════════════════════════════════════════════
 
 
+async def _async_load_pwa_token(hass: HomeAssistant) -> str:
+    """Load the PWA shared token from .storage; generate + persist on first run.
+
+    Issue #54: the token previously lived only in hass.data, so every HA
+    restart or config-entry reload rotated it — already-open PWA pages then
+    got 401 from RecordView until manually refreshed. Persisting it keeps
+    existing pages working across restarts.
+    """
+    store = Store(hass, PWA_TOKEN_STORAGE_VERSION, PWA_TOKEN_STORAGE_KEY)
+    data = await store.async_load()
+    if isinstance(data, dict) and data.get("token"):
+        return data["token"]
+    token = secrets.token_urlsafe(32)
+    await store.async_save({"token": token})
+    _LOGGER.info("Generated new PWA token (first run or storage reset)")
+    return token
+
+
 async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Full setup: merge all entries, register services + devices."""
     entry_rooms = hass.data.get(DOMAIN, {}).get("entry_rooms", {})
@@ -200,7 +221,7 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     )
 
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
-    hass.data[DOMAIN].setdefault("pwa_token", secrets.token_urlsafe(32))
+    hass.data[DOMAIN]["pwa_token"] = await _async_load_pwa_token(hass)
 
     # Device registry for ESP32 intercom buttons (issue #40)
     device_store = DeviceStore(hass)
