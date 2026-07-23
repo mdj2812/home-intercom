@@ -291,7 +291,7 @@ class TestDeviceRecordView:
 
         assert DeviceRecordView.url == "/api/home_intercom/device/record"
         assert DeviceRecordView.name == "api:home_intercom:device-record"
-        assert DeviceRecordView.requires_auth is True
+        assert DeviceRecordView.requires_auth is False  # dual auth: MAC or HA user
 
     @pytest.mark.asyncio
     async def test_post_delegates_to_handle_record(self):
@@ -300,6 +300,8 @@ class TestDeviceRecordView:
         view = DeviceRecordView()
         req = _make_request()
         req.app = {"hass": _make_hass()}
+        # HA-authenticated request: auth middleware attached a user
+        req.get = lambda k, d=None: MagicMock() if k == "hass_user" else d
 
         with patch(
             "custom_components.home_intercom.api._handle_record",
@@ -313,6 +315,81 @@ class TestDeviceRecordView:
             resp = await view.post(req)
             body = json.loads(resp.text)
         assert body["ok"] is True
+
+
+class TestDeviceRecordViewMacAuth:
+    """MAC-based auth on DeviceRecordView (issue #47)."""
+
+    def _req_with_mac(self, mac: str, hass: MagicMock) -> MagicMock:
+        req = _make_request()
+        req.app = {"hass": hass}
+        req.headers = {"X-Device-ID": mac}
+        req.get = lambda k, d=None: d  # no hass_user attached
+        return req
+
+    def _hass_with_device(self, device: dict | None) -> MagicMock:
+        hass = _make_hass()
+        store = MagicMock()
+        store.get = lambda mac: device
+        hass.data["home_intercom"]["device_store"] = store
+        return hass
+
+    def _ok_response(self):
+        return AsyncMock(return_value=MagicMock(status=200, text='{"ok": true}'))
+
+    @pytest.mark.asyncio
+    async def test_registered_mac_delegates(self):
+        from custom_components.home_intercom.api import DeviceRecordView
+
+        device = {"name": "Study Button", "room": "study", "revoked": False}
+        req = self._req_with_mac("AA:BB:CC:DD:EE:FF", self._hass_with_device(device))
+        with patch(
+            "custom_components.home_intercom.api._handle_record", new=self._ok_response()
+        ) as mock_handle:
+            resp = await DeviceRecordView().post(req)
+        assert resp.status == 200
+        mock_handle.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_unknown_mac_403(self):
+        from custom_components.home_intercom.api import DeviceRecordView
+
+        req = self._req_with_mac("AA:BB:CC:DD:EE:FF", self._hass_with_device(None))
+        with patch(
+            "custom_components.home_intercom.api._handle_record", new=self._ok_response()
+        ) as mock_handle:
+            resp = await DeviceRecordView().post(req)
+        assert resp.status == 403
+        assert json.loads(resp.text)["error"] == "unknown device"
+        mock_handle.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_revoked_mac_403(self):
+        from custom_components.home_intercom.api import DeviceRecordView
+
+        device = {"name": "Study Button", "room": "study", "revoked": True}
+        req = self._req_with_mac("AA:BB:CC:DD:EE:FF", self._hass_with_device(device))
+        with patch(
+            "custom_components.home_intercom.api._handle_record", new=self._ok_response()
+        ) as mock_handle:
+            resp = await DeviceRecordView().post(req)
+        assert resp.status == 403
+        assert json.loads(resp.text)["error"] == "device revoked"
+        mock_handle.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_mac_no_user_401(self):
+        from custom_components.home_intercom.api import DeviceRecordView
+
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+        req.get = lambda k, d=None: d  # unauthenticated
+        with patch(
+            "custom_components.home_intercom.api._handle_record", new=self._ok_response()
+        ) as mock_handle:
+            resp = await DeviceRecordView().post(req)
+        assert resp.status == 401
+        mock_handle.assert_not_called()
 
 
 # ——— register_api_views tests ———

@@ -157,4 +157,33 @@ else
     exit 1
 fi
 
+# 7. POST /api/home_intercom/device/record with registered MAC → allowed (issue #47)
+docker exec "${CONTAINER_NAME}" python3 -c "
+import struct, sys
+hdr = b'RIFF' + struct.pack('<I', 36+64) + b'WAVEfmt ' + struct.pack('<I',16) + (1).to_bytes(2,'little') + (1).to_bytes(2,'little') + (16000).to_bytes(4,'little') + (32000).to_bytes(4,'little') + (2).to_bytes(2,'little') + (16).to_bytes(2,'little') + b'data' + struct.pack('<I', 64)
+open('/tmp/test.wav','wb').write(hdr + b'\x00' * 64)
+"
+REC_CODE=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+    --data-binary @/tmp/test.wav \
+    "http://localhost:${HA_PORT}/api/home_intercom/device/record?target=test" 2>/dev/null || echo "000")
+if [ "${REC_CODE}" = "200" ]; then
+    echo "  ✅ POST /api/home_intercom/device/record — registered MAC → 200"
+else
+    echo "  ❌ POST /api/home_intercom/device/record — registered MAC gave HTTP ${REC_CODE}, want 200"
+    exit 1
+fi
+
+# 8. POST /api/home_intercom/device/record with unknown MAC → 403
+REC_BAD=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: 11:22:33:44:55:66" \
+    --data-binary @/tmp/test.wav \
+    "http://localhost:${HA_PORT}/api/home_intercom/device/record?target=test" 2>/dev/null || echo "000")
+if [ "${REC_BAD}" = "403" ]; then
+    echo "  ✅ POST /api/home_intercom/device/record — unknown MAC → 403"
+else
+    echo "  ❌ POST /api/home_intercom/device/record — unknown MAC gave HTTP ${REC_BAD}, want 403"
+    exit 1
+fi
+
 echo "==> All smoke tests passed! 🎉"

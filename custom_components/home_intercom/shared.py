@@ -243,3 +243,12 @@ def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
         "sample_rate": PCM_RATE,
         "max_record_secs": MAX_RECORD_SECS,
     }
+
+
+def device_record_auth_error(device: dict[str, Any] | None) -> str | None:
+    """Return why a device may not record, or None if it may (issue #47)."""
+    if device is None:
+        return "unknown device"
+    if device.get("revoked"):
+        return "device revoked"
+    return None

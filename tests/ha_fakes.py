@@ -97,3 +97,4 @@ def install_fake_homeassistant() -> None:
     sys.modules["homeassistant.components.http"].HomeAssistantView = type(
         "HomeAssistantView", (), {"requires_auth": False}
     )
+    sys.modules["homeassistant.components.http"].KEY_HASS_USER = "hass_user"
