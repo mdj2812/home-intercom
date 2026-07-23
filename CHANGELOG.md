@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.0.2 (2026-07-23)
+
+> **Patch: PWA token persistence — no more 401 after HA restart**
+
+- **PWA 401 fix (#54)** — `pwa_token` was regenerated in memory on every HA restart / integration reload, so already-open PWA pages got `401 unauthorized` on `POST /record` until manually refreshed (worst on iOS home-screen PWA and Companion App). The token is now persisted in `.storage` and survives restarts.
+- **Frontend self-heal** — if `POST /record` still returns 401 (e.g. `.storage` deleted or backup restored), the page reloads itself once to pick up the fresh token; a `sessionStorage` guard prevents reload loops.
+
+⚠️ **After upgrading**: pages opened before this release need one final manual refresh (they still hold the old in-memory token). One time only.
+
+---
+
 ## v2.0.1 (2026-07-20)
 
 > **Patch: lower min HA version to 2025.7.0**
