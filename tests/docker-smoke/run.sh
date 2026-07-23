@@ -21,11 +21,23 @@ POLL_INTERVAL=2
 # Local runs may have http_proxy set — never proxy localhost requests
 export NO_PROXY="${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1"
 
+# Serialize concurrent local runs — a second invocation would collide on the
+# fixed container name/port and its teardown would kill this run's container.
+LOCK_FILE="/tmp/home-intercom-docker-smoke.lock"
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+    echo "❌ Another docker-smoke run is in progress (lock: ${LOCK_FILE})"
+    exit 1
+fi
+
 cleanup() {
     echo "==> Tearing down container..."
     docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 }
 trap cleanup EXIT
+
+# Remove leftovers from previously interrupted runs before starting
+docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
 # ── Build image ──────────────────────────────────────────────
 if [ "${SKIP_BUILD}" = true ]; then
