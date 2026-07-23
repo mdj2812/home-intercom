@@ -23,9 +23,9 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
 from .shared import concat_wavs as _concat_wavs
+from .shared import device_hello_payload, is_wav
 from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
 from .shared import handle_wav_passthrough as _handle_wav_passthrough
-from .shared import is_wav
 
 _LOGGER = logging.getLogger(__name__)
 _INTEGRATION_DIR = Path(__file__).parent
@@ -241,6 +241,53 @@ class RoomsView(HomeAssistantView):
         return web.json_response(_get_hass_data(request.app["hass"]).get("rooms", {}))
 
 
+class DevicesHelloView(HomeAssistantView):
+    """POST /api/home_intercom/devices/hello — ESP32 boot registration (issue #37).
+
+    Trust-on-first-use: unknown MACs auto-register with a default name.
+    Revoked devices are rejected. No secrets on the device — it identifies
+    by MAC address only.
+    """
+
+    url = "/api/home_intercom/devices/hello"
+    name = "api:home_intercom:devices-hello"
+    requires_auth = False  # MAC identity per trust-on-first-use model
+
+    async def post(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        mac = request.headers.get("X-Device-ID", "")
+        if not mac:
+            return web.json_response(
+                {"status": "error", "error": "missing X-Device-ID header"}, status=400
+            )
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        firmware_version = body.get("firmware_version", "") if isinstance(body, dict) else ""
+
+        store = _get_hass_data(hass).get("device_store")
+        if store is None:
+            return web.json_response(
+                {"status": "error", "error": "device registry unavailable"}, status=500
+            )
+
+        existing = store.get(mac)
+        if existing and existing.get("revoked"):
+            _LOGGER.warning("hello from revoked device %s — rejected", mac)
+            return web.json_response({"status": "error", "error": "device revoked"}, status=403)
+
+        try:
+            device = await store.register_or_update(mac, firmware_version)
+        except ValueError:
+            return web.json_response(
+                {"status": "error", "error": "invalid X-Device-ID (MAC)"}, status=400
+            )
+
+        return web.json_response(device_hello_payload(device))
+
+
 class PanelView(HomeAssistantView):
     """GET /home_intercom — PWA frontend HTML.
 
@@ -343,5 +390,6 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(StatusView)
     hass.http.register_view(VersionView)
     hass.http.register_view(RoomsView)
+    hass.http.register_view(DevicesHelloView)
     hass.http.register_view(PanelView)
     hass.http.register_view(StaticView)

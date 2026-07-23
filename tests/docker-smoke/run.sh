@@ -143,4 +143,27 @@ else
     exit 1
 fi
 
+# 8. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37)
+HELLO=$(curl -sS -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
+    -d '{"firmware_version": "smoke-1.0"}' "${URL}/api/home_intercom/devices/hello" 2>/dev/null || echo "")
+echo "${HELLO}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('status') == 'ok', f'bad status: {d}'
+assert d.get('sample_rate') == 16000, f'bad sample_rate: {d}'
+assert d.get('max_record_secs') == 60, f'bad max_record_secs: {d}'
+assert 'device_name' in d and 'room' in d, f'missing fields: {d}'
+print(f'ok: hello={d}')
+" 2>&1 && echo "  ✅ POST /api/home_intercom/devices/hello — ${HELLO}" || { echo "  ❌ POST /api/home_intercom/devices/hello — check failed"; exit 1; }
+
+# 9. POST /api/home_intercom/devices/hello — invalid MAC rejected
+HELLO_BAD=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: not-a-mac" \
+    "${URL}/api/home_intercom/devices/hello" 2>/dev/null || echo "000")
+if [ "${HELLO_BAD}" = "400" ]; then
+    echo "  ✅ POST /api/home_intercom/devices/hello — invalid MAC → 400"
+else
+    echo "  ❌ POST /api/home_intercom/devices/hello — invalid MAC gave HTTP ${HELLO_BAD}, want 400"
+    exit 1
+fi
+
 echo "==> All Docker smoke tests passed! 🎉"

@@ -134,4 +134,27 @@ else
     exit 1
 fi
 
+# 5. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37)
+HELLO=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
+    -d '{"firmware_version": "smoke-1.0"}' \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices/hello" 2>/dev/null || echo "")
+if echo "${HELLO}" | grep -q '"status": *"ok"'; then
+    echo "  ✅ POST /api/home_intercom/devices/hello — ${HELLO}"
+else
+    echo "  ❌ POST /api/home_intercom/devices/hello — unexpected: ${HELLO}"
+    exit 1
+fi
+
+# 6. POST /api/home_intercom/devices/hello — invalid MAC rejected
+HELLO_BAD=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: not-a-mac" \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices/hello" 2>/dev/null || echo "000")
+if [ "${HELLO_BAD}" = "400" ]; then
+    echo "  ✅ POST /api/home_intercom/devices/hello — invalid MAC → 400"
+else
+    echo "  ❌ POST /api/home_intercom/devices/hello — invalid MAC gave HTTP ${HELLO_BAD}, want 400"
+    exit 1
+fi
+
 echo "==> All smoke tests passed! 🎉"
