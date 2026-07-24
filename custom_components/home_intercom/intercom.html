@@ -432,10 +432,9 @@ async function pollSpeakerStatus() {
 loadRooms().then(() => pollSpeakerStatus());
 setInterval(pollSpeakerStatus, 30000);
 
-// Show version number + fetch server config
+// Show version number
 fetch((window.API_BASE || '') + '/version', { credentials: 'same-origin' }).then(r => r.json()).then(d => {
   document.getElementById('ver').textContent = d.version;
-  if (d.pcm_rate) TARGET_RATE = d.pcm_rate;
 }).catch(() => {
   document.getElementById('ver').textContent = '';
 });
