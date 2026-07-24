@@ -382,17 +382,26 @@ def _handle_button_device_delete(hass: HomeAssistant, device_entry: Any) -> None
 
 
 def _setup_device_store_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Listen for device_store_changed signal → reload button entry.
+    """Listen for device_store_changed signal → debounced reload of button entry.
 
-    When a new ESP32 sends /devices/hello, api.py dispatches
-    ``{DOMAIN}_device_store_changed``. This listener reloads the
-    button entry so the new device gets its HA device + entities.
+    Multiple hello calls in quick succession trigger only one reload
+    after a 2-second quiet period, avoiding race conditions.
     """
+    import asyncio
+
     from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-    async def _on_store_changed() -> None:
+    _timer: asyncio.TimerHandle | None = None
+
+    async def _reload_now() -> None:
         _LOGGER.info("Device store changed — reloading button entry %s", entry.entry_id)
         await hass.config_entries.async_reload(entry.entry_id)
+
+    async def _on_store_changed() -> None:
+        nonlocal _timer
+        if _timer is not None:
+            _timer.cancel()
+        _timer = hass.loop.call_later(2.0, lambda: hass.async_create_task(_reload_now()))
 
     async_dispatcher_connect(hass, f"{DOMAIN}_device_store_changed", _on_store_changed)
 
