@@ -601,3 +601,58 @@ body {
 
 .broadcast-card .waves::before,
 .broadcast-card .waves::after { border-color: #f0a030; }
+
+/* ──── Device list (read-only, issue #52) ──── */
+.devices-section {
+  margin-top: 18px;
+}
+
+.devices-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
+  margin: 0 0 8px;
+}
+
+.devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.device-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  border: 1px solid #262626;
+  border-radius: 10px;
+}
+
+.device-row .device-name {
+  font-size: 0.85rem;
+  color: #ddd;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-row .device-room {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.device-row .device-meta {
+  font-size: 0.7rem;
+  color: #555;
+  white-space: nowrap;
+}
+
+.device-row.revoked .device-name,
+.device-row.revoked .device-room,
+.device-row.revoked .device-meta {
+  opacity: 0.45;
+  text-decoration: line-through;
+}

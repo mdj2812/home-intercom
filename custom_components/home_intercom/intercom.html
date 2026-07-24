@@ -46,6 +46,11 @@
 
   <div class="grid" id="grid"></div>
 
+  <div class="devices-section" id="devices-section" hidden>
+    <h2 class="devices-title" data-i18n="devicesTitle">对讲按钮</h2>
+    <div class="devices-list" id="devices-list"></div>
+  </div>
+
   <footer class="footer">
     <span class="ver" id="ver">…</span>
     <div class="lang-dropdown" id="lang-dropdown">
@@ -279,6 +284,60 @@ function setCardState(card, state, msg) {
   card.querySelector('.status').textContent = msg;
 }
 
+// ——— Read-only device list (issue #52) ———
+// window._DEVICES caches the last fetch so language switches re-render instantly.
+window._DEVICES = null;
+
+window.renderDevices = function () {
+  const section = document.getElementById('devices-section');
+  const list = document.getElementById('devices-list');
+  const devices = window._DEVICES;
+  if (!devices || !Object.keys(devices).length) {
+    section.hidden = true;
+    return;
+  }
+  const macs = Object.keys(devices).sort((a, b) =>
+    (devices[a].name || a).localeCompare(devices[b].name || b));
+  list.innerHTML = '';
+  for (const mac of macs) {
+    const d = devices[mac];
+    const row = document.createElement('div');
+    row.className = 'device-row' + (d.revoked ? ' revoked' : '');
+
+    const name = document.createElement('span');
+    name.className = 'device-name';
+    name.textContent = d.name || mac;
+
+    const room = document.createElement('span');
+    room.className = 'device-room';
+    room.textContent = (d.room && ROOM_NAMES[d.room]) || '—';
+
+    const meta = document.createElement('span');
+    meta.className = 'device-meta';
+    const lastSeen = (d.last_seen || '').replace('T', ' ').slice(0, 16);
+    meta.textContent = [d.firmware_version, lastSeen].filter(Boolean).join(' · ');
+
+    row.appendChild(name);
+    row.appendChild(room);
+    row.appendChild(meta);
+    row.title = mac;
+    list.appendChild(row);
+  }
+  section.hidden = false;
+};
+
+async function loadDevices() {
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/devices', {
+      credentials: 'same-origin',
+      headers: authHeaders(),
+    });
+    if (!resp.ok) return; // 401/404: stay hidden
+    window._DEVICES = await resp.json();
+    window.renderDevices();
+  } catch (e) { /* network error: stay hidden */ }
+}
+
 async function startRecording(target, card) {
   currentTarget = target;
   currentCard = card;
@@ -429,7 +488,7 @@ async function pollSpeakerStatus() {
   }
 })();
 
-loadRooms().then(() => pollSpeakerStatus());
+loadRooms().then(() => { pollSpeakerStatus(); loadDevices(); });
 setInterval(pollSpeakerStatus, 30000);
 
 // Show version number

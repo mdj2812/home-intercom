@@ -196,6 +196,26 @@ else
     exit 1
 fi
 
+# 9b. GET /devices — read-only registry listing includes the hello-registered MAC (issue #52)
+DEVICES=$(curl -sS "${URL}/devices" 2>/dev/null || echo "")
+echo "${DEVICES}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+dev = d.get('AA:BB:CC:DD:EE:FF')
+assert dev, f'registered MAC missing: {d}'
+assert dev.get('name') == 'Device EE:FF', f'bad name: {dev}'
+assert dev.get('firmware_version') == 'smoke-1.0', f'bad firmware: {dev}'
+print(f'ok: devices={list(d)}')
+" 2>&1 && echo "  ✅ GET /devices — registered MAC listed" || { echo "  ❌ GET /devices — check failed"; exit 1; }
+
+DEVICES_HA=$(curl -sS "${URL}/api/home_intercom/devices" 2>/dev/null || echo "")
+if [ "${DEVICES_HA}" = "${DEVICES}" ]; then
+    echo "  ✅ GET /api/home_intercom/devices — matches /devices"
+else
+    echo "  ❌ GET /api/home_intercom/devices — differs from /devices"
+    exit 1
+fi
+
 # 10. POST /record with registered MAC → allowed (issue #47)
 python3 -c "
 import struct, sys

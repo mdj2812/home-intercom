@@ -12,6 +12,7 @@ from shared import (
     config_payload,
     device_hello_payload,
     device_record_auth_error,
+    devices_payload,
     handle_pcm_to_wav,
     handle_wav_passthrough,
     is_wav,
@@ -122,6 +123,12 @@ def version():
 def config():
     """Global audio settings (issue #39) — public, same fields as the hello payload."""
     return jsonify(config_payload())
+
+
+@app.route("/devices")
+def devices_list():
+    """Read-only registry listing for the PWA (issue #52). LAN trust, same as /record."""
+    return jsonify(devices_payload(device_store))
 
 
 @app.route("/record", methods=["POST"])
@@ -245,6 +252,7 @@ def devices_hello():
 # `gunicorn intercom_server:app` pick up the extra routes.
 _HA_PREFIX = "/api/home_intercom"
 app.add_url_rule(f"{_HA_PREFIX}/devices/hello", "ha_devices_hello", devices_hello, methods=["POST"])
+app.add_url_rule(f"{_HA_PREFIX}/devices", "ha_devices", devices_list)
 app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
 app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
 app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)
