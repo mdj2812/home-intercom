@@ -36,6 +36,14 @@ class TestStaticRoutes:
         assert "living" in data
         assert data["living"]["name"] == "Living Room"
 
+    def test_rooms_ha_alias(self, client):
+        """HA-style alias used by ESP32 after /devices/hello (issue #38)."""
+        resp = client.get("/api/home_intercom/rooms")
+        assert resp.status_code == 200
+        data = resp.json
+        assert "living" in data
+        assert data["living"]["name"] == "Living Room"
+
     def test_static_icon_192(self, client):
         """icon-192.png served from static/ (symlinked from custom_components/)."""
         resp = client.get("/static/icon-192.png")

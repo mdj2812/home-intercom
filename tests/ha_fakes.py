@@ -1,8 +1,7 @@
 """Shared fake `homeassistant` package for tests.
 
-test_api.py installs its own inline copy; new test modules should call
-install_fake_homeassistant() instead. Idempotent — later calls simply
-re-register the same sys.modules entries.
+All test modules call install_fake_homeassistant() at import time.
+Idempotent — later calls simply re-register the same sys.modules entries.
 """
 
 from __future__ import annotations
