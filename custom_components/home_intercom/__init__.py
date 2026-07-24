@@ -150,6 +150,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             translation_key="yaml_entry_delete_blocked",
             translation_placeholders={"title": entry.title},
         )
+
+    # Button entry: just unload platforms
+    if entry.unique_id == BUTTONS_UNIQUE_ID:
+        return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
     if DOMAIN in hass.data:
         hass.data[DOMAIN].setdefault("entry_rooms", {}).pop(entry.entry_id, None)
         remaining = hass.data[DOMAIN].get("entry_rooms", {})
