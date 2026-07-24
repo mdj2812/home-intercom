@@ -6,80 +6,15 @@ Uses mocked web.Request, patched homeassistant module, and pytest-asyncio.
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from .ha_fakes import install_fake_homeassistant
+
 # ——— Fake homeassistant package before any custom_components imports ———
-
-# Build a proper package hierarchy so "from homeassistant.X import Y" works.
-_ha = types.ModuleType("homeassistant")
-_ha.const = types.ModuleType("homeassistant.const")
-_ha.config_entries = types.ModuleType("homeassistant.config_entries")
-_ha.exceptions = types.ModuleType("homeassistant.exceptions")
-_ha.core = types.ModuleType("homeassistant.core")
-_ha.setup = types.ModuleType("homeassistant.setup")
-_ha.helpers = types.ModuleType("homeassistant.helpers")
-_ha.helpers.device_registry = MagicMock()
-_ha.helpers.entity_registry = MagicMock()
-_ha.helpers.area_registry = MagicMock()
-
-# Constants
-_ha.const.CONF_ENTITY_ID = "entity_id"
-_ha.const.CONF_NAME = "name"
-_ha.const.CONF_ROOMS = "rooms"
-_ha.const.CONF_AREA_ID = "area_id"
-_ha.const.CONF_ANNOUNCE_VOLUME = "announce_volume"
-_ha.const.CONF_PAUSE_BUFFER = "pause_buffer"
-_ha.const.ATTR_ENTITY_ID = "entity_id"
-_ha.const.DOMAIN = "home_intercom"
-
-# Config entries
-_ha.config_entries.ConfigEntry = MagicMock
-_ha.config_entries.SOURCE_IMPORT = "source_import"
-_ha.config_entries.HAS_OPTIONS_FLOW = True
-
-# Exceptions
-_ha.exceptions.HomeAssistantError = Exception
-_ha.exceptions.ConfigEntryNotReady = Exception
-
-# Events
-_ha.const.EVENT_HOMEASSISTANT_START = "home_assistant_start"
-_ha.const.EVENT_HOMEASSISTANT_STOP = "home_assistant_stop"
-
-# Register in sys.modules
-sys.modules["homeassistant"] = _ha
-sys.modules["homeassistant.const"] = _ha.const
-sys.modules["homeassistant.config_entries"] = _ha.config_entries
-sys.modules["homeassistant.exceptions"] = _ha.exceptions
-sys.modules["homeassistant.core"] = _ha.core
-sys.modules["homeassistant.setup"] = _ha.setup
-sys.modules["homeassistant.helpers"] = _ha.helpers
-sys.modules["homeassistant.helpers.device_registry"] = _ha.helpers.device_registry
-sys.modules["homeassistant.helpers.entity_registry"] = _ha.helpers.entity_registry
-sys.modules["homeassistant.helpers.area_registry"] = _ha.helpers.area_registry
-sys.modules["homeassistant.components"] = types.ModuleType("homeassistant.components")
-sys.modules["homeassistant.components.http"] = MagicMock()
-sys.modules["homeassistant.components.http"].HomeAssistantView = type(
-    "HomeAssistantView", (), {"requires_auth": False}
-)
-
-# Prevent _register_devices from running at module import time
-_ha.setup.async_setup_entry = AsyncMock(return_value=True)
-
-# Core types
-_ha.core.HomeAssistant = MagicMock
-_ha.core.ServiceCall = MagicMock
-
-# Helpers
-_ha.helpers.config_validation = MagicMock()
-_ha.helpers.typing = types.ModuleType("homeassistant.helpers.typing")
-_ha.helpers.typing.ConfigType = dict
-sys.modules["homeassistant.helpers.config_validation"] = _ha.helpers.config_validation
-sys.modules["homeassistant.helpers.typing"] = _ha.helpers.typing
+install_fake_homeassistant()
 
 # ——— Test data ———
 
@@ -409,3 +344,40 @@ class TestRegisterApiViews:
         calls = [c.args[0] for c in hass.http.register_view.call_args_list]
         assert RecordView in calls
         assert DeviceRecordView in calls
+
+
+# ——— RoomsView tests (issue #38) ———
+
+
+class TestRoomsView:
+    """GET /api/home_intercom/rooms — ESP32 calls this right after /devices/hello."""
+
+    def test_class_attributes(self):
+        from custom_components.home_intercom.api import RoomsView
+
+        assert RoomsView.url == "/api/home_intercom/rooms"
+        # Public: ESP32 holds zero secrets, so this endpoint must not require auth.
+        assert RoomsView.requires_auth is False
+
+    @pytest.mark.asyncio
+    async def test_get_returns_room_map(self):
+        from custom_components.home_intercom.api import RoomsView
+
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+        resp = await RoomsView().get(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        # ESP32 needs room keys; display names optional but present.
+        assert set(body) == {"living_room", "bedroom"}
+        assert body["living_room"]["name"] == "Living Room"
+
+    @pytest.mark.asyncio
+    async def test_get_empty_when_no_rooms(self):
+        from custom_components.home_intercom.api import RoomsView
+
+        req = _make_request()
+        req.app = {"hass": _make_hass(rooms={})}
+        resp = await RoomsView().get(req)
+        assert resp.status == 200
+        assert json.loads(resp.text) == {}
