@@ -326,9 +326,7 @@ class DevicesHelloView(HomeAssistantView):
         if is_new:
             button_entry_id = _get_hass_data(hass).get("button_entry_id")
             if button_entry_id:
-                hass.async_create_task(
-                    hass.config_entries.async_reload(button_entry_id)
-                )
+                hass.async_create_task(hass.config_entries.async_reload(button_entry_id))
 
         return web.json_response(device_hello_payload(device))
 

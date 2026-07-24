@@ -303,6 +303,7 @@ async def async_remove_config_entry_device(
         if domain == DOMAIN:
             # Check if this identifier is a button MAC (not a room ID)
             import re
+
             if re.match(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$", ident.upper()):
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
@@ -373,9 +374,7 @@ def _find_yaml_entry(entries: list[ConfigEntry]) -> ConfigEntry | None:
     return None
 
 
-def _register_button_devices(
-    hass: HomeAssistant, entry_id: str, device_store: DeviceStore
-) -> None:
+def _register_button_devices(hass: HomeAssistant, entry_id: str, device_store: DeviceStore) -> None:
     """Register each non-revoked intercom button as an HA device.
 
     Device info (name, area) is owned by the HA device registry.
@@ -476,9 +475,7 @@ def _async_handle_device_update(
     new_name = changes.get("name")
     if new_name and new_name != existing.get("name"):
         _LOGGER.info("Button %s renamed via HA UI: %r → %r", mac, existing.get("name"), new_name)
-        hass.async_create_task(
-            _async_sync_device_field(hass, device_store, mac, "name", new_name)
-        )
+        hass.async_create_task(_async_sync_device_field(hass, device_store, mac, "name", new_name))
 
     # Device moved to a different area → update device_store room
     new_area_id = changes.get("area_id")
@@ -497,9 +494,7 @@ def _async_handle_device_update(
             )
 
 
-async def _ensure_button_entry(
-    hass: HomeAssistant, device_store: DeviceStore
-) -> str | None:
+async def _ensure_button_entry(hass: HomeAssistant, device_store: DeviceStore) -> str | None:
     """Create a dedicated config entry for intercom buttons if any exist (issue #48).
 
     Returns the button entry_id, or None if there are no devices yet.
