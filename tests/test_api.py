@@ -352,6 +352,64 @@ class TestConfigView:
         assert body["max_record_secs"] == 60
 
 
+# ——— DevicesView tests (issue #52) ———
+
+
+class TestDevicesView:
+    """GET /api/home_intercom/devices — PWA-token-gated read-only listing."""
+
+    def _req(self, token: str | None, store: MagicMock | None) -> MagicMock:
+        req = _make_request()
+        hass = _make_hass()
+        if store is not None:
+            hass.data["home_intercom"]["device_store"] = store
+        req.app = {"hass": hass}
+        req.headers = {"X-PWA-Token": token} if token else {}
+        return req
+
+    def _store_with_device(self) -> MagicMock:
+        store = MagicMock()
+        store.devices = {
+            "AA:BB:CC:DD:EE:FF": {
+                "name": "Device EE:FF",
+                "room": "living_room",
+                "last_seen": "2026-07-24T08:00:00",
+                "firmware_version": "1.0.0",
+                "revoked": False,
+            }
+        }
+        return store
+
+    @pytest.mark.asyncio
+    async def test_returns_devices_with_valid_token(self):
+        from custom_components.home_intercom.api import DevicesView
+
+        req = self._req(PWA_TOKEN, self._store_with_device())
+        resp = await DevicesView().get(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["AA:BB:CC:DD:EE:FF"]["name"] == "Device EE:FF"
+        assert body["AA:BB:CC:DD:EE:FF"]["room"] == "living_room"
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_or_wrong_token(self):
+        from custom_components.home_intercom.api import DevicesView
+
+        for bad in (None, "wrong-token"):
+            req = self._req(bad, self._store_with_device())
+            resp = await DevicesView().get(req)
+            assert resp.status == 401
+
+    @pytest.mark.asyncio
+    async def test_empty_without_store(self):
+        from custom_components.home_intercom.api import DevicesView
+
+        req = self._req(PWA_TOKEN, None)
+        resp = await DevicesView().get(req)
+        assert resp.status == 200
+        assert json.loads(resp.text) == {}
+
+
 # ——— register_api_views tests ———
 
 

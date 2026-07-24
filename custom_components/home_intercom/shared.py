@@ -272,3 +272,11 @@ def device_record_auth_error(device: dict[str, Any] | None) -> DeviceRecordFault
     if device.get("revoked"):
         return DeviceRecordFault.DEVICE_REVOKED
     return None
+
+
+def devices_payload(store: DeviceStoreBase) -> dict[str, dict[str, Any]]:
+    """GET /devices response — read-only registry listing for the PWA (issue #52).
+
+    The store's snapshot is already a defensive copy keyed by MAC.
+    """
+    return store.devices

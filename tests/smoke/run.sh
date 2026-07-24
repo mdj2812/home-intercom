@@ -170,6 +170,22 @@ else
     exit 1
 fi
 
+# 6b. GET /api/home_intercom/devices — PWA-token-gated read-only listing (issue #52)
+PWA_TOKEN=$(docker exec "${CONTAINER_NAME}" \
+    python3 -c "import json; print(json.load(open('/config/.storage/home_intercom.pwa_token'))['data']['token'])" 2>/dev/null || echo "")
+DEV_NOAUTH=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices" 2>/dev/null || echo "000")
+DEVICES=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -H "X-PWA-Token: ${PWA_TOKEN}" \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices" 2>/dev/null || echo "")
+if [ "${DEV_NOAUTH}" = "401" ] && echo "${DEVICES}" | grep -q "AA:BB:CC:DD:EE:FF"; then
+    echo "  ✅ GET /api/home_intercom/devices — no token → 401, valid token lists registered MAC"
+else
+    echo "  ❌ GET /api/home_intercom/devices — noauth=${DEV_NOAUTH} (want 401), with token: ${DEVICES}"
+    exit 1
+fi
+
 # 7. POST /api/home_intercom/device/record with registered MAC → allowed (issue #47)
 docker exec "${CONTAINER_NAME}" python3 -c "
 import struct, sys
