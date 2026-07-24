@@ -93,7 +93,8 @@ import sys, json
 d = json.load(sys.stdin)
 assert 'version' in d and d['version'], 'missing version'
 assert d.get('pcm_rate') == 16000, f'bad pcm_rate: {d.get(\"pcm_rate\")}'
-print(f'ok: version={d[\"version\"]} pcm_rate={d[\"pcm_rate\"]}')
+assert d.get('max_record_secs') == 60, f'bad max_record_secs: {d}'
+print(f'ok: version={d[\"version\"]} pcm_rate={d[\"pcm_rate\"]} max_record_secs={d[\"max_record_secs\"]}')
 " 2>&1 && echo "  ✅ GET /version — ${VER}" || { echo "  ❌ GET /version — check failed"; exit 1; }
 
 # 2. /rooms — verify matches input rooms.json

@@ -92,12 +92,16 @@ echo "==> Checking API endpoints..."
 # 1. /api/home_intercom/version
 VER=$(docker exec "${CONTAINER_NAME}" \
     curl -sS "http://localhost:${HA_PORT}/api/home_intercom/version" 2>/dev/null || echo "")
-if echo "${VER}" | grep -q '"version"'; then
-    echo "  ✅ GET /api/home_intercom/version — ${VER}"
-else
+echo "${VER}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert 'version' in d and d['version'], f'missing version: {d}'
+assert d.get('pcm_rate') == 16000, f'bad pcm_rate: {d}'
+assert d.get('max_record_secs') == 60, f'bad max_record_secs: {d}'
+" 2>&1 && echo "  ✅ GET /api/home_intercom/version — ${VER}" || {
     echo "  ❌ GET /api/home_intercom/version — unexpected: ${VER}"
     exit 1
-fi
+}
 
 # 2. /api/home_intercom/rooms
 ROOMS=$(docker exec "${CONTAINER_NAME}" \

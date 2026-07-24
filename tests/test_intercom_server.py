@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 # src in pythonpath via pyproject.toml
-from const import WAV_HEADER_SIZE
+from const import MAX_RECORD_SECS, WAV_HEADER_SIZE
 
 from device_store import DeviceStore as DockerDeviceStore
 from intercom_server import app
@@ -54,6 +54,7 @@ class TestVersionRoute:
         data = resp.json
         assert "version" in data
         assert "pcm_rate" in data
+        assert data["max_record_secs"] == MAX_RECORD_SECS
 
 
 class TestRoomsStatus:

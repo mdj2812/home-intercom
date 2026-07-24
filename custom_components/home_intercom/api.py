@@ -20,7 +20,7 @@ from aiohttp import web
 from homeassistant.components.http import KEY_HASS_USER, HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
+from .const import DOMAIN, MAX_RECORD_SECS, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
 from .shared import concat_wavs as _concat_wavs
 from .shared import device_hello_payload, device_record_auth_error, is_wav
@@ -248,7 +248,9 @@ class VersionView(HomeAssistantView):
 
         version = await request.app["hass"].async_add_executor_job(_read_version)
 
-        return web.json_response({"version": version, "pcm_rate": PCM_RATE})
+        return web.json_response(
+            {"version": version, "pcm_rate": PCM_RATE, "max_record_secs": MAX_RECORD_SECS}
+        )
 
 
 class RoomsView(HomeAssistantView):

@@ -5,7 +5,7 @@ import json
 import os
 import sys
 
-from const import DEVICE_REGISTRY_DEFAULT_PATH, PCM_RATE, WAV_HEADER_SIZE
+from const import DEVICE_REGISTRY_DEFAULT_PATH, MAX_RECORD_SECS, PCM_RATE, WAV_HEADER_SIZE
 from flask import Flask, jsonify, request, send_from_directory
 from shared import (
     concat_wavs,
@@ -114,7 +114,7 @@ def rooms_status():
 
 @app.route("/version")
 def version():
-    return jsonify({"version": VERSION, "pcm_rate": PCM_RATE})
+    return jsonify({"version": VERSION, "pcm_rate": PCM_RATE, "max_record_secs": MAX_RECORD_SECS})
 
 
 @app.route("/record", methods=["POST"])
