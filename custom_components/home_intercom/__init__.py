@@ -467,10 +467,17 @@ def _register_button_devices(hass: HomeAssistant, entry_id: str, device_store: D
             if old_eid != entry_id:
                 registry.async_update_device(device.id, remove_config_entry_id=old_eid)
         # Update manufacturer and serial if they changed (existing devices from 2.0.2)
+        updates: dict[str, Any] = {}
+        if not device.name:
+            updates["name"] = dev.get("name", mac)
         if device.manufacturer != "Espressif":
-            registry.async_update_device(device.id, manufacturer="Espressif")
+            updates["manufacturer"] = "Espressif"
+        if not device.model:
+            updates["model"] = "ESP32 Intercom Button"
         if device.serial_number != mac:
-            registry.async_update_device(device.id, serial_number=mac)
+            updates["serial_number"] = mac
+        if updates:
+            registry.async_update_device(device.id, **updates)
 
     # Listen for HA-side edits (rename, area change) → sync back to device_store
     @callback
