@@ -20,10 +20,33 @@
   "options": {
     "step": {
       "init": {
+        "title": "Home Intercom",
+        "menu_options": {
+          "rooms": "管理房间",
+          "devices": "管理对讲按钮"
+        }
+      },
+      "rooms": {
         "title": "管理房间",
         "description": "已配置 {room_count} 个房间。选择房间编辑或添加新房间。",
         "data": {
           "room_choice": "房间"
+        }
+      },
+      "devices": {
+        "title": "对讲按钮",
+        "description": "已注册 {device_count} 个按钮。选择一个进行管理。已撤销的按钮带 🚫 标记。",
+        "data": {
+          "device_choice": "按钮"
+        }
+      },
+      "device_edit": {
+        "title": "编辑按钮 — {device_name}",
+        "description": "MAC：{mac}\n固件：{firmware}\n最后在线：{last_seen}",
+        "data": {
+          "name": "名称",
+          "room": "绑定房间",
+          "revoked": "撤销（禁用此按钮）"
         }
       },
       "yaml_info": {
@@ -55,7 +78,9 @@
       "room_exists": "该区域已配置。"
     },
     "abort": {
-      "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。"
+      "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。",
+      "no_devices": "尚未注册任何对讲按钮。按钮首次调用 /devices/hello 后会出现在这里。",
+      "device_not_found": "该按钮已不在注册表中。"
     }
   },
   "exceptions": {

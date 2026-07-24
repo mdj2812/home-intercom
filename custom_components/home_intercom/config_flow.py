@@ -170,10 +170,18 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         self._entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Entry point — pick Add Room or select a room to edit."""
-        if self._entry.unique_id == YAML_UNIQUE_ID:
-            return self.async_abort(reason="yaml_read_only")
+        """Entry point — menu: manage rooms or manage intercom buttons.
 
+        YAML-configured entries skip the menu: rooms are read-only from
+        YAML, but the device registry is runtime state, so button
+        management stays available.
+        """
+        if self._entry.unique_id == YAML_UNIQUE_ID:
+            return await self.async_step_devices()
+        return self.async_show_menu(step_id="init", menu_options=["rooms", "devices"])
+
+    async def async_step_rooms(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Pick Add Room or select a room to edit."""
         rooms = dict(self._entry.data.get(CONF_ROOMS, {}))
         rooms.update(self._entry.options.get(CONF_ROOMS, {}))
 
@@ -197,7 +205,7 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             room_choices[rid] = display_name
 
         return self.async_show_form(
-            step_id="init",
+            step_id="rooms",
             data_schema=vol.Schema({vol.Required("room_choice"): vol.In(room_choices)}),
             description_placeholders={"room_count": str(len(rooms))},
         )
@@ -311,6 +319,78 @@ class HomeIntercomOptionsFlow(OptionsFlow):
             step_id="confirm_delete",
             data_schema=vol.Schema({}),
             description_placeholders={"room_name": room_name},
+        )
+
+    # ——— device management (issue #48) ———
+
+    async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """List registered ESP32 buttons — pick one to manage."""
+        store = self.hass.data[DOMAIN].get("device_store") if self.hass else None
+        devices = store.devices if store is not None else {}
+        if not devices:
+            return self.async_abort(reason="no_devices")
+
+        if user_input is not None:
+            self._device_mac = user_input["device_choice"]
+            return await self.async_step_device_edit()
+
+        choices: dict[str, str] = {}
+        for mac, dev in sorted(devices.items(), key=lambda kv: kv[1].get("name", "")):
+            label = f"{dev.get('name') or mac} ({mac})"
+            if dev.get("revoked"):
+                label = f"🚫 {label}"
+            choices[mac] = label
+
+        return self.async_show_form(
+            step_id="devices",
+            data_schema=vol.Schema({vol.Required("device_choice"): vol.In(choices)}),
+            description_placeholders={"device_count": str(len(devices))},
+        )
+
+    async def async_step_device_edit(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Rename / rebind room / revoke a single button."""
+        store = self.hass.data[DOMAIN]["device_store"]
+        device = store.get(self._device_mac)
+        if device is None:
+            return self.async_abort(reason="device_not_found")
+
+        if user_input is not None:
+            name = (user_input.get(CONF_NAME) or "").strip()
+            if name and name != device.get("name"):
+                await store.update_field(self._device_mac, "name", name)
+            if user_input["room"] != device.get("room", ""):
+                await store.update_field(self._device_mac, "room", user_input["room"])
+            if user_input["revoked"] != device.get("revoked", False):
+                if user_input["revoked"]:
+                    await store.revoke(self._device_mac)
+                else:
+                    await store.update_field(self._device_mac, "revoked", False)
+            # Options entry must keep the rooms — create_entry replaces options wholesale.
+            return self.async_create_entry(title="", data={CONF_ROOMS: self._get_rooms()})
+
+        room_choices: dict[str, str] = {"": "—"}
+        room_choices.update(
+            {rid: room.get(CONF_NAME, rid) for rid, room in self._get_rooms().items()}
+        )
+        current_room = device.get("room", "")
+        if current_room and current_room not in room_choices:
+            room_choices[current_room] = f"{current_room} (?)"
+
+        return self.async_show_form(
+            step_id="device_edit",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=device.get("name", "")): str,
+                    vol.Required("room", default=current_room): vol.In(room_choices),
+                    vol.Required("revoked", default=device.get("revoked", False)): bool,
+                }
+            ),
+            description_placeholders={
+                "device_name": device.get("name", self._device_mac),
+                "mac": self._device_mac,
+                "firmware": device.get("firmware_version") or "?",
+                "last_seen": device.get("last_seen", "?"),
+            },
         )
 
     # ——— helpers ———

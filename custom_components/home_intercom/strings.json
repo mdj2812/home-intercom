@@ -20,10 +20,33 @@
   "options": {
     "step": {
       "init": {
+        "title": "Home Intercom",
+        "menu_options": {
+          "rooms": "Manage Rooms",
+          "devices": "Manage Intercom Buttons"
+        }
+      },
+      "rooms": {
         "title": "Manage Rooms",
         "description": "{room_count} room(s) configured. Choose a room to edit or add a new one.",
         "data": {
           "room_choice": "Room"
+        }
+      },
+      "devices": {
+        "title": "Intercom Buttons",
+        "description": "{device_count} button(s) registered. Choose one to manage. Revoked buttons are marked with 🚫.",
+        "data": {
+          "device_choice": "Button"
+        }
+      },
+      "device_edit": {
+        "title": "Edit Button — {device_name}",
+        "description": "MAC: {mac}\nFirmware: {firmware}\nLast seen: {last_seen}",
+        "data": {
+          "name": "Name",
+          "room": "Bound Room",
+          "revoked": "Revoked (block this button)"
         }
       },
       "yaml_info": {
@@ -55,7 +78,9 @@
       "room_exists": "A room with this area is already configured."
     },
     "abort": {
-      "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant."
+      "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant.",
+      "no_devices": "No intercom buttons registered yet. A button appears here after its first call to /devices/hello.",
+      "device_not_found": "This button is no longer registered."
     }
   },
   "exceptions": {
