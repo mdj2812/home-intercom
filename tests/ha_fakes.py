@@ -70,6 +70,9 @@ def install_fake_homeassistant() -> None:
 
     _ha.core.HomeAssistant = MagicMock
     _ha.core.ServiceCall = MagicMock
+    def _noop_callback(fn):
+        return fn
+    _ha.core.callback = _noop_callback
     _ha.setup.async_setup_entry = AsyncMock(return_value=True)
 
     _ha.helpers.config_validation = MagicMock()

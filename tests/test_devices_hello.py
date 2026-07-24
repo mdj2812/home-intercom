@@ -74,6 +74,16 @@ class TestDockerDevicesHello:
         assert resp.status_code == 403
         assert resp.get_json()["error"] == "device revoked"
 
+    def test_unrevoked_device_hello_succeeds(self, client):
+        """Revoke → un-revoke → hello should succeed."""
+        client.store.register_or_update(MAC)
+        client.store.revoke(MAC)
+        # un-revoke
+        client.store.update_field(MAC, "revoked", False)
+        resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "ok"
+
     def test_missing_header_rejected(self, client):
         resp = client.post("/devices/hello", json={})
         assert resp.status_code == 400
@@ -171,6 +181,19 @@ class TestHADevicesHelloView:
         resp, body, _ = await self._post(body={}, hass=hass)
         assert resp.status == 403
         assert body["error"] == "device revoked"
+
+    @pytest.mark.asyncio
+    async def test_unrevoked_device_hello_succeeds(self):
+        """Revoke → un-revoke → hello should succeed."""
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        await store.revoke(MAC)
+        # un-revoke
+        await store.update_field(MAC, "revoked", False)
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={}, hass=hass)
+        assert resp.status == 200
+        assert body["status"] == "ok"
 
     @pytest.mark.asyncio
     async def test_missing_header_rejected(self):
