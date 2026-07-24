@@ -220,6 +220,50 @@ class TestHADevicesHelloView:
         resp, body, _ = await self._post(body={}, hass=hass)
         assert resp.status == 500
 
+    # ── delete + re-hello round-trip ──
+
+    @pytest.mark.asyncio
+    async def test_delete_rehello_registers_entities(self):
+        """Delete from device_store → hello → device + entities recreated."""
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "1.0.0")
+        assert store.get(MAC) is not None
+
+        # Simulate HA delete: remove from store entirely
+        await store.remove(MAC)
+        assert store.get(MAC) is None
+
+        # Re-hello should auto-register as a brand-new device
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={"firmware_version": "3.0.0"}, hass=hass)
+        assert resp.status == 200
+        assert body["status"] == "ok"
+        assert body["device_name"] == "Device EE:FF"  # default name again
+
+        # Verify device is back in store
+        dev = store.get(MAC)
+        assert dev is not None
+        assert dev["name"] == "Device EE:FF"
+        assert dev["firmware_version"] == "3.0.0"
+        assert not dev.get("revoked")
+
+    @pytest.mark.asyncio
+    async def test_delete_rehello_dispaches_signal(self):
+        """After re-hello, dispatcher signal fires for entity creation."""
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        await store.remove(MAC)
+
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={}, hass=hass)
+        assert resp.status == 200
+
+        # Verify dispatcher was called
+        import homeassistant.helpers.dispatcher as disp
+        disp.async_dispatcher_send.assert_called_with(
+            hass, "home_intercom_device_store_changed"
+        )
+
     @pytest.mark.asyncio
     async def test_class_attributes(self):
         from custom_components.home_intercom.api import DevicesHelloView
