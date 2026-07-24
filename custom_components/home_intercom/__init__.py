@@ -286,9 +286,10 @@ def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
 async def async_remove_config_entry_device(
     hass: HomeAssistant, entry: ConfigEntry, device_entry: Any
 ) -> bool:
-    """Allow device deletion only for UI entry, not YAML.
+    """Allow device deletion only for room devices, not YAML or buttons.
 
-    YAML entry has unique_id=home_intercom_yaml (read-only).
+    YAML entry → read-only. Button devices → managed automatically,
+    use the Revoke switch instead of deleting.
     """
     if entry.unique_id == YAML_UNIQUE_ID:
         raise HomeAssistantError(
@@ -296,6 +297,19 @@ async def async_remove_config_entry_device(
             translation_key="yaml_device_delete_blocked",
             translation_placeholders={"name": device_entry.name},
         )
+
+    # Block deletion of intercom button devices: use Revoke switch instead
+    for domain, ident in device_entry.identifiers:
+        if domain == DOMAIN:
+            # Check if this identifier is a button MAC (not a room ID)
+            import re
+            if re.match(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$", ident.upper()):
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="button_device_delete_blocked",
+                    translation_placeholders={"name": device_entry.name},
+                )
+            break
 
     # Find which room this device belongs to
     room_id = None
@@ -420,9 +434,7 @@ def _async_device_registry_updated(
     registry = dr.async_get(hass)
     device_entry = registry.async_get(device_id)
     if device_entry is None:
-        # Device was deleted — check if it was one of our button devices
-        # by looking at the identifiers in the event data
-        return _async_handle_device_removed(hass, event, device_store)
+        return
 
     # Check if this is one of our button devices
     mac: str | None = None
@@ -440,10 +452,6 @@ def _async_device_registry_updated(
     if action == "update":
         changes: dict[str, Any] = event.data.get("changes", {})
         _async_handle_device_update(hass, device_store, mac, existing, changes)
-    elif action == "remove":
-        # User deleted the device from HA UI → revoke it
-        _LOGGER.info("Button %s deleted from HA UI — revoking", mac)
-        hass.async_create_task(device_store.revoke(mac))
 
 
 async def _async_sync_device_field(
@@ -487,35 +495,6 @@ def _async_handle_device_update(
             hass.async_create_task(
                 _async_sync_device_field(hass, device_store, mac, "room", new_room)
             )
-
-
-def _async_handle_device_removed(
-    hass: HomeAssistant, event: Any, device_store: DeviceStore
-) -> None:
-    """Handle device removal — revoke the corresponding button.
-
-    When the device is already deleted from the registry, we can't look
-    up its identifiers via async_get(). Fall back to the event data.
-    """
-    if event.data.get("action") != "remove":
-        return
-
-    # Try to extract MAC from the device identifiers in the event data.
-    # HA device_registry_updated events carry the old device data for
-    # removals in some versions, but it's not guaranteed. We iterate the
-    # device_store looking for a device that is no longer in the registry.
-    from homeassistant.helpers import device_registry as dr
-
-    registry = dr.async_get(hass)
-    for mac, dev in device_store.devices.items():
-        if dev.get("revoked"):
-            continue
-        # Check if this button's HA device still exists
-        ha_device = registry.async_get_device(identifiers={(DOMAIN, mac)})
-        if ha_device is None:
-            _LOGGER.info("Button %s HA device gone — revoking", mac)
-            hass.async_create_task(device_store.revoke(mac))
-            return  # one per event
 
 
 async def _ensure_button_entry(

@@ -63,6 +63,9 @@
     "yaml_device_delete_blocked": {
       "message": "「{name}」是 YAML 配置的设备，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
     },
+    "button_device_delete_blocked": {
+      "message": "「{name}」是对讲按钮设备，不可直接删除。请使用 Revoked 开关来禁用或恢复。"
+    },
     "yaml_entry_delete_blocked": {
       "message": "「{title}」是 YAML 配置的集成，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
     }
@@ -75,14 +78,20 @@
       "media": { "name": "正在播放" },
       "player_type": { "name": "类别" },
       "config_announce_volume": { "name": "播报音量" },
-      "config_pause_buffer": { "name": "暂停缓冲" }
+      "config_pause_buffer": { "name": "暂停缓冲" },
+      "last_seen": { "name": "最后上线" },
+      "firmware_version": { "name": "固件版本" }
     },
     "binary_sensor": {
-      "connected": { "name": "已连接" }
+      "connected": { "name": "已连接" },
+      "online": { "name": "在线" }
     },
     "number": {
       "announce_volume": { "name": "播报音量" },
       "pause_buffer": { "name": "暂停缓冲" }
+    },
+    "switch": {
+      "revoked": { "name": "已撤销" }
     }
   }
 }

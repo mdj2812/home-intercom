@@ -63,6 +63,9 @@
     "yaml_device_delete_blocked": {
       "message": "\"{name}\" is a YAML-configured device and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
     },
+    "button_device_delete_blocked": {
+      "message": "\"{name}\" is an intercom button device. Use the Revoke switch to disable it instead of deleting."
+    },
     "yaml_entry_delete_blocked": {
       "message": "\"{title}\" is a YAML-configured integration and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
     }
@@ -75,14 +78,20 @@
       "media": { "name": "Now Playing" },
       "player_type": { "name": "Player Type" },
       "config_announce_volume": { "name": "Announce Volume" },
-      "config_pause_buffer": { "name": "Pause Buffer" }
+      "config_pause_buffer": { "name": "Pause Buffer" },
+      "last_seen": { "name": "Last seen" },
+      "firmware_version": { "name": "Firmware" }
     },
     "binary_sensor": {
-      "connected": { "name": "Connected" }
+      "connected": { "name": "Connected" },
+      "online": { "name": "Online" }
     },
     "number": {
       "announce_volume": { "name": "Announce Volume" },
       "pause_buffer": { "name": "Pause Buffer" }
+    },
+    "switch": {
+      "revoked": { "name": "Revoked" }
     }
   }
 }

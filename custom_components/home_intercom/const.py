@@ -22,7 +22,7 @@ AUDIO_SUBDIR = "home_intercom_audio"
 WWW_DIR = "www"
 
 # ——— Config entry ———
-PLATFORMS: list[str] = ["number", "sensor", "binary_sensor"]
+PLATFORMS: list[str] = ["number", "sensor", "binary_sensor", "switch"]
 YAML_UNIQUE_ID = f"{DOMAIN}_yaml"
 UI_UNIQUE_ID = DOMAIN
 BUTTONS_UNIQUE_ID = f"{DOMAIN}_buttons"
