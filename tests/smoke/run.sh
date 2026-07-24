@@ -99,6 +99,19 @@ else
     exit 1
 fi
 
+# 1b. /api/home_intercom/config — global audio settings (issue #39)
+CFG=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS "http://localhost:${HA_PORT}/api/home_intercom/config" 2>/dev/null || echo "")
+echo "${CFG}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('sample_rate') == 16000, f'bad sample_rate: {d}'
+assert d.get('max_record_secs') == 60, f'bad max_record_secs: {d}'
+" 2>&1 && echo "  ✅ GET /api/home_intercom/config — ${CFG}" || {
+    echo "  ❌ GET /api/home_intercom/config — unexpected: ${CFG}"
+    exit 1
+}
+
 # 2. /api/home_intercom/rooms
 ROOMS=$(docker exec "${CONTAINER_NAME}" \
     curl -sS "http://localhost:${HA_PORT}/api/home_intercom/rooms" 2>/dev/null || echo "")

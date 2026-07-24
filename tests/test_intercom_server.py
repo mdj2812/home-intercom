@@ -56,6 +56,20 @@ class TestVersionRoute:
         assert "pcm_rate" in data
 
 
+class TestConfigRoute:
+    """GET /config + HA alias — global audio settings (issue #39)."""
+
+    def test_config_fields(self, client):
+        resp = client.get("/config")
+        assert resp.status_code == 200
+        assert resp.json == {"sample_rate": 16000, "max_record_secs": 60}
+
+    def test_config_ha_alias(self, client):
+        resp = client.get("/api/home_intercom/config")
+        assert resp.status_code == 200
+        assert resp.json == {"sample_rate": 16000, "max_record_secs": 60}
+
+
 class TestRoomsStatus:
     def test_returns_500_without_token(self, client, monkeypatch):
         monkeypatch.setattr("intercom_server.HA_TOKEN", "")

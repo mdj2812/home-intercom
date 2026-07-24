@@ -246,6 +246,18 @@ def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def config_payload() -> dict[str, Any]:
+    """Build the GET /config response — global audio settings (issue #39).
+
+    Field names match the hello payload: this is the same audio config,
+    discoverable pre-registration and by non-ESP32 clients.
+    """
+    return {
+        "sample_rate": PCM_RATE,
+        "max_record_secs": MAX_RECORD_SECS,
+    }
+
+
 class DeviceRecordFault(StrEnum):
     """Why a device may not record (issue #47). Serialized as its string value."""
 

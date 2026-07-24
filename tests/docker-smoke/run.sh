@@ -96,6 +96,24 @@ assert d.get('pcm_rate') == 16000, f'bad pcm_rate: {d.get(\"pcm_rate\")}'
 print(f'ok: version={d[\"version\"]} pcm_rate={d[\"pcm_rate\"]}')
 " 2>&1 && echo "  ✅ GET /version — ${VER}" || { echo "  ❌ GET /version — check failed"; exit 1; }
 
+# 1b. /config — global audio settings (issue #39)
+CFG=$(curl -sS "${URL}/config" 2>/dev/null || echo "")
+echo "${CFG}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('sample_rate') == 16000, f'bad sample_rate: {d}'
+assert d.get('max_record_secs') == 60, f'bad max_record_secs: {d}'
+print(f'ok: config={d}')
+" 2>&1 && echo "  ✅ GET /config — ${CFG}" || { echo "  ❌ GET /config — check failed"; exit 1; }
+
+CFG_HA=$(curl -sS "${URL}/api/home_intercom/config" 2>/dev/null || echo "")
+if [ "${CFG_HA}" = "${CFG}" ]; then
+    echo "  ✅ GET /api/home_intercom/config — matches /config"
+else
+    echo "  ❌ GET /api/home_intercom/config — differs from /config"
+    exit 1
+fi
+
 # 2. /rooms — verify matches input rooms.json
 ROOMS=$(curl -sS "${URL}/rooms" 2>/dev/null || echo "")
 echo "${ROOMS}" | python3 -c "

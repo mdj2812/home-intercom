@@ -9,6 +9,7 @@ from const import DEVICE_REGISTRY_DEFAULT_PATH, PCM_RATE, WAV_HEADER_SIZE
 from flask import Flask, jsonify, request, send_from_directory
 from shared import (
     concat_wavs,
+    config_payload,
     device_hello_payload,
     device_record_auth_error,
     handle_pcm_to_wav,
@@ -115,6 +116,12 @@ def rooms_status():
 @app.route("/version")
 def version():
     return jsonify({"version": VERSION, "pcm_rate": PCM_RATE})
+
+
+@app.route("/config")
+def config():
+    """Global audio settings (issue #39) — public, same fields as the hello payload."""
+    return jsonify(config_payload())
 
 
 @app.route("/record", methods=["POST"])
@@ -241,6 +248,7 @@ app.add_url_rule(f"{_HA_PREFIX}/devices/hello", "ha_devices_hello", devices_hell
 app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
 app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
 app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)
+app.add_url_rule(f"{_HA_PREFIX}/config", "ha_config", config)
 app.add_url_rule(f"{_HA_PREFIX}/record", "ha_record", record, methods=["POST"])
 app.add_url_rule(f"{_HA_PREFIX}/audio/<path:filename>", "ha_audio", serve_audio)
 app.add_url_rule(f"{_HA_PREFIX}/static/<path:filename>", "ha_static", static_files)

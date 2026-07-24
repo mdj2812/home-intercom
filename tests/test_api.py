@@ -392,6 +392,31 @@ class TestDeviceRecordViewMacAuth:
         mock_handle.assert_not_called()
 
 
+# ——— ConfigView tests (issue #39) ———
+
+
+class TestConfigView:
+    """GET /api/home_intercom/config — public global audio settings."""
+
+    def test_class_attributes(self):
+        from custom_components.home_intercom.api import ConfigView
+
+        assert ConfigView.url == "/api/home_intercom/config"
+        assert ConfigView.requires_auth is False  # ESP32 holds zero secrets
+
+    @pytest.mark.asyncio
+    async def test_returns_audio_settings(self):
+        from custom_components.home_intercom.api import ConfigView
+
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+        resp = await ConfigView().get(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["sample_rate"] == 16000
+        assert body["max_record_secs"] == 60
+
+
 # ——— register_api_views tests ———
 
 

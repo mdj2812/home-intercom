@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
 from .shared import concat_wavs as _concat_wavs
-from .shared import device_hello_payload, device_record_auth_error, is_wav
+from .shared import config_payload, device_hello_payload, device_record_auth_error, is_wav
 from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
 from .shared import handle_wav_passthrough as _handle_wav_passthrough
 
@@ -251,6 +251,21 @@ class VersionView(HomeAssistantView):
         return web.json_response({"version": version, "pcm_rate": PCM_RATE})
 
 
+class ConfigView(HomeAssistantView):
+    """GET /api/home_intercom/config — global audio settings (issue #39).
+
+    Public like /version and /rooms: ESP32 holds zero secrets. Same audio
+    fields the hello payload delivers, discoverable pre-registration.
+    """
+
+    url = "/api/home_intercom/config"
+    name = "api:home_intercom:config"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        return web.json_response(config_payload())
+
+
 class RoomsView(HomeAssistantView):
     """GET /api/home_intercom/rooms — room configuration."""
 
@@ -410,6 +425,7 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(DeviceRecordView)
     hass.http.register_view(StatusView)
     hass.http.register_view(VersionView)
+    hass.http.register_view(ConfigView)
     hass.http.register_view(RoomsView)
     hass.http.register_view(DevicesHelloView)
     hass.http.register_view(PanelView)
