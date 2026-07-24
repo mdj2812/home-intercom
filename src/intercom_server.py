@@ -115,7 +115,7 @@ def rooms_status():
 
 @app.route("/version")
 def version():
-    return jsonify({"version": VERSION, "pcm_rate": PCM_RATE})
+    return jsonify({"version": VERSION})
 
 
 @app.route("/config")

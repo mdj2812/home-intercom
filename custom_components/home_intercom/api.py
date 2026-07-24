@@ -4,7 +4,7 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /record        → RecordView        (PWA token; POST audio → WAV → play)
   /device/record → DeviceRecordView  (HA auth; POST audio → WAV → play)
   /rooms/status  → StatusView  (GET speaker online status)
-  /version       → VersionView (GET version + pcm_rate)
+  /version       → VersionView (GET version only)
   /rooms         → RoomsView   (GET room config)
   /audio/<path>  → AudioView   (GET recorded WAV files)
   /              → PanelView   (GET PWA frontend HTML)
@@ -248,7 +248,7 @@ class VersionView(HomeAssistantView):
 
         version = await request.app["hass"].async_add_executor_job(_read_version)
 
-        return web.json_response({"version": version, "pcm_rate": PCM_RATE})
+        return web.json_response({"version": version})
 
 
 class ConfigView(HomeAssistantView):
