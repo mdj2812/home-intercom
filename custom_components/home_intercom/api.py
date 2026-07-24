@@ -314,12 +314,21 @@ class DevicesHelloView(HomeAssistantView):
             _LOGGER.warning("hello from revoked device %s — rejected", mac)
             return web.json_response({"status": "error", "error": "device revoked"}, status=403)
 
+        is_new = existing is None  # before register_or_update
         try:
             device = await store.register_or_update(mac, firmware_version)
         except ValueError:
             return web.json_response(
                 {"status": "error", "error": "invalid X-Device-ID (MAC)"}, status=400
             )
+
+        # New device → reload to register HA device + entities (issue #48)
+        if is_new:
+            button_entry_id = _get_hass_data(hass).get("button_entry_id")
+            if button_entry_id:
+                hass.async_create_task(
+                    hass.config_entries.async_reload(button_entry_id)
+                )
 
         return web.json_response(device_hello_payload(device))
 

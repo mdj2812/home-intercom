@@ -17,7 +17,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.storage import Store
@@ -228,6 +228,9 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await device_store.async_load()
     hass.data[DOMAIN]["device_store"] = device_store
 
+    # Track which entry handles button devices so hello can trigger reload
+    hass.data[DOMAIN]["button_entry_id"] = entry.entry_id
+
     # Initialize error/state tracking
     hass.data[DOMAIN].setdefault("errors", {})
     hass.data[DOMAIN].setdefault("states", {})
@@ -235,14 +238,16 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     register_api_views(hass)
     _register_services(hass, all_rooms)
     _register_devices(hass, entry.entry_id, entry_rooms.get(entry.entry_id, {}))
+    _register_button_devices(hass, entry.entry_id, device_store)
 
     # Forward to sensor/number/binary_sensor platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     _LOGGER.info(
-        "Home Intercom — %d rooms (%d entries), audio: %s",
+        "Home Intercom — %d rooms (%d entries), %d buttons, audio: %s",
         len(all_rooms),
         len(entry_rooms),
+        len(device_store.devices),
         audio_dir,
     )
 
@@ -343,3 +348,117 @@ def _find_yaml_entry(entries: list[ConfigEntry]) -> ConfigEntry | None:
         if entry.unique_id == YAML_UNIQUE_ID:
             return entry
     return None
+
+
+def _register_button_devices(
+    hass: HomeAssistant, entry_id: str, device_store: DeviceStore
+) -> None:
+    """Register each non-revoked intercom button as an HA device.
+
+    Device info (name, area) is owned by the HA device registry.
+    Changes sync back to device_store via
+    _async_device_registry_updated.
+
+    Only runs once (first entry to call it). Subsequent entries skip
+    to avoid duplicate devices/entities.
+    """
+    if hass.data[DOMAIN].get("_button_devices_registered"):
+        return
+    hass.data[DOMAIN]["_button_devices_registered"] = True
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+
+    for mac, dev in device_store.devices.items():
+        if dev.get("revoked"):
+            continue
+        registry.async_get_or_create(
+            config_entry_id=entry_id,
+            identifiers={(DOMAIN, mac)},
+            name=dev.get("name", mac),
+            manufacturer="Home Intercom",
+            model="ESP32 Intercom Button",
+            sw_version=dev.get("firmware_version"),
+            suggested_area=dev.get("room") or None,
+        )
+
+    # Listen for HA-side edits (rename, area change) → sync back to device_store
+    @callback
+    def _on_device_registry_updated(event: Any) -> None:
+        _async_device_registry_updated(hass, event, device_store)
+
+    hass.bus.async_listen("device_registry_updated", _on_device_registry_updated)
+
+
+@callback
+def _async_device_registry_updated(
+    hass: HomeAssistant, event: Any, device_store: DeviceStore
+) -> None:
+    """Sync HA device registry edits back to device_store.
+
+    Triggered when a user renames a button device or moves it to a
+    different area in the HA UI. We update the device_store JSON so
+    the binding survives restarts.
+    """
+    if event.data.get("action") != "update":
+        return
+
+    device_id: str | None = event.data.get("device_id")
+    if not device_id:
+        return
+
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+    device_entry = registry.async_get(device_id)
+    if device_entry is None:
+        return
+
+    # Check if this is one of our button devices
+    for domain, identifier in device_entry.identifiers:
+        if domain == DOMAIN:
+            mac = identifier
+            break
+    else:
+        return  # not our device
+
+    existing = device_store.devices.get(mac)
+    if existing is None:
+        return
+
+    changes: dict[str, Any] = event.data.get("changes", {})
+
+    # HA device renamed → update device_store name
+    new_name = changes.get("name")
+    if new_name and new_name != existing.get("name"):
+        _LOGGER.info("Button %s renamed via HA UI: %r → %r", mac, existing.get("name"), new_name)
+        hass.async_create_task(
+            _async_sync_device_field(hass, device_store, mac, "name", new_name)
+        )
+
+    # Device moved to a different area → update device_store room
+    new_area_id = changes.get("area_id")
+    if new_area_id is not None:
+        # area_id → area name for room mapping
+        from homeassistant.helpers import area_registry as ar
+
+        area_reg = ar.async_get(hass)
+        new_room = ""
+        if new_area_id:
+            area_entry = area_reg.async_get_area(new_area_id)
+            new_room = area_entry.name if area_entry else new_area_id
+        if new_room != existing.get("room"):
+            _LOGGER.info("Button %s moved to area %r via HA UI", mac, new_room)
+            hass.async_create_task(
+                _async_sync_device_field(hass, device_store, mac, "room", new_room)
+            )
+
+
+async def _async_sync_device_field(
+    hass: HomeAssistant, device_store: DeviceStore, mac: str, field: str, value: str
+) -> None:
+    """Persist a device_store field change (from HA UI edit)."""
+    try:
+        await device_store.update_field(mac, field, value)
+    except ValueError:
+        _LOGGER.warning("Cannot update field %r for device %s", field, mac)
