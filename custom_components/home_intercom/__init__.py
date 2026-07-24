@@ -32,6 +32,7 @@ from .const import (
     CONF_PAUSE_BUFFER,
     CONF_ROOMS,
     DOMAIN,
+    KEY_BUTTON_ENTRY_ID,
     PLATFORMS,
     PWA_TOKEN_STORAGE_KEY,
     PWA_TOKEN_STORAGE_VERSION,
@@ -243,7 +244,7 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
     # Ensure a dedicated config entry for button devices (issue #48)
     button_entry_id = await _ensure_button_entry(hass, device_store)
-    hass.data[DOMAIN]["button_entry_id"] = button_entry_id
+    hass.data[DOMAIN][KEY_BUTTON_ENTRY_ID] = button_entry_id
 
     # Initialize error/state tracking
     hass.data[DOMAIN].setdefault("errors", {})
@@ -502,9 +503,9 @@ def _async_device_registry_updated(
 ) -> None:
     """Sync HA device registry edits back to device_store.
 
-    Triggered when a user renames a button device, moves it to a
-    different area, or deletes it in the HA UI. We update the
-    device_store JSON so the binding survives restarts.
+    Triggered when a user renames a button device or moves it to a
+    different area in the HA UI. (Deletion is handled separately in
+    async_remove_config_entry_device.)
     """
     action = event.data.get("action")
     device_id: str | None = event.data.get("device_id")

@@ -21,7 +21,7 @@ from .const import BUTTONS_UNIQUE_ID, CONF_ROOMS, DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 # A device is "online" if it checked in within this window
-_ONLINE_WINDOW = timedelta(hours=24)
+_ONLINE_WINDOW = timedelta(minutes=5)
 
 
 @dataclass(frozen=True, kw_only=True)
