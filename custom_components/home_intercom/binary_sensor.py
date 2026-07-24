@@ -133,6 +133,7 @@ class ButtonOnlineSensor(BinarySensorEntity):
         """Initialize."""
         self._entry = entry
         self._mac = mac
+        self._device_name = device_name
         self.entity_description = BinarySensorEntityDescription(
             key="online",
             translation_key="online",
@@ -144,7 +145,12 @@ class ButtonOnlineSensor(BinarySensorEntity):
     @property
     def device_info(self):
         """Associate with the button's HA device."""
-        return {"identifiers": {(DOMAIN, self._mac)}}
+        return {
+            "identifiers": {(DOMAIN, self._mac)},
+            "name": self._device_name,
+            "manufacturer": "Espressif",
+            "model": "ESP32 Intercom Button",
+        }
 
     @property
     def is_on(self) -> bool:

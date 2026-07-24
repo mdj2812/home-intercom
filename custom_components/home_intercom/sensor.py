@@ -428,6 +428,7 @@ class ButtonLastSeenSensor(SensorEntity):
         """Initialize."""
         self._entry = entry
         self._mac = mac
+        self._device_name = device_name
         self.entity_description = SensorEntityDescription(
             key="last_seen",
             translation_key="last_seen",
@@ -439,7 +440,12 @@ class ButtonLastSeenSensor(SensorEntity):
 
     @property
     def device_info(self):
-        return {"identifiers": {(DOMAIN, self._mac)}}
+        return {
+            "identifiers": {(DOMAIN, self._mac)},
+            "name": self._device_name,
+            "manufacturer": "Espressif",
+            "model": "ESP32 Intercom Button",
+        }
 
     @property
     def native_value(self) -> str | None:
@@ -464,6 +470,7 @@ class ButtonFirmwareSensor(SensorEntity):
         """Initialize."""
         self._entry = entry
         self._mac = mac
+        self._device_name = device_name
         self.entity_description = SensorEntityDescription(
             key="firmware_version",
             translation_key="firmware_version",
@@ -476,7 +483,12 @@ class ButtonFirmwareSensor(SensorEntity):
 
     @property
     def device_info(self):
-        return {"identifiers": {(DOMAIN, self._mac)}}
+        return {
+            "identifiers": {(DOMAIN, self._mac)},
+            "name": self._device_name,
+            "manufacturer": "Espressif",
+            "model": "ESP32 Intercom Button",
+        }
 
     @property
     def native_value(self) -> str | None:

@@ -60,6 +60,7 @@ class ButtonRevokeSwitch(SwitchEntity):
         """Initialize."""
         self._entry = entry
         self._mac = mac
+        self._device_name = device_name
         self.entity_description = SwitchEntityDescription(
             key="revoked",
             translation_key="revoked",
