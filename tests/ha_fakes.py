@@ -49,6 +49,9 @@ def install_fake_homeassistant() -> None:
     _ha.helpers.device_registry = MagicMock()
     _ha.helpers.entity_registry = MagicMock()
     _ha.helpers.area_registry = MagicMock()
+    _ha.helpers.dispatcher = MagicMock()
+    _ha.helpers.dispatcher.async_dispatcher_send = MagicMock()
+    _ha.helpers.dispatcher.async_dispatcher_connect = MagicMock()
 
     _ha.const.CONF_ENTITY_ID = "entity_id"
     _ha.const.CONF_NAME = "name"
@@ -93,6 +96,7 @@ def install_fake_homeassistant() -> None:
     sys.modules["homeassistant.helpers.device_registry"] = _ha.helpers.device_registry
     sys.modules["homeassistant.helpers.entity_registry"] = _ha.helpers.entity_registry
     sys.modules["homeassistant.helpers.area_registry"] = _ha.helpers.area_registry
+    sys.modules["homeassistant.helpers.dispatcher"] = _ha.helpers.dispatcher
     sys.modules["homeassistant.helpers.config_validation"] = _ha.helpers.config_validation
     sys.modules["homeassistant.helpers.typing"] = _ha.helpers.typing
     sys.modules["homeassistant.helpers.storage"] = _ha.helpers.storage
