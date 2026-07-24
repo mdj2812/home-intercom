@@ -17,13 +17,13 @@ import os
 from pathlib import Path
 
 from aiohttp import web
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http import KEY_HASS_USER, HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
 from .shared import concat_wavs as _concat_wavs
-from .shared import device_hello_payload, is_wav
+from .shared import device_hello_payload, device_record_auth_error, is_wav
 from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
 from .shared import handle_wav_passthrough as _handle_wav_passthrough
 
@@ -160,14 +160,35 @@ class RecordView(HomeAssistantView):
 
 
 class DeviceRecordView(HomeAssistantView):
-    """POST /api/home_intercom/device/record using standard HA authentication."""
+    """POST /api/home_intercom/device/record — hardware clients (issue #47).
+
+    Auth, first match wins:
+    1. X-Device-ID header → MAC checked against the device registry
+       (unknown / revoked → 403). No HA token needed on the device.
+    2. Otherwise the request must be HA-authenticated (Bearer token),
+       attached by HA's auth middleware as hass_user.
+    """
 
     url = "/api/home_intercom/device/record"
     name = "api:home_intercom:device-record"
-    requires_auth = True
+    requires_auth = False  # custom dual auth: MAC registry or HA user
 
     async def post(self, request: web.Request) -> web.Response:
-        return await _handle_record(request)
+        hass = request.app["hass"]
+        mac = request.headers.get("X-Device-ID", "")
+        if mac:
+            store = _get_hass_data(hass).get("device_store")
+            device = store.get(mac) if store is not None else None
+            error = device_record_auth_error(device)
+            if error:
+                _LOGGER.warning("device/record rejected for %s: %s", mac, error)
+                return web.json_response({"ok": False, "error": error}, status=403)
+            return await _handle_record(request)
+
+        if request.get(KEY_HASS_USER) is not None:
+            return await _handle_record(request)
+
+        return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
 
 
 class StatusView(HomeAssistantView):

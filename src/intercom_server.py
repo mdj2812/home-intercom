@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from shared import (
     concat_wavs,
     device_hello_payload,
+    device_record_auth_error,
     handle_pcm_to_wav,
     handle_wav_passthrough,
     is_wav,
@@ -123,7 +124,18 @@ def record():
     Supports two input formats:
     - Raw PCM (PWA): body is 16-bit mono PCM, wrapped into WAV
     - WAV passthrough (ESP32): body is a complete WAV file, written as-is
+
+    Auth (issue #47): when X-Device-ID is present the MAC must be
+    registered and not revoked. Without the header the route stays open
+    for the PWA (LAN trust), same as before.
     """
+    mac = request.headers.get("X-Device-ID", "")
+    if mac:
+        error = device_record_auth_error(device_store.get(mac))
+        if error:
+            app.logger.warning(f"[intercom] /record rejected for {mac}: {error}")
+            return jsonify({"ok": False, "error": error}), 403
+
     target = request.args.get("target", "")
     if not target:
         return jsonify({"ok": False, "error": "missing target"}), 400

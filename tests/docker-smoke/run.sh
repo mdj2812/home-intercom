@@ -18,11 +18,23 @@ URL="http://localhost:${PORT}"
 MAX_WAIT=30
 POLL_INTERVAL=2
 
+# Serialize concurrent local runs — a second invocation would collide on the
+# fixed container name/port and its teardown would kill this run's container.
+LOCK_FILE="/tmp/home-intercom-docker-smoke.lock"
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+    echo "❌ Another docker-smoke run is in progress (lock: ${LOCK_FILE})"
+    exit 1
+fi
+
 cleanup() {
     echo "==> Tearing down container..."
     docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 }
 trap cleanup EXIT
+
+# Remove leftovers from previously interrupted runs before starting
+docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
 # ── Build image ──────────────────────────────────────────────
 if [ "${SKIP_BUILD}" = true ]; then
@@ -38,8 +50,9 @@ else
 fi
 
 # ── Create minimal rooms.json for testing ────────────────────
+# Note: Docker room entries use "entity" (not HA's "entity_id") — /record reads it.
 TMPDIR=$(mktemp -d)
-EXPECTED_ROOMS='{"test":{"name":"Test Room","entity_id":"media_player.test_speaker"}}'
+EXPECTED_ROOMS='{"test":{"name":"Test Room","entity":"media_player.test_speaker"}}'
 echo "${EXPECTED_ROOMS}" > "${TMPDIR}/rooms.json"
 
 # ── Start container ─────────────────────────────────────────
@@ -163,6 +176,65 @@ if [ "${HELLO_BAD}" = "400" ]; then
     echo "  ✅ POST /api/home_intercom/devices/hello — invalid MAC → 400"
 else
     echo "  ❌ POST /api/home_intercom/devices/hello — invalid MAC gave HTTP ${HELLO_BAD}, want 400"
+    exit 1
+fi
+
+# 10. POST /record with registered MAC → allowed (issue #47)
+python3 -c "
+import struct, sys
+hdr = b'RIFF' + struct.pack('<I', 36+64) + b'WAVEfmt ' + struct.pack('<I',16) + (1).to_bytes(2,'little') + (1).to_bytes(2,'little') + (16000).to_bytes(4,'little') + (32000).to_bytes(4,'little') + (2).to_bytes(2,'little') + (16).to_bytes(2,'little') + b'data' + struct.pack('<I', 64)
+sys.stdout.buffer.write(hdr + b'\x00' * 64)
+" > "${TMPDIR}/test.wav"
+REC_CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+    --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test" 2>/dev/null || echo "000")
+if [ "${REC_CODE}" = "200" ]; then
+    echo "  ✅ POST /record — registered MAC → 200"
+else
+    echo "  ❌ POST /record — registered MAC gave HTTP ${REC_CODE}, want 200"
+    exit 1
+fi
+
+# 11. POST /record with unknown MAC → 403
+REC_BAD=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: 11:22:33:44:55:66" \
+    --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test" 2>/dev/null || echo "000")
+if [ "${REC_BAD}" = "403" ]; then
+    echo "  ✅ POST /record — unknown MAC → 403"
+else
+    echo "  ❌ POST /record — unknown MAC gave HTTP ${REC_BAD}, want 403"
+    exit 1
+fi
+
+# 12. Device registry persisted to disk
+if docker exec "${CONTAINER_NAME}" grep -q "AA:BB:CC:DD:EE:FF" /data/device_registry.json 2>/dev/null; then
+    echo "  ✅ device registry persisted to /data/device_registry.json"
+else
+    echo "  ❌ /data/device_registry.json missing the registered MAC"
+    docker exec "${CONTAINER_NAME}" cat /data/device_registry.json 2>&1 || true
+    exit 1
+fi
+
+# 13. Registry survives a container restart — record without re-hello
+docker restart "${CONTAINER_NAME}" >/dev/null
+echo "==> Container restarted, waiting for server (persistence check)..."
+ELAPSED=0
+until curl -sS "${URL}/version" -o /dev/null 2>/dev/null; do
+    sleep "${POLL_INTERVAL}"
+    ELAPSED=$((ELAPSED + POLL_INTERVAL))
+    if [ "${ELAPSED}" -ge "${MAX_WAIT}" ]; then
+        echo "  ❌ Server did not come back after restart"
+        exit 1
+    fi
+done
+REC_RESTART=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+    --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test" 2>/dev/null || echo "000")
+if [ "${REC_RESTART}" = "200" ]; then
+    echo "  ✅ POST /record after restart (no re-hello) — registry reloaded from disk → 200"
+else
+    echo "  ❌ POST /record after restart gave HTTP ${REC_RESTART}, want 200 (registry not persisted?)"
+    echo "  --- registry file after restart:"
+    docker exec "${CONTAINER_NAME}" cat /data/device_registry.json 2>&1 || true
+    echo "  --- container logs (tail):"
+    docker logs "${CONTAINER_NAME}" --tail 20 2>&1 || true
     exit 1
 fi
 

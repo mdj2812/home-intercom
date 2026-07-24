@@ -10,6 +10,7 @@ import pytest
 # src in pythonpath via pyproject.toml
 from const import WAV_HEADER_SIZE
 
+from device_store import DeviceStore as DockerDeviceStore
 from intercom_server import app
 
 
@@ -327,6 +328,58 @@ class TestRecordAnnounceVolume:
         assert (
             kwargs.get("audio_url_with_chime") == "http://localhost/audio/intercom_living_chime.wav"
         )
+
+
+class TestDeviceRecordAuth:
+    """MAC-based auth on /record (issue #47) — Docker side."""
+
+    WAV = (
+        b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"
+        b"@\x1f\x00\x00\x80>\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00" + b"\x00" * 64
+    )
+
+    @pytest.fixture
+    def mac_client(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
+        monkeypatch.setattr(intercom_server, "device_store", store)
+        monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
+        return client, store
+
+    def _post(self, client, mac=None):
+        import intercom_server
+
+        headers = {"X-Device-ID": mac} if mac else {}
+        with patch.object(intercom_server.haclient, "play_announcement", return_value={"ok": True}):
+            return client.post("/record?target=living", data=self.WAV, headers=headers)
+
+    def test_registered_mac_allowed(self, mac_client):
+        client, store = mac_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        resp = self._post(client, "AA:BB:CC:DD:EE:FF")
+        assert resp.status_code == 200
+        assert resp.json["ok"] is True
+
+    def test_unknown_mac_403(self, mac_client):
+        client, _store = mac_client
+        resp = self._post(client, "AA:BB:CC:DD:EE:FF")
+        assert resp.status_code == 403
+        assert resp.json["error"] == "unknown device"
+
+    def test_revoked_mac_403(self, mac_client):
+        client, store = mac_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.revoke("AA:BB:CC:DD:EE:FF")
+        resp = self._post(client, "AA:BB:CC:DD:EE:FF")
+        assert resp.status_code == 403
+        assert resp.json["error"] == "device revoked"
+
+    def test_no_header_stays_open_for_pwa(self, mac_client):
+        client, _store = mac_client
+        resp = self._post(client)
+        assert resp.status_code == 200
+        assert resp.json["ok"] is True
 
 
 class TestParsePauseBuffer:
