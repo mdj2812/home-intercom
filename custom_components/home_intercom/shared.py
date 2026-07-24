@@ -17,6 +17,7 @@ import re
 import shutil
 import wave
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 try:
@@ -245,10 +246,17 @@ def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def device_record_auth_error(device: dict[str, Any] | None) -> str | None:
+class DeviceRecordFault(StrEnum):
+    """Why a device may not record (issue #47). Serialized as its string value."""
+
+    UNKNOWN_DEVICE = "unknown device"
+    DEVICE_REVOKED = "device revoked"
+
+
+def device_record_auth_error(device: dict[str, Any] | None) -> DeviceRecordFault | None:
     """Return why a device may not record, or None if it may (issue #47)."""
     if device is None:
-        return "unknown device"
+        return DeviceRecordFault.UNKNOWN_DEVICE
     if device.get("revoked"):
-        return "device revoked"
+        return DeviceRecordFault.DEVICE_REVOKED
     return None

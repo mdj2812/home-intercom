@@ -18,9 +18,6 @@ URL="http://localhost:${PORT}"
 MAX_WAIT=30
 POLL_INTERVAL=2
 
-# Local runs may have http_proxy set — never proxy localhost requests
-export NO_PROXY="${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1"
-
 # Serialize concurrent local runs — a second invocation would collide on the
 # fixed container name/port and its teardown would kill this run's container.
 LOCK_FILE="/tmp/home-intercom-docker-smoke.lock"
