@@ -311,7 +311,6 @@ async def async_remove_config_entry_device(
     _handle_button_device_delete(hass, device_entry)
 
     # Find which room this device belongs to
-    # Find which room this device belongs to
     room_id = None
     for domain, rid in device_entry.identifiers:
         if domain == DOMAIN:
@@ -404,7 +403,10 @@ def _setup_device_store_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
             _timer.cancel()
         _timer = hass.loop.call_later(2.0, lambda: hass.async_create_task(_reload_now()))
 
-    async_dispatcher_connect(hass, f"{DOMAIN}_device_store_changed", _on_store_changed)
+    # Auto-unsubscribe on entry unload to prevent stacking
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, f"{DOMAIN}_device_store_changed", _on_store_changed)
+    )
 
 
 def _register_devices(hass: HomeAssistant, entry_id: str, room_map: dict[str, Any]) -> None:

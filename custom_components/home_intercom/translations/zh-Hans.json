@@ -1,97 +1,122 @@
 {
-  "config": {
-    "step": {
-      "user": {
-        "title": "Home Intercom",
-        "description": "设置第一个房间。之后可通过「配置」添加更多。",
-        "data": {
-          "area_id": "区域",
-          "entity_id": "媒体播放器",
-          "announce_volume": "播报音量 (0-100, 0=不设置)",
-          "pause_buffer": "暂停缓冲 (秒)"
+    "config": {
+        "step": {
+            "user": {
+                "title": "Home Intercom",
+                "description": "设置第一个房间。之后可通过「配置」添加更多。",
+                "data": {
+                    "area_id": "区域",
+                    "entity_id": "媒体播放器",
+                    "announce_volume": "播报音量 (0-100, 0=不设置)",
+                    "pause_buffer": "暂停缓冲 (秒)"
+                }
+            }
+        },
+        "abort": {
+            "no_media_players": "Home Assistant 中未找到 media_player 实体。",
+            "already_configured": "Home Intercom 已配置。请通过「配置」按钮管理房间。"
         }
-      }
     },
-    "abort": {
-      "no_media_players": "Home Assistant 中未找到 media_player 实体。",
-      "already_configured": "Home Intercom 已配置。请通过「配置」按钮管理房间。"
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "管理房间",
-        "description": "已配置 {room_count} 个房间。选择房间编辑或添加新房间。",
-        "data": {
-          "room_choice": "房间"
+    "options": {
+        "step": {
+            "init": {
+                "title": "管理房间",
+                "description": "已配置 {room_count} 个房间。选择房间编辑或添加新房间。",
+                "data": {
+                    "room_choice": "房间"
+                }
+            },
+            "yaml_info": {
+                "title": "YAML 配置的房间",
+                "description": "从 configuration.yaml 加载了 {room_count} 个房间。要修改请编辑 configuration.yaml 后重启 Home Assistant。"
+            },
+            "add_room": {
+                "title": "添加房间",
+                "description": "选择区域和媒体播放器。房间名默认为区域名，可自定义。",
+                "data": {
+                    "area_id": "区域",
+                    "name": "房间名称（可选）",
+                    "entity_id": "媒体播放器",
+                    "announce_volume": "播报音量 (0-100, 0=不设置)",
+                    "pause_buffer": "暂停缓冲 (秒)"
+                }
+            },
+            "edit_room": {
+                "title": "编辑房间 — {room_name}",
+                "description": "更换媒体播放器。音量/缓冲设为 0 表示使用默认值。",
+                "data": {
+                    "entity_id": "媒体播放器",
+                    "announce_volume": "播报音量 (0-100, 0=不设置)",
+                    "pause_buffer": "暂停缓冲 (秒)"
+                }
+            }
+        },
+        "error": {
+            "room_exists": "该区域已配置。"
+        },
+        "abort": {
+            "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。",
+            "buttons_read_only": "对讲按钮设备由系统自动管理，无需手动配置。ESP32 按钮上线后自动出现在此处。"
         }
-      },
-      "yaml_info": {
-        "title": "YAML 配置的房间",
-        "description": "从 configuration.yaml 加载了 {room_count} 个房间。要修改请编辑 configuration.yaml 后重启 Home Assistant。"
-      },
-      "add_room": {
-        "title": "添加房间",
-        "description": "选择区域和媒体播放器。房间名默认为区域名，可自定义。",
-        "data": {
-          "area_id": "区域",
-          "name": "房间名称（可选）",
-          "entity_id": "媒体播放器",
-          "announce_volume": "播报音量 (0-100, 0=不设置)",
-          "pause_buffer": "暂停缓冲 (秒)"
+    },
+    "exceptions": {
+        "yaml_device_delete_blocked": {
+            "message": "「{name}」是 YAML 配置的设备，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
+        },
+        "yaml_entry_delete_blocked": {
+            "message": "「{title}」是 YAML 配置的集成，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
         }
-      },
-      "edit_room": {
-        "title": "编辑房间 — {room_name}",
-        "description": "更换媒体播放器。音量/缓冲设为 0 表示使用默认值。",
-        "data": {
-          "entity_id": "媒体播放器",
-          "announce_volume": "播报音量 (0-100, 0=不设置)",
-          "pause_buffer": "暂停缓冲 (秒)"
+    },
+    "entity": {
+        "sensor": {
+            "error": {
+                "name": "错误"
+            },
+            "state": {
+                "name": "状态"
+            },
+            "volume": {
+                "name": "音量"
+            },
+            "media": {
+                "name": "正在播放"
+            },
+            "player_type": {
+                "name": "类别"
+            },
+            "config_announce_volume": {
+                "name": "播报音量"
+            },
+            "config_pause_buffer": {
+                "name": "暂停缓冲"
+            },
+            "last_seen": {
+                "name": "最后上线"
+            },
+            "firmware_version": {
+                "name": "固件版本"
+            }
+        },
+        "binary_sensor": {
+            "connected": {
+                "name": "已连接"
+            },
+            "online": {
+                "name": "在线"
+            }
+        },
+        "number": {
+            "announce_volume": {
+                "name": "播报音量"
+            },
+            "pause_buffer": {
+                "name": "暂停缓冲"
+            }
+        },
+        "switch": {
+            "revoked": {
+                "name": "已撤销"
+            }
         }
-      }
-    },
-    "error": {
-      "room_exists": "该区域已配置。"
-    },
-    "abort": {
-      "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。",
-      "buttons_read_only": "对讲按钮设备由系统自动管理，无需手动配置。ESP32 按钮上线后自动出现在此处。"
     }
-  },
-  "exceptions": {
-    "yaml_device_delete_blocked": {
-      "message": "「{name}」是 YAML 配置的设备，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
-    },
-    "button_device_delete_blocked": {
-      "message": "「{name}」是对讲按钮设备，不可直接删除。请使用 Revoked 开关来禁用或恢复。"
-    },
-    "yaml_entry_delete_blocked": {
-      "message": "「{title}」是 YAML 配置的集成，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
-    }
-  },
-  "entity": {
-    "sensor": {
-      "error": { "name": "错误" },
-      "state": { "name": "状态" },
-      "volume": { "name": "音量" },
-      "media": { "name": "正在播放" },
-      "player_type": { "name": "类别" },
-      "config_announce_volume": { "name": "播报音量" },
-      "config_pause_buffer": { "name": "暂停缓冲" },
-      "last_seen": { "name": "最后上线" },
-      "firmware_version": { "name": "固件版本" }
-    },
-    "binary_sensor": {
-      "connected": { "name": "已连接" },
-      "online": { "name": "在线" }
-    },
-    "number": {
-      "announce_volume": { "name": "播报音量" },
-      "pause_buffer": { "name": "暂停缓冲" }
-    },
-    "switch": {
-      "revoked": { "name": "已撤销" }
-    }
-  }
 }
