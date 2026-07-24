@@ -286,10 +286,11 @@ def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
 async def async_remove_config_entry_device(
     hass: HomeAssistant, entry: ConfigEntry, device_entry: Any
 ) -> bool:
-    """Allow device deletion only for room devices, not YAML or buttons.
+    """Allow device deletion — only blocked for YAML.
 
-    YAML entry → read-only. Button devices → managed automatically,
-    use the Revoke switch instead of deleting.
+    YAML entry → read-only. Room + button devices can be deleted.
+    Deleting a button device removes it from device_store.json
+    (unlike revoke which keeps the record but blocks hello).
     """
     if entry.unique_id == YAML_UNIQUE_ID:
         raise HomeAssistantError(
@@ -298,20 +299,10 @@ async def async_remove_config_entry_device(
             translation_placeholders={"name": device_entry.name},
         )
 
-    # Block deletion of intercom button devices: use Revoke switch instead
-    for domain, ident in device_entry.identifiers:
-        if domain == DOMAIN:
-            # Check if this identifier is a button MAC (not a room ID)
-            import re
+    # Button device: delete from device_store.json so it's truly gone
+    _handle_button_device_delete(hass, device_entry)
 
-            if re.match(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$", ident.upper()):
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="button_device_delete_blocked",
-                    translation_placeholders={"name": device_entry.name},
-                )
-            break
-
+    # Find which room this device belongs to
     # Find which room this device belongs to
     room_id = None
     for domain, rid in device_entry.identifiers:
@@ -359,6 +350,28 @@ def _media_player_manufacturer(
         if device is not None and device.manufacturer:
             return device.manufacturer
     return "Home Intercom"
+
+
+def _handle_button_device_delete(hass: HomeAssistant, device_entry: Any) -> None:
+    """Delete a button device from device_store.json when removed from HA.
+
+    Unlike revoke (which keeps the record but blocks hello), delete
+    removes it entirely.  The device can only come back by sending
+    a new /devices/hello.
+    """
+    import re
+
+    for domain, ident in device_entry.identifiers:
+        if domain != DOMAIN:
+            continue
+        if not re.match(r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$", ident.upper()):
+            continue
+        store: DeviceStore | None = hass.data.get(DOMAIN, {}).get("device_store")
+        if store is None:
+            return
+        _LOGGER.info("Button %s deleted from HA — removing from device_store", ident)
+        hass.async_create_task(store.remove(ident))
+        return
 
 
 def _register_devices(hass: HomeAssistant, entry_id: str, room_map: dict[str, Any]) -> None:

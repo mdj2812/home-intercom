@@ -230,6 +230,11 @@ class DeviceStoreBase:
         device["revoked"] = True
         return dict(device)
 
+    def _remove(self, mac: str) -> None:
+        """Shared remove logic: permanently deletes from registry."""
+        key = normalize_mac(mac)
+        self._devices.pop(key, None)
+
 
 def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
     """Build the POST /devices/hello response payload (issue #37).

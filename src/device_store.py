@@ -103,3 +103,16 @@ class DeviceStore(DeviceStoreBase):
             self._save_locked()
             _LOGGER.warning("Device revoked: %s (%s)", mac, device["name"])
             return device
+
+    def remove(self, mac: str) -> None:
+        """Permanently delete a device from the registry.
+
+        Unlike revoke (which flags), this removes the record entirely.
+        """
+        with self._lock:
+            if mac not in self._devices:
+                return
+            name = self._devices[mac].get("name", mac)
+            self._remove(mac)
+            self._save_locked()
+            _LOGGER.info("Device removed: %s (%s)", mac, name)
