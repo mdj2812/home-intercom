@@ -55,7 +55,8 @@
       "room_exists": "A room with this area is already configured."
     },
     "abort": {
-      "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant."
+      "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant.",
+      "buttons_read_only": "Intercom button devices are auto-managed — no configuration needed. They appear automatically when an ESP32 button checks in."
     }
   },
   "exceptions": {

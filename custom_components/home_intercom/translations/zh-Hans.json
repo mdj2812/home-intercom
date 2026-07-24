@@ -55,7 +55,8 @@
       "room_exists": "该区域已配置。"
     },
     "abort": {
-      "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。"
+      "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。",
+      "buttons_read_only": "对讲按钮设备由系统自动管理，无需手动配置。ESP32 按钮上线后自动出现在此处。"
     }
   },
   "exceptions": {

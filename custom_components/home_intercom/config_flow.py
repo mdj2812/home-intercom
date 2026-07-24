@@ -187,6 +187,8 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         """Entry point — pick Add Room or select a room to edit."""
         if self._entry.unique_id == YAML_UNIQUE_ID:
             return self.async_abort(reason="yaml_read_only")
+        if self._entry.unique_id == BUTTONS_UNIQUE_ID:
+            return self.async_abort(reason="buttons_read_only")
 
         rooms = dict(self._entry.data.get(CONF_ROOMS, {}))
         rooms.update(self._entry.options.get(CONF_ROOMS, {}))
