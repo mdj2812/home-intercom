@@ -326,7 +326,12 @@ class DevicesHelloView(HomeAssistantView):
         if is_new:
             button_entry_id = _get_hass_data(hass).get("button_entry_id")
             if button_entry_id:
+                _LOGGER.info("New device %s — reloading button entry %s", mac, button_entry_id)
                 hass.async_create_task(hass.config_entries.async_reload(button_entry_id))
+            else:
+                _LOGGER.warning(
+                    "New device %s but no button entry — entities won't appear until restart", mac
+                )
 
         return web.json_response(device_hello_payload(device))
 
