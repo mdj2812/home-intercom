@@ -325,6 +325,7 @@ class DevicesHelloView(HomeAssistantView):
         # New device → reload to register HA device + entities (issue #48)
         if is_new:
             from homeassistant.helpers.dispatcher import async_dispatcher_send
+
             async_dispatcher_send(hass, f"{DOMAIN}_device_store_changed")
 
         return web.json_response(device_hello_payload(device))

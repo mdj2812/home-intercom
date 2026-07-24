@@ -260,9 +260,8 @@ class TestHADevicesHelloView:
 
         # Verify dispatcher was called
         import homeassistant.helpers.dispatcher as disp
-        disp.async_dispatcher_send.assert_called_with(
-            hass, "home_intercom_device_store_changed"
-        )
+
+        disp.async_dispatcher_send.assert_called_with(hass, "home_intercom_device_store_changed")
 
     @pytest.mark.asyncio
     async def test_class_attributes(self):
