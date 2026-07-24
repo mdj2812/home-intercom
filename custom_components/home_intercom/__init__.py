@@ -406,13 +406,11 @@ def _async_device_registry_updated(
 ) -> None:
     """Sync HA device registry edits back to device_store.
 
-    Triggered when a user renames a button device or moves it to a
-    different area in the HA UI. We update the device_store JSON so
-    the binding survives restarts.
+    Triggered when a user renames a button device, moves it to a
+    different area, or deletes it in the HA UI. We update the
+    device_store JSON so the binding survives restarts.
     """
-    if event.data.get("action") != "update":
-        return
-
+    action = event.data.get("action")
     device_id: str | None = event.data.get("device_id")
     if not device_id:
         return
@@ -422,22 +420,50 @@ def _async_device_registry_updated(
     registry = dr.async_get(hass)
     device_entry = registry.async_get(device_id)
     if device_entry is None:
-        return
+        # Device was deleted — check if it was one of our button devices
+        # by looking at the identifiers in the event data
+        return _async_handle_device_removed(hass, event, device_store)
 
     # Check if this is one of our button devices
+    mac: str | None = None
     for domain, identifier in device_entry.identifiers:
         if domain == DOMAIN:
             mac = identifier
             break
-    else:
+    if mac is None:
         return  # not our device
 
     existing = device_store.devices.get(mac)
     if existing is None:
         return
 
-    changes: dict[str, Any] = event.data.get("changes", {})
+    if action == "update":
+        changes: dict[str, Any] = event.data.get("changes", {})
+        _async_handle_device_update(hass, device_store, mac, existing, changes)
+    elif action == "remove":
+        # User deleted the device from HA UI → revoke it
+        _LOGGER.info("Button %s deleted from HA UI — revoking", mac)
+        hass.async_create_task(device_store.revoke(mac))
 
+
+async def _async_sync_device_field(
+    hass: HomeAssistant, device_store: DeviceStore, mac: str, field: str, value: str
+) -> None:
+    """Persist a device_store field change (from HA UI edit)."""
+    try:
+        await device_store.update_field(mac, field, value)
+    except ValueError:
+        _LOGGER.warning("Cannot update field %r for device %s", field, mac)
+
+
+def _async_handle_device_update(
+    hass: HomeAssistant,
+    device_store: DeviceStore,
+    mac: str,
+    existing: dict[str, Any],
+    changes: dict[str, Any],
+) -> None:
+    """Handle device_registry_updated with action=update for a button device."""
     # HA device renamed → update device_store name
     new_name = changes.get("name")
     if new_name and new_name != existing.get("name"):
@@ -449,7 +475,6 @@ def _async_device_registry_updated(
     # Device moved to a different area → update device_store room
     new_area_id = changes.get("area_id")
     if new_area_id is not None:
-        # area_id → area name for room mapping
         from homeassistant.helpers import area_registry as ar
 
         area_reg = ar.async_get(hass)
@@ -464,14 +489,33 @@ def _async_device_registry_updated(
             )
 
 
-async def _async_sync_device_field(
-    hass: HomeAssistant, device_store: DeviceStore, mac: str, field: str, value: str
+def _async_handle_device_removed(
+    hass: HomeAssistant, event: Any, device_store: DeviceStore
 ) -> None:
-    """Persist a device_store field change (from HA UI edit)."""
-    try:
-        await device_store.update_field(mac, field, value)
-    except ValueError:
-        _LOGGER.warning("Cannot update field %r for device %s", field, mac)
+    """Handle device removal — revoke the corresponding button.
+
+    When the device is already deleted from the registry, we can't look
+    up its identifiers via async_get(). Fall back to the event data.
+    """
+    if event.data.get("action") != "remove":
+        return
+
+    # Try to extract MAC from the device identifiers in the event data.
+    # HA device_registry_updated events carry the old device data for
+    # removals in some versions, but it's not guaranteed. We iterate the
+    # device_store looking for a device that is no longer in the registry.
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+    for mac, dev in device_store.devices.items():
+        if dev.get("revoked"):
+            continue
+        # Check if this button's HA device still exists
+        ha_device = registry.async_get_device(identifiers={(DOMAIN, mac)})
+        if ha_device is None:
+            _LOGGER.info("Button %s HA device gone — revoking", mac)
+            hass.async_create_task(device_store.revoke(mac))
+            return  # one per event
 
 
 async def _ensure_button_entry(
