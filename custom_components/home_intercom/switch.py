@@ -8,10 +8,10 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import BUTTONS_UNIQUE_ID, CONF_ROOMS, DOMAIN
+from .const import BUTTONS_UNIQUE_ID, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
