@@ -122,6 +122,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Button entry: just forward platforms (no rooms, no services)
     if entry.unique_id == BUTTONS_UNIQUE_ID:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        # Listen for new device registrations → reload to create entities
+        _setup_device_store_listener(hass, entry)
         return True
 
     data_rooms = entry.data.get(CONF_ROOMS, {})
@@ -372,6 +374,22 @@ def _handle_button_device_delete(hass: HomeAssistant, device_entry: Any) -> None
         _LOGGER.info("Button %s deleted from HA — removing from device_store", ident)
         hass.async_create_task(store.remove(ident))
         return
+
+
+def _setup_device_store_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Listen for device_store_changed signal → reload button entry.
+
+    When a new ESP32 sends /devices/hello, api.py dispatches
+    ``{DOMAIN}_device_store_changed``. This listener reloads the
+    button entry so the new device gets its HA device + entities.
+    """
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    async def _on_store_changed() -> None:
+        _LOGGER.info("Device store changed — reloading button entry %s", entry.entry_id)
+        await hass.config_entries.async_reload(entry.entry_id)
+
+    async_dispatcher_connect(hass, f"{DOMAIN}_device_store_changed", _on_store_changed)
 
 
 def _register_devices(hass: HomeAssistant, entry_id: str, room_map: dict[str, Any]) -> None:
