@@ -387,6 +387,10 @@ def _register_button_devices(
         # Ensure the device is owned by the button entry (not just a room entry)
         if entry_id not in device.config_entries:
             registry.async_update_device(device.id, add_config_entry_id=entry_id)
+        # Remove room-entry associations so button entry becomes primary
+        for old_eid in list(device.config_entries):
+            if old_eid != entry_id:
+                registry.async_update_device(device.id, remove_config_entry_id=old_eid)
 
     # Listen for HA-side edits (rename, area change) → sync back to device_store
     @callback
