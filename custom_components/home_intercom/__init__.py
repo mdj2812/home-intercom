@@ -375,7 +375,7 @@ def _register_button_devices(
     for mac, dev in device_store.devices.items():
         if dev.get("revoked"):
             continue
-        registry.async_get_or_create(
+        device = registry.async_get_or_create(
             config_entry_id=entry_id,
             identifiers={(DOMAIN, mac)},
             name=dev.get("name", mac),
@@ -384,6 +384,9 @@ def _register_button_devices(
             sw_version=dev.get("firmware_version"),
             suggested_area=dev.get("room") or None,
         )
+        # Ensure the device is owned by the button entry (not just a room entry)
+        if entry_id not in device.config_entries:
+            registry.async_update_device(device.id, add_config_entry_id=entry_id)
 
     # Listen for HA-side edits (rename, area change) → sync back to device_store
     @callback
