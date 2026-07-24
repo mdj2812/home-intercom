@@ -25,6 +25,7 @@ WWW_DIR = "www"
 PLATFORMS: list[str] = ["number", "sensor", "binary_sensor"]
 YAML_UNIQUE_ID = f"{DOMAIN}_yaml"
 UI_UNIQUE_ID = DOMAIN
+BUTTONS_UNIQUE_ID = f"{DOMAIN}_buttons"
 
 # ——— Device registry (ESP32 intercom buttons, issue #40) ———
 DEVICE_STORAGE_KEY = f"{DOMAIN}.devices"  # HA .storage key

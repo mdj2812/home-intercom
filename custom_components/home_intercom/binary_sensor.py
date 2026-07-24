@@ -16,7 +16,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CONF_ROOMS, DOMAIN
+from .const import BUTTONS_UNIQUE_ID, CONF_ROOMS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,29 +36,14 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up binary sensor from config entry."""
-    rooms: dict[str, dict] = {}
-    rooms.update(entry.data.get(CONF_ROOMS, {}))
-    rooms.update(entry.options.get(CONF_ROOMS, {}))
+    """Set up binary sensor from config entry.
 
-    entities: list[ConnectedSensor | ButtonOnlineSensor] = []
-    for room_id, room_cfg in rooms.items():
-        entity_id = room_cfg.get("entity_id", "")
-        if not entity_id:
-            continue
-        entities.append(
-            ConnectedSensor(
-                entry=entry,
-                room_key=room_id,
-                entity_id=entity_id,
-                room_name=room_cfg.get("name", room_id),
-            )
-        )
-
-    # Per-device online sensors (issue #48: native HA device registry)
-    # Only created by the first entry to avoid duplicates
-    if not hass.data.get(DOMAIN, {}).get("_button_entities_registered"):
-        hass.data[DOMAIN]["_button_entities_registered"] = True
+    Room entries → ConnectedSensor per room.
+    Buttons entry → ButtonOnlineSensor per device.
+    """
+    if entry.unique_id == BUTTONS_UNIQUE_ID:
+        # Buttons entry: per-device online sensors
+        entities: list[ConnectedSensor | ButtonOnlineSensor] = []
         device_store = hass.data.get(DOMAIN, {}).get("device_store")
         if device_store is not None:
             for mac, dev in device_store.devices.items():
@@ -71,6 +56,27 @@ async def async_setup_entry(
                         device_name=dev.get("name", mac),
                     )
                 )
+        async_add_entities(entities)
+        return
+
+    # Room entry: per-room connectivity sensors
+    rooms: dict[str, dict] = {}
+    rooms.update(entry.data.get(CONF_ROOMS, {}))
+    rooms.update(entry.options.get(CONF_ROOMS, {}))
+
+    entities = []
+    for room_id, room_cfg in rooms.items():
+        entity_id = room_cfg.get("entity_id", "")
+        if not entity_id:
+            continue
+        entities.append(
+            ConnectedSensor(
+                entry=entry,
+                room_key=room_id,
+                entity_id=entity_id,
+                room_name=room_cfg.get("name", room_id),
+            )
+        )
 
     async_add_entities(entities)
 

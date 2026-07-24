@@ -86,7 +86,31 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up sensor entities from config entry."""
+    """Set up sensor entities from config entry.
+
+    Room entries → room diagnostic sensors.
+    Buttons entry → per-device last_seen + firmware sensors.
+    """
+    from .const import BUTTONS_UNIQUE_ID as _BTN_ID  # local to avoid top-level import churn
+
+    if entry.unique_id == _BTN_ID:
+        # Buttons entry: per-device sensors only
+        entities: list[SensorEntity] = []
+        device_store = hass.data.get(DOMAIN, {}).get("device_store")
+        if device_store is not None:
+            for mac, dev in device_store.devices.items():
+                if dev.get("revoked"):
+                    continue
+                entities.append(
+                    ButtonLastSeenSensor(entry=entry, mac=mac, device_name=dev.get("name", mac))
+                )
+                entities.append(
+                    ButtonFirmwareSensor(entry=entry, mac=mac, device_name=dev.get("name", mac))
+                )
+        async_add_entities(entities)
+        return
+
+    # Room entry: per-room diagnostic sensors
     rooms: dict[str, dict] = {}
     rooms.update(entry.data.get(CONF_ROOMS, {}))
     rooms.update(entry.options.get(CONF_ROOMS, {}))
@@ -135,22 +159,6 @@ async def async_setup_entry(
                 room_name=room_name,
             )
         )
-
-    # Per-device sensors (issue #48: native HA device registry)
-    # Only created by the first entry to avoid duplicates
-    if not hass.data.get(DOMAIN, {}).get("_button_entities_registered"):
-        hass.data[DOMAIN]["_button_entities_registered"] = True
-        device_store = hass.data.get(DOMAIN, {}).get("device_store")
-        if device_store is not None:
-            for mac, dev in device_store.devices.items():
-                if dev.get("revoked"):
-                    continue
-                entities.append(
-                    ButtonLastSeenSensor(entry=entry, mac=mac, device_name=dev.get("name", mac))
-                )
-                entities.append(
-                    ButtonFirmwareSensor(entry=entry, mac=mac, device_name=dev.get("name", mac))
-                )
 
     async_add_entities(entities)
 

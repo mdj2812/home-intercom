@@ -27,6 +27,7 @@ from .announce import handle_announce_service
 from .api import register_api_views
 from .const import (
     AUDIO_SUBDIR,
+    BUTTONS_UNIQUE_ID,
     CONF_ANNOUNCE_VOLUME,
     CONF_PAUSE_BUFFER,
     CONF_ROOMS,
@@ -118,6 +119,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up or update a config entry. Merges all entries' rooms for services."""
+    # Button entry: just forward platforms (no rooms, no services)
+    if entry.unique_id == BUTTONS_UNIQUE_ID:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        return True
+
     data_rooms = entry.data.get(CONF_ROOMS, {})
     options_rooms = entry.options.get(CONF_ROOMS, {})
     room_map = {**data_rooms, **options_rooms}
@@ -228,8 +234,9 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await device_store.async_load()
     hass.data[DOMAIN]["device_store"] = device_store
 
-    # Track which entry handles button devices so hello can trigger reload
-    hass.data[DOMAIN]["button_entry_id"] = entry.entry_id
+    # Ensure a dedicated config entry for button devices (issue #48)
+    button_entry_id = await _ensure_button_entry(hass, device_store)
+    hass.data[DOMAIN]["button_entry_id"] = button_entry_id
 
     # Initialize error/state tracking
     hass.data[DOMAIN].setdefault("errors", {})
@@ -238,7 +245,9 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     register_api_views(hass)
     _register_services(hass, all_rooms)
     _register_devices(hass, entry.entry_id, entry_rooms.get(entry.entry_id, {}))
-    _register_button_devices(hass, entry.entry_id, device_store)
+    # Button devices registered under their own entry if it exists
+    if button_entry_id:
+        _register_button_devices(hass, button_entry_id, device_store)
 
     # Forward to sensor/number/binary_sensor platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -358,13 +367,7 @@ def _register_button_devices(
     Device info (name, area) is owned by the HA device registry.
     Changes sync back to device_store via
     _async_device_registry_updated.
-
-    Only runs once (first entry to call it). Subsequent entries skip
-    to avoid duplicate devices/entities.
     """
-    if hass.data[DOMAIN].get("_button_devices_registered"):
-        return
-    hass.data[DOMAIN]["_button_devices_registered"] = True
     from homeassistant.helpers import device_registry as dr
 
     registry = dr.async_get(hass)
@@ -462,3 +465,36 @@ async def _async_sync_device_field(
         await device_store.update_field(mac, field, value)
     except ValueError:
         _LOGGER.warning("Cannot update field %r for device %s", field, mac)
+
+
+async def _ensure_button_entry(
+    hass: HomeAssistant, device_store: DeviceStore
+) -> str | None:
+    """Create a dedicated config entry for intercom buttons if any exist (issue #48).
+
+    Returns the button entry_id, or None if there are no devices yet.
+    The buttons entry appears as a separate card in Settings → Devices & Services.
+    """
+    # Already exists?
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.unique_id == BUTTONS_UNIQUE_ID:
+            return entry.entry_id
+
+    # No devices yet — don't create an empty entry
+    active = [d for d in device_store.devices.values() if not d.get("revoked")]
+    if not active:
+        return None
+
+    # Create the entry via flow (no user interaction needed)
+    await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": "buttons"},
+        data={},
+    )
+    # Look up the newly created entry
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if entry.unique_id == BUTTONS_UNIQUE_ID:
+            return entry.entry_id
+
+    _LOGGER.warning("Button entry flow did not create an entry — button devices won't appear")
+    return None
