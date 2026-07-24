@@ -74,3 +74,16 @@ class DeviceStore(DeviceStoreBase):
         await self._async_save()
         _LOGGER.warning("Device revoked: %s (%s)", mac, device["name"])
         return device
+
+    async def remove(self, mac: str) -> None:
+        """Permanently delete a device from the registry.
+
+        Unlike revoke (which flags), this removes the record entirely.
+        The device can only come back by sending a new /devices/hello.
+        """
+        if mac not in self.devices:
+            return
+        name = self.devices[mac].get("name", mac)
+        self._remove(mac)
+        await self._async_save()
+        _LOGGER.info("Device removed: %s (%s)", mac, name)

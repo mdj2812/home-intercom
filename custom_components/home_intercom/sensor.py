@@ -86,7 +86,31 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up sensor entities from config entry."""
+    """Set up sensor entities from config entry.
+
+    Room entries → room diagnostic sensors.
+    Buttons entry → per-device last_seen + firmware sensors.
+    """
+    from .const import BUTTONS_UNIQUE_ID as _BTN_ID  # local to avoid top-level import churn
+
+    if entry.unique_id == _BTN_ID:
+        # Buttons entry: per-device sensors only
+        entities: list[SensorEntity] = []
+        device_store = hass.data.get(DOMAIN, {}).get("device_store")
+        if device_store is not None:
+            for mac, dev in device_store.devices.items():
+                if dev.get("revoked"):
+                    continue
+                entities.append(
+                    ButtonLastSeenSensor(entry=entry, mac=mac, device_name=dev.get("name", mac))
+                )
+                entities.append(
+                    ButtonFirmwareSensor(entry=entry, mac=mac, device_name=dev.get("name", mac))
+                )
+        async_add_entities(entities)
+        return
+
+    # Room entry: per-room diagnostic sensors
     rooms: dict[str, dict] = {}
     rooms.update(entry.data.get(CONF_ROOMS, {}))
     rooms.update(entry.options.get(CONF_ROOMS, {}))
@@ -387,3 +411,97 @@ class ConfigSensor(SensorEntity):
         rooms = hass_data.get("rooms", {})
         cfg = rooms.get(self._room_key, {})
         return cfg.get(self._config_key, 0)
+
+
+# ——— Per-device sensor entities (issue #48: native HA device registry) ———
+
+
+class ButtonLastSeenSensor(SensorEntity):
+    """Sensor: last-seen timestamp for an intercom button (issue #48)."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_should_poll = True
+    _attr_icon = "mdi:clock-outline"
+
+    def __init__(self, entry: ConfigEntry, mac: str, device_name: str) -> None:
+        """Initialize."""
+        self._entry = entry
+        self._mac = mac
+        self._device_name = device_name
+        self.entity_description = SensorEntityDescription(
+            key="last_seen",
+            translation_key="last_seen",
+            entity_category=EntityCategory.DIAGNOSTIC,
+        )
+        self._attr_unique_id = f"{entry.entry_id}_{mac}_last_seen_v1"
+        self._attr_name = "Last seen"
+        self.entity_id = f"sensor.{_safe_entity_id(mac)}_last_seen"
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._mac)},
+            "name": self._device_name,
+            "manufacturer": "Espressif",
+            "model": "ESP32 Intercom Button",
+        }
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the last_seen ISO timestamp."""
+        store = self.hass.data.get(DOMAIN, {}).get("device_store")
+        if store is None:
+            return None
+        dev = store.devices.get(self._mac)
+        if dev is None:
+            return None
+        return dev.get("last_seen") or None
+
+
+class ButtonFirmwareSensor(SensorEntity):
+    """Sensor: firmware version of an intercom button (issue #48)."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_should_poll = True
+
+    def __init__(self, entry: ConfigEntry, mac: str, device_name: str) -> None:
+        """Initialize."""
+        self._entry = entry
+        self._mac = mac
+        self._device_name = device_name
+        self.entity_description = SensorEntityDescription(
+            key="firmware_version",
+            translation_key="firmware_version",
+            entity_category=EntityCategory.DIAGNOSTIC,
+        )
+        self._attr_unique_id = f"{entry.entry_id}_{mac}_firmware_v1"
+        self._attr_name = "Firmware"
+        self._attr_icon = "mdi:chip"
+        self.entity_id = f"sensor.{_safe_entity_id(mac)}_firmware"
+
+    @property
+    def device_info(self):
+        return {
+            "identifiers": {(DOMAIN, self._mac)},
+            "name": self._device_name,
+            "manufacturer": "Espressif",
+            "model": "ESP32 Intercom Button",
+        }
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the firmware version string."""
+        store = self.hass.data.get(DOMAIN, {}).get("device_store")
+        if store is None:
+            return None
+        dev = store.devices.get(self._mac)
+        if dev is None:
+            return None
+        return dev.get("firmware_version") or None
+
+
+def _safe_entity_id(mac: str) -> str:
+    """Convert a MAC address to a safe entity id fragment."""
+    return mac.lower().replace(":", "_")

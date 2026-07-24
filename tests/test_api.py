@@ -313,6 +313,20 @@ class TestDeviceRecordViewMacAuth:
         mock_handle.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_unrevoked_mac_record_succeeds(self):
+        """Revoke → un-revoke → record should succeed."""
+        from custom_components.home_intercom.api import DeviceRecordView
+
+        device = {"name": "Study Button", "room": "study", "revoked": False}
+        req = self._req_with_mac("AA:BB:CC:DD:EE:FF", self._hass_with_device(device))
+        with patch(
+            "custom_components.home_intercom.api._handle_record", new=self._ok_response()
+        ) as mock_handle:
+            resp = await DeviceRecordView().post(req)
+        assert resp.status == 200
+        mock_handle.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_no_mac_no_user_401(self):
         from custom_components.home_intercom.api import DeviceRecordView
 

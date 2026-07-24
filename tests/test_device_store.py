@@ -141,6 +141,28 @@ class TestDockerDeviceStore:
         assert default_device_name(MAC2) == "Device 55:66"
         assert len(store.devices) == 2
 
+    def test_remove_deletes_permanently(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC)
+        store.remove(MAC)
+        assert store.get(MAC) is None
+        assert len(store.devices) == 0
+
+    def test_remove_then_hello_reregisters(self, tmp_path):
+        """Delete + re-hello = fresh registration."""
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC, "1.0.0")
+        store.remove(MAC)
+        device = store.register_or_update(MAC, "2.0.0")
+        assert device["name"] == "Device EE:FF"  # default name again
+        assert device["firmware_version"] == "2.0.0"
+        assert len(store.devices) == 1
+
+    def test_remove_unknown_is_noop(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.remove(MAC)  # should not raise
+        assert store.get(MAC) is None
+
 
 # ——— HA side (async, .storage via FakeStore) ———
 
@@ -227,6 +249,31 @@ class TestHADeviceStore:
     async def test_revoke_unknown_returns_none(self):
         store = await _fresh_ha_store()
         assert await store.revoke(MAC) is None
+
+    @pytest.mark.asyncio
+    async def test_remove_deletes_permanently(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        await store.remove(MAC)
+        assert store.get(MAC) is None
+        assert len(store.devices) == 0
+
+    @pytest.mark.asyncio
+    async def test_remove_then_hello_reregisters(self):
+        """Delete + re-hello = fresh registration."""
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "1.0.0")
+        await store.remove(MAC)
+        device = await store.register_or_update(MAC, "2.0.0")
+        assert device["name"] == "Device EE:FF"
+        assert device["firmware_version"] == "2.0.0"
+        assert len(store.devices) == 1
+
+    @pytest.mark.asyncio
+    async def test_remove_unknown_is_noop(self):
+        store = await _fresh_ha_store()
+        await store.remove(MAC)  # should not raise
+        assert store.get(MAC) is None
 
     @pytest.mark.asyncio
     async def test_persistence_round_trip(self):

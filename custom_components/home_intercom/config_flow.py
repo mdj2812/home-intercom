@@ -23,6 +23,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import area_registry as ar
 
 from .const import (
+    BUTTONS_UNIQUE_ID,
     CONF_ANNOUNCE_VOLUME,
     CONF_AREA_ID,
     CONF_PAUSE_BUFFER,
@@ -151,6 +152,19 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
             data={CONF_ROOMS: dict(import_data.get(CONF_ROOMS, {}))},
         )
 
+    async def async_step_buttons(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Auto-create a config entry for intercom button devices (issue #48).
+
+        Called programmatically by _ensure_button_entry(). No user interaction —
+        creates a placeholder entry that owns the button HA devices and entities.
+        """
+        await self.async_set_unique_id(BUTTONS_UNIQUE_ID)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title="Home Intercom Buttons",
+            data={CONF_ROOMS: {}},  # no rooms — buttons only
+        )
+
     @staticmethod
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         """Return the options flow handler for any entry."""
@@ -173,6 +187,8 @@ class HomeIntercomOptionsFlow(OptionsFlow):
         """Entry point — pick Add Room or select a room to edit."""
         if self._entry.unique_id == YAML_UNIQUE_ID:
             return self.async_abort(reason="yaml_read_only")
+        if self._entry.unique_id == BUTTONS_UNIQUE_ID:
+            return self.async_abort(reason="buttons_read_only")
 
         rooms = dict(self._entry.data.get(CONF_ROOMS, {}))
         rooms.update(self._entry.options.get(CONF_ROOMS, {}))

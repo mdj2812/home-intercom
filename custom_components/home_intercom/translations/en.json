@@ -1,87 +1,122 @@
 {
-  "config": {
-    "step": {
-      "user": {
-        "title": "Home Intercom",
-        "description": "Set up your first room. You can add more later via Options.",
-        "data": {
-          "area_id": "Area",
-          "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (0-100, 0=disabled)",
-          "pause_buffer": "Pause Buffer (seconds)"
+    "config": {
+        "step": {
+            "user": {
+                "title": "Home Intercom",
+                "description": "Set up your first room. You can add more later via Options.",
+                "data": {
+                    "area_id": "Area",
+                    "entity_id": "Media Player",
+                    "announce_volume": "Announce Volume (0-100, 0=disabled)",
+                    "pause_buffer": "Pause Buffer (seconds)"
+                }
+            }
+        },
+        "abort": {
+            "no_media_players": "No media_player entities found in Home Assistant.",
+            "already_configured": "Home Intercom is already configured. Use the Configure button to manage rooms."
         }
-      }
     },
-    "abort": {
-      "no_media_players": "No media_player entities found in Home Assistant.",
-      "already_configured": "Home Intercom is already configured. Use the Configure button to manage rooms."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Manage Rooms",
-        "description": "{room_count} room(s) configured. Choose a room to edit or add a new one.",
-        "data": {
-          "room_choice": "Room"
+    "options": {
+        "step": {
+            "init": {
+                "title": "Manage Rooms",
+                "description": "{room_count} room(s) configured. Choose a room to edit or add a new one.",
+                "data": {
+                    "room_choice": "Room"
+                }
+            },
+            "yaml_info": {
+                "title": "YAML Configured Rooms",
+                "description": "{room_count} room(s) from configuration.yaml. To modify, edit configuration.yaml and restart Home Assistant."
+            },
+            "add_room": {
+                "title": "Add Room",
+                "description": "Select area and media player. Room name defaults to area name.",
+                "data": {
+                    "area_id": "Area",
+                    "name": "Room Name (optional)",
+                    "entity_id": "Media Player",
+                    "announce_volume": "Announce Volume (0-100, 0=disabled)",
+                    "pause_buffer": "Pause Buffer (seconds)"
+                }
+            },
+            "edit_room": {
+                "title": "Edit Room — {room_name}",
+                "description": "Change the media player entity for this room. Set volume/buffer to 0 to use defaults.",
+                "data": {
+                    "entity_id": "Media Player",
+                    "announce_volume": "Announce Volume (0-100, 0=disabled)",
+                    "pause_buffer": "Pause Buffer (seconds)"
+                }
+            }
+        },
+        "error": {
+            "room_exists": "A room with this area is already configured."
+        },
+        "abort": {
+            "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant.",
+            "buttons_read_only": "Intercom button devices are auto-managed — no configuration needed. They appear automatically when an ESP32 button checks in."
         }
-      },
-      "yaml_info": {
-        "title": "YAML Configured Rooms",
-        "description": "{room_count} room(s) from configuration.yaml. To modify, edit configuration.yaml and restart Home Assistant."
-      },
-      "add_room": {
-        "title": "Add Room",
-        "description": "Select area and media player. Room name defaults to area name.",
-        "data": {
-          "area_id": "Area",
-          "name": "Room Name (optional)",
-          "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (0-100, 0=disabled)",
-          "pause_buffer": "Pause Buffer (seconds)"
+    },
+    "exceptions": {
+        "yaml_device_delete_blocked": {
+            "message": "\"{name}\" is a YAML-configured device and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
+        },
+        "yaml_entry_delete_blocked": {
+            "message": "\"{title}\" is a YAML-configured integration and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
         }
-      },
-      "edit_room": {
-        "title": "Edit Room — {room_name}",
-        "description": "Change the media player entity for this room. Set volume/buffer to 0 to use defaults.",
-        "data": {
-          "entity_id": "Media Player",
-          "announce_volume": "Announce Volume (0-100, 0=disabled)",
-          "pause_buffer": "Pause Buffer (seconds)"
+    },
+    "entity": {
+        "sensor": {
+            "error": {
+                "name": "Error"
+            },
+            "state": {
+                "name": "State"
+            },
+            "volume": {
+                "name": "Volume"
+            },
+            "media": {
+                "name": "Now Playing"
+            },
+            "player_type": {
+                "name": "Player Type"
+            },
+            "config_announce_volume": {
+                "name": "Announce Volume"
+            },
+            "config_pause_buffer": {
+                "name": "Pause Buffer"
+            },
+            "last_seen": {
+                "name": "Last seen"
+            },
+            "firmware_version": {
+                "name": "Firmware"
+            }
+        },
+        "binary_sensor": {
+            "connected": {
+                "name": "Connected"
+            },
+            "online": {
+                "name": "Online"
+            }
+        },
+        "number": {
+            "announce_volume": {
+                "name": "Announce Volume"
+            },
+            "pause_buffer": {
+                "name": "Pause Buffer"
+            }
+        },
+        "switch": {
+            "revoked": {
+                "name": "Revoked"
+            }
         }
-      }
-    },
-    "error": {
-      "room_exists": "A room with this area is already configured."
-    },
-    "abort": {
-      "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant."
     }
-  },
-  "exceptions": {
-    "yaml_device_delete_blocked": {
-      "message": "\"{name}\" is a YAML-configured device and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
-    },
-    "yaml_entry_delete_blocked": {
-      "message": "\"{title}\" is a YAML-configured integration and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
-    }
-  },
-  "entity": {
-    "sensor": {
-      "error": { "name": "Error" },
-      "state": { "name": "State" },
-      "volume": { "name": "Volume" },
-      "media": { "name": "Now Playing" },
-      "player_type": { "name": "Player Type" },
-      "config_announce_volume": { "name": "Announce Volume" },
-      "config_pause_buffer": { "name": "Pause Buffer" }
-    },
-    "binary_sensor": {
-      "connected": { "name": "Connected" }
-    },
-    "number": {
-      "announce_volume": { "name": "Announce Volume" },
-      "pause_buffer": { "name": "Pause Buffer" }
-    }
-  }
 }

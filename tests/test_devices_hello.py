@@ -74,6 +74,16 @@ class TestDockerDevicesHello:
         assert resp.status_code == 403
         assert resp.get_json()["error"] == "device revoked"
 
+    def test_unrevoked_device_hello_succeeds(self, client):
+        """Revoke → un-revoke → hello should succeed."""
+        client.store.register_or_update(MAC)
+        client.store.revoke(MAC)
+        # un-revoke
+        client.store.update_field(MAC, "revoked", False)
+        resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "ok"
+
     def test_missing_header_rejected(self, client):
         resp = client.post("/devices/hello", json={})
         assert resp.status_code == 400
@@ -173,6 +183,19 @@ class TestHADevicesHelloView:
         assert body["error"] == "device revoked"
 
     @pytest.mark.asyncio
+    async def test_unrevoked_device_hello_succeeds(self):
+        """Revoke → un-revoke → hello should succeed."""
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        await store.revoke(MAC)
+        # un-revoke
+        await store.update_field(MAC, "revoked", False)
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={}, hass=hass)
+        assert resp.status == 200
+        assert body["status"] == "ok"
+
+    @pytest.mark.asyncio
     async def test_missing_header_rejected(self):
         resp, body, _ = await self._post(mac=None, body={})
         assert resp.status == 400
@@ -196,6 +219,49 @@ class TestHADevicesHelloView:
         hass.data = {"home_intercom": {}}
         resp, body, _ = await self._post(body={}, hass=hass)
         assert resp.status == 500
+
+    # ── delete + re-hello round-trip ──
+
+    @pytest.mark.asyncio
+    async def test_delete_rehello_registers_entities(self):
+        """Delete from device_store → hello → device + entities recreated."""
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "1.0.0")
+        assert store.get(MAC) is not None
+
+        # Simulate HA delete: remove from store entirely
+        await store.remove(MAC)
+        assert store.get(MAC) is None
+
+        # Re-hello should auto-register as a brand-new device
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={"firmware_version": "3.0.0"}, hass=hass)
+        assert resp.status == 200
+        assert body["status"] == "ok"
+        assert body["device_name"] == "Device EE:FF"  # default name again
+
+        # Verify device is back in store
+        dev = store.get(MAC)
+        assert dev is not None
+        assert dev["name"] == "Device EE:FF"
+        assert dev["firmware_version"] == "3.0.0"
+        assert not dev.get("revoked")
+
+    @pytest.mark.asyncio
+    async def test_delete_rehello_dispaches_signal(self):
+        """After re-hello, dispatcher signal fires for entity creation."""
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        await store.remove(MAC)
+
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={}, hass=hass)
+        assert resp.status == 200
+
+        # Verify dispatcher was called
+        import homeassistant.helpers.dispatcher as disp
+
+        disp.async_dispatcher_send.assert_called_with(hass, "home_intercom_device_store_changed")
 
     @pytest.mark.asyncio
     async def test_class_attributes(self):
