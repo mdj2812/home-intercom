@@ -342,24 +342,49 @@ def _friendly_name(hass: HomeAssistant, entity_id: str) -> str:
     return entity_id
 
 
+def _media_player_manufacturer(
+    hass: HomeAssistant,
+    entity_id: str,
+    entity_registry: Any,
+    device_registry: Any,
+) -> str:
+    """Get the manufacturer of the underlying media_player device.
+
+    Follows entity_id → entity entry → device entry → manufacturer.
+    Falls back to "Home Intercom" if the chain is broken.
+    """
+    entry = entity_registry.async_get(entity_id)
+    if entry is not None and entry.device_id:
+        device = device_registry.async_get(entry.device_id)
+        if device is not None and device.manufacturer:
+            return device.manufacturer
+    return "Home Intercom"
+
+
 def _register_devices(hass: HomeAssistant, entry_id: str, room_map: dict[str, Any]) -> None:
     """Register devices for ONE config entry. Import is lazy."""
     from homeassistant.helpers import area_registry as ar
     from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
 
     registry = dr.async_get(hass)
     area_registry = ar.async_get(hass)
+    entity_registry = er.async_get(hass)
 
     for room_id, room in room_map.items():
         entity_id = room.get(CONF_ENTITY_ID, "")
         name = room.get(CONF_NAME, room_id)
         if not entity_id:
             continue
+
+        # Copy manufacturer from the underlying media_player device
+        manufacturer = _media_player_manufacturer(hass, entity_id, entity_registry, registry)
+
         device = registry.async_get_or_create(
             config_entry_id=entry_id,
             identifiers={(DOMAIN, room_id)},
             name=name,
-            manufacturer="Home Intercom",
+            manufacturer=manufacturer,
             model=_friendly_name(hass, entity_id),
         )
         if area_registry.async_get_area(room_id) and device.area_id != room_id:
@@ -392,8 +417,9 @@ def _register_button_devices(hass: HomeAssistant, entry_id: str, device_store: D
             config_entry_id=entry_id,
             identifiers={(DOMAIN, mac)},
             name=dev.get("name", mac),
-            manufacturer="Home Intercom",
+            manufacturer="Espressif",
             model="ESP32 Intercom Button",
+            serial_number=mac,
             sw_version=dev.get("firmware_version"),
             suggested_area=dev.get("room") or None,
         )
