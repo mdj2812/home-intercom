@@ -11,6 +11,7 @@ from .ha_fakes import install_fake_homeassistant
 install_fake_homeassistant()
 
 import homeassistant.helpers.device_registry as dr  # noqa: E402
+
 from custom_components.home_intercom.__init__ import (  # noqa: E402
     DOMAIN,
     _reconcile_yaml_devices,
@@ -32,9 +33,7 @@ class FakeDeviceRegistry:
 
     def __init__(self, devices: list[FakeDevice]):
         self.devices = MagicMock()
-        self.devices.get_devices_for_config_entry_id = MagicMock(
-            return_value=list(devices)
-        )
+        self.devices.get_devices_for_config_entry_id = MagicMock(return_value=list(devices))
         self._removed: list[str] = []
         self.async_remove_device = MagicMock(
             side_effect=lambda device_id: self._removed.append(device_id)
