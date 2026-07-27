@@ -136,6 +136,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("entry_rooms", {})
     hass.data[DOMAIN]["entry_rooms"][entry.entry_id] = room_map
 
+    # Reconcile YAML devices on every setup/reload (#63)
+    if entry.unique_id == YAML_UNIQUE_ID:
+        _reconcile_yaml_devices(hass, entry.entry_id, set(room_map.keys()))
+
     # Full setup with merged rooms from all entries
     await _full_setup(hass, entry)
 
@@ -163,11 +167,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
             hass.data.pop(DOMAIN, None)
             return True
-        # Reload with remaining rooms
-        next_entry_id = next(iter(remaining))
-        next_entry = hass.config_entries.async_get_entry(next_entry_id)
-        if next_entry:
-            await _full_setup(hass, next_entry)
+        # Update services with remaining rooms only —
+        # do NOT re-forward platforms (HA framework handles that). (#63)
+        all_rooms: dict[str, dict[str, Any]] = {}
+        for rooms in remaining.values():
+            all_rooms.update(rooms)
+        hass.data[DOMAIN]["rooms"] = all_rooms
+        _register_services(hass, all_rooms)
     return True
 
 
@@ -437,6 +443,32 @@ def _register_devices(hass: HomeAssistant, entry_id: str, room_map: dict[str, An
         )
         if area_registry.async_get_area(room_id) and device.area_id != room_id:
             registry.async_update_device(device.id, area_id=room_id)
+
+
+def _reconcile_yaml_devices(
+    hass: HomeAssistant,
+    entry_id: str,
+    current_rooms: set[str],
+) -> None:
+    """Remove YAML-owned devices whose room is no longer in configuration.yaml.
+
+    Unlike _register_devices (which only calls async_get_or_create),
+    this actively removes orphaned devices.  Called unconditionally on
+    every async_setup so that cold-restarts also pick up stale entries.
+    """
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+    for device in list(registry.devices.get_devices_for_config_entry_id(entry_id)):
+        for domain, identifier in device.identifiers:
+            if domain == DOMAIN and identifier not in current_rooms:
+                _LOGGER.info(
+                    "Removing orphaned device '%s' (room '%s')",
+                    device.name or device.id,
+                    identifier,
+                )
+                registry.async_remove_device(device.id)
+                break
 
 
 def _find_yaml_entry(entries: list[ConfigEntry]) -> ConfigEntry | None:
