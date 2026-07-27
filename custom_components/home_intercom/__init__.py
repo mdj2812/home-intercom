@@ -102,8 +102,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if yaml_entry:
         # Update existing YAML entry with current config
         hass.config_entries.async_update_entry(yaml_entry, data={CONF_ROOMS: yaml_rooms})
-        # Always reconcile device registry with current YAML rooms (#63)
-        _reconcile_yaml_devices(hass, yaml_entry.entry_id, set(yaml_rooms.keys()))
     else:
         hass.async_create_task(
             hass.config_entries.flow.async_init(
@@ -137,6 +135,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].setdefault("entry_rooms", {})
     hass.data[DOMAIN]["entry_rooms"][entry.entry_id] = room_map
+
+    # Reconcile YAML devices on every setup/reload (#63)
+    if entry.unique_id == YAML_UNIQUE_ID:
+        _reconcile_yaml_devices(hass, entry.entry_id, set(room_map.keys()))
 
     # Full setup with merged rooms from all entries
     await _full_setup(hass, entry)
