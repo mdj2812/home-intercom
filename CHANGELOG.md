@@ -1,6 +1,24 @@
 # Changelog
 
-## v2.0.2 (2026-07-23)
+## v2.0.3 (2026-07-27)
+
+> **ESP32 Buttons as Native HA Devices + YAML Device Lifecycle Fix**
+
+### 🆕 Intercom Buttons as Native HA Devices (#48, #61)
+
+- ESP32 intercom buttons now appear as **native HA devices** with their own config entry ("Home Intercom Buttons").
+- Each button gets a **device card** in HA with sensor entities: Last Seen, Firmware Version, Online status.
+- **Revoke switch** per device — turn on to block a lost/unknown button without deleting it. Delete the device to permanently remove.
+- Device registry edits (rename, move to area) sync back to `device_store.json`.
+- MAC-based authentication on `/device/record` — no HA token needed on ESP32 (#47).
+- Global audio config endpoint `GET /api/home_intercom/config` — discoverable pre-registration (#39).
+
+### 🐛 Fixes
+
+- **YAML room removal** — when a room is removed from `configuration.yaml`, its device and entities are now properly cleaned up on next restart (#63).
+- **Config reload broken** — adding a room via Configure (OptionsFlow) no longer causes `"already been setup"` errors on reload (#64).
+
+---
 
 > **Patch: PWA token persistence — no more 401 after HA restart**
 
