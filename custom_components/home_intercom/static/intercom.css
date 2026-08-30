@@ -172,6 +172,24 @@ body {
   color: #888;
 }
 
+.settings-btn-danger {
+  color: #e74c3c;
+  border-color: #5c2a2a;
+  background: #2a1818;
+}
+
+.settings-btn-danger:hover:not(:disabled) {
+  color: #ff6b5a;
+  border-color: #8b3a3a;
+  background: #3a2020;
+}
+
+.settings-btn-danger:disabled {
+  color: #7a4038;
+  border-color: #3a2222;
+  background: #221515;
+}
+
 .chime-upload-label {
   display: inline-flex;
   align-items: center;
