@@ -481,10 +481,12 @@ let chimeState = { custom: false, url: '' };
 let chimePreviewAudio = null;
 
 function resolveChimePlayUrl(url) {
-  if (!url) return (window.STATIC_BASE || '/static') + '/pre_announce.wav';
+  const staticBase = (window.STATIC_BASE || '/static').replace(/\/$/, '');
+  if (!url) return staticBase + '/pre_announce.wav';
   if (/^https?:\/\//i.test(url)) return url;
   if (url.indexOf('/static/') !== -1) {
-    return (window.STATIC_BASE || '/static') + url.split('/static/').pop();
+    const file = url.split('/static/').pop().replace(/^\//, '');
+    return staticBase + '/' + file;
   }
   return url;
 }
@@ -516,6 +518,7 @@ function updateChimeStatusUI() {
     statusEl.textContent = custom ? I18N.t('chimeCustom') : I18N.t('chimeDefault');
   }
   setSettingsButtonState('chime-reset', custom);
+  setSettingsButtonState('chime-preview', true);
 }
 
 async function refreshChimeStatus() {
