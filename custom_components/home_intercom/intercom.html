@@ -516,7 +516,6 @@ function updateChimeStatusUI() {
     statusEl.textContent = custom ? I18N.t('chimeCustom') : I18N.t('chimeDefault');
   }
   setSettingsButtonState('chime-reset', custom);
-  setSettingsButtonState('chime-preview', custom);
 }
 
 async function refreshChimeStatus() {
