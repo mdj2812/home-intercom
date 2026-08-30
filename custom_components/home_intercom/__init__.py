@@ -160,20 +160,23 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.unique_id == BUTTONS_UNIQUE_ID:
         return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
+    # Room entry (UI): unload platforms so reload can re-forward (#64)
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+
     if DOMAIN in hass.data:
         hass.data[DOMAIN].setdefault("entry_rooms", {}).pop(entry.entry_id, None)
         remaining = hass.data[DOMAIN].get("entry_rooms", {})
         if not remaining:
             hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
             hass.data.pop(DOMAIN, None)
-            return True
-        # Update services with remaining rooms only —
-        # do NOT re-forward platforms (HA framework handles that). (#63)
-        all_rooms: dict[str, dict[str, Any]] = {}
-        for rooms in remaining.values():
-            all_rooms.update(rooms)
-        hass.data[DOMAIN]["rooms"] = all_rooms
-        _register_services(hass, all_rooms)
+        else:
+            # Other entries still loaded — refresh merged room list only
+            all_rooms: dict[str, dict[str, Any]] = {}
+            for rooms in remaining.values():
+                all_rooms.update(rooms)
+            hass.data[DOMAIN]["rooms"] = all_rooms
+            _register_services(hass, all_rooms)
     return True
 
 
