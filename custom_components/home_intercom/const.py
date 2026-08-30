@@ -40,3 +40,8 @@ MAX_RECORD_SECS = 60  # recording cap delivered to ESP32 via hello/config
 # ——— PWA shared token (issue #54) ———
 PWA_TOKEN_STORAGE_KEY = f"{DOMAIN}.pwa_token"  # HA .storage key
 PWA_TOKEN_STORAGE_VERSION = 1
+
+# ——— Custom chime (issue #66) ———
+CUSTOM_CHIME_FILENAME = "custom_chime.wav"
+MAX_CHIME_BYTES = 2 * 1024 * 1024  # 2 MB upload cap
+DEFAULT_CHIME_STATIC_URL = "/home_intercom/static/pre_announce.wav"

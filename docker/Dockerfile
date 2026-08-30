@@ -13,6 +13,7 @@ COPY docker/.docker-image /app/.docker-image
 # Shared files — canonical source in custom_components/
 COPY custom_components/home_intercom/const.py ./
 COPY custom_components/home_intercom/shared.py ./
+COPY custom_components/home_intercom/auto_pause.py ./
 COPY custom_components/home_intercom/intercom.html ./
 COPY custom_components/home_intercom/static/ ./static/
 

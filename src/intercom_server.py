@@ -4,17 +4,23 @@
 import json
 import os
 import sys
+from pathlib import Path
 
 from const import DEVICE_REGISTRY_DEFAULT_PATH, PCM_RATE, WAV_HEADER_SIZE
 from flask import Flask, jsonify, request, send_from_directory
 from shared import (
+    chime_public_url,
+    chime_status_payload,
     concat_wavs,
     config_payload,
+    delete_custom_chime,
     device_hello_payload,
     device_record_auth_error,
     handle_pcm_to_wav,
     handle_wav_passthrough,
     is_wav,
+    resolve_chime_wav,
+    write_custom_chime_wav,
 )
 
 from device_store import DeviceStore
@@ -58,7 +64,8 @@ STATE_TIMEOUT = _parse_state_timeout()
 
 haclient = HAClient(HA_URL, HA_TOKEN, pause_buffer=PAUSE_BUFFER, state_timeout=STATE_TIMEOUT)
 
-CHIME_WAV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "pre_announce.wav")
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+CHIME_WAV = os.path.join(_APP_DIR, "static", "pre_announce.wav")
 
 # ——— Version ———
 try:
@@ -103,6 +110,35 @@ def static_files(filename):
 @app.route("/audio/<path:filename>")
 def serve_audio(filename):
     return send_from_directory(AUDIO_DIR, filename)
+
+
+def _request_base_url() -> str:
+    public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
+    return public_base or f"{scheme}://{request.host}"
+
+
+@app.route("/chime", methods=["GET", "POST", "DELETE"])
+def chime():
+    """Custom pre-announce chime upload/reset (#66). POST/DELETE: LAN trust (same as /record)."""
+    base = _request_base_url()
+
+    if request.method == "GET":
+        return jsonify(chime_status_payload(base_url=base, audio_dir=AUDIO_DIR, deployment="docker"))
+
+    data = request.get_data()
+    if request.method == "POST":
+        if len(data) < WAV_HEADER_SIZE:
+            return jsonify({"ok": False, "error": "no audio data"}), 400
+        try:
+            write_custom_chime_wav(data, AUDIO_DIR)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        url = chime_public_url(base, audio_dir=AUDIO_DIR, deployment="docker")
+        return jsonify({"ok": True, "url": url})
+
+    delete_custom_chime(AUDIO_DIR)
+    return jsonify({"ok": True, "custom": False})
 
 
 @app.route("/rooms/status")
@@ -171,16 +207,16 @@ def record():
         duration = handle_pcm_to_wav(data, rate, filepath)
 
     # Prepend chime — creates a copy with chime for standard players
+    chime_path = str(resolve_chime_wav(integration_dir=Path(_APP_DIR), audio_dir=AUDIO_DIR))
     filename_chime = f"intercom_{target}_chime.wav"
     filepath_chime = os.path.join(AUDIO_DIR, filename_chime)
-    duration_with_chime = concat_wavs(CHIME_WAV, filepath, filepath_chime)
+    duration_with_chime = concat_wavs(chime_path, filepath, filepath_chime)
 
     # Build public URLs
-    public_base = os.environ.get("PUBLIC_URL", "").rstrip("/")
-    scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
-    base = public_base or f"{scheme}://{request.host}"
+    base = _request_base_url()
     audio_url = f"{base}/audio/{filename}"
     audio_url_with_chime = f"{base}/audio/{filename_chime}"
+    chime_url = chime_public_url(base, audio_dir=AUDIO_DIR, deployment="docker")
 
     ok_count = 0
     errors = []
@@ -193,6 +229,7 @@ def record():
             announce_volume=announce_volume,
             audio_url_with_chime=audio_url_with_chime,
             duration_with_chime=duration_with_chime,
+            chime_url=chime_url,
         )
         if result["ok"]:
             ok_count += 1
@@ -250,6 +287,7 @@ app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
 app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)
 app.add_url_rule(f"{_HA_PREFIX}/config", "ha_config", config)
 app.add_url_rule(f"{_HA_PREFIX}/record", "ha_record", record, methods=["POST"])
+app.add_url_rule(f"{_HA_PREFIX}/chime", "ha_chime", chime, methods=["GET", "POST", "DELETE"])
 app.add_url_rule(f"{_HA_PREFIX}/audio/<path:filename>", "ha_audio", serve_audio)
 app.add_url_rule(f"{_HA_PREFIX}/static/<path:filename>", "ha_static", static_files)
 

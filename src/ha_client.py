@@ -370,6 +370,7 @@ class HAClient:
         announce_volume: int | None = None,
         audio_url_with_chime: str | None = None,
         duration_with_chime: float | None = None,
+        chime_url: str | None = None,
     ) -> dict:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
 
@@ -380,6 +381,7 @@ class HAClient:
         announce_volume: optional volume override (0-100) for MA players only.
         audio_url_with_chime: WAV with pre-announce chime prepended (for standard players).
         duration_with_chime: total duration including chime.
+        chime_url: public URL for MA pre_announce_url when custom chime is set.
         Returns {"ok": True} on success,
         {"ok": False, "error": "reason"} on failure.
         """
@@ -399,7 +401,9 @@ class HAClient:
             info, info_ok = self._get_entity_info(entity_id)
 
         if info["app_id"] == "music_assistant":
-            return self._play_ma_announcement(entity_id, audio_url, volume=announce_volume)
+            return self._play_ma_announcement(
+                entity_id, audio_url, volume=announce_volume, chime_url=chime_url
+            )
         # Standard player: use concatenated audio (chime + recording in one file)
         url = audio_url_with_chime or audio_url
         dur = duration_with_chime or duration
@@ -412,6 +416,8 @@ class HAClient:
         entity_id: str,
         audio_url: str,
         volume: int | None = None,
+        *,
+        chime_url: str | None = None,
     ) -> dict:
         """Tier 1: Music Assistant play_announcement (self-stopping).
 
@@ -422,6 +428,8 @@ class HAClient:
             "url": audio_url,
             "use_pre_announce": True,
         }
+        if chime_url:
+            data["pre_announce_url"] = chime_url
         if volume is not None:
             data["announce_volume"] = volume
             _logger.info(

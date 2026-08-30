@@ -996,7 +996,7 @@ class TestPlayMA:
         """MA play_announcement with volume override."""
         client = HAClient("http://ha:8123", "tok")
 
-        with patch.object(client, "call", return_value=True):
+        with patch.object(client, "call", return_value=True) as mock_call:
             result = client._play_ma_announcement(
                 "media_player.test",
                 "http://ha/audio/test.wav",
@@ -1004,6 +1004,24 @@ class TestPlayMA:
             )
 
         assert result == {"ok": True}
+        assert mock_call.call_args[0][1]["announce_volume"] == 80
+
+    def test_play_ma_with_custom_chime_url(self):
+        """MA play_announcement passes pre_announce_url when custom chime set."""
+        client = HAClient("http://ha:8123", "tok")
+        chime_url = "http://ha/audio/custom_chime.wav"
+
+        with patch.object(client, "call", return_value=True) as mock_call:
+            result = client._play_ma_announcement(
+                "media_player.test",
+                "http://ha/audio/test.wav",
+                chime_url=chime_url,
+            )
+
+        assert result == {"ok": True}
+        data = mock_call.call_args[0][1]
+        assert data["pre_announce_url"] == chime_url
+        assert data["use_pre_announce"] is True
 
     def test_play_ma_success_no_volume(self):
         """MA play_announcement without volume override."""

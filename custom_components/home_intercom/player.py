@@ -79,6 +79,7 @@ async def play_announcement(
     announce_volume: int | None = None,
     audio_url_with_chime: str | None = None,
     duration_with_chime: float | None = None,
+    chime_url: str | None = None,
     pause_buffer: float = DEFAULT_PAUSE_BUFFER,
 ) -> PlayResult:
     """Play an announcement on a media_player entity.
@@ -91,6 +92,7 @@ async def play_announcement(
         announce_volume: Optional volume (1-100) for MA players.
         audio_url_with_chime: URL with chime prepended (for standard players).
         duration_with_chime: Duration of chime + audio.
+        chime_url: Public URL for MA pre_announce_url when custom chime is set.
         pause_buffer: Extra seconds before auto-pause (default 0.0, tuned per-room).
 
     Returns:
@@ -105,7 +107,9 @@ async def play_announcement(
 
     # Tier 1: Music Assistant
     if _is_ma_player(attrs):
-        return await _play_ma_announcement(hass, entity_id, audio_url, announce_volume)
+        return await _play_ma_announcement(
+            hass, entity_id, audio_url, announce_volume, chime_url=chime_url
+        )
 
     # Guard: entity must support play_media
     if not _has_play_media(attrs):
@@ -134,6 +138,8 @@ async def _play_ma_announcement(
     entity_id: str,
     audio_url: str,
     announce_volume: int | None,
+    *,
+    chime_url: str | None = None,
 ) -> PlayResult:
     """Play via Music Assistant's play_announcement service."""
     service_data: dict[str, Any] = {
@@ -141,6 +147,8 @@ async def _play_ma_announcement(
         "url": audio_url,
         "use_pre_announce": True,
     }
+    if chime_url:
+        service_data["pre_announce_url"] = chime_url
     if announce_volume is not None:
         service_data["announce_volume"] = announce_volume
 
