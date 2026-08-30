@@ -15,6 +15,8 @@ import urllib.parse
 import urllib.request
 from enum import StrEnum
 
+from auto_pause import run_auto_pause
+
 _logger = logging.getLogger(__name__)
 
 
@@ -25,10 +27,6 @@ def _truncate(s: str, max_len: int) -> str:
     return s if len(s) <= max_len else s[: max_len - 1] + "…"
 
 
-# ——— Retry constants ———
-STATE_POLL_INTERVAL = 0.5  # poll interval for state checks (seconds)
-PLAYING_CONFIRM_RETRIES = 10  # max attempts to confirm "playing" (10 × 0.5s = 5s)
-PAUSE_RETRIES = 5  # pause retry count
 DEFAULT_STATE_TIMEOUT = 5  # seconds for entity state queries
 SERVICE_TIMEOUT = 10  # seconds for HA service calls
 # MediaPlayerEntityFeature.REPEAT_SET from HA core:
@@ -66,11 +64,6 @@ class PlayError(StrEnum):
 
     PLAY_FAILED = "play_failed"
     MA_FAILED = "ma_failed"
-
-
-# ——— WebSocket wait constants ———
-WS_PLAYING_TIMEOUT = DEFAULT_STATE_TIMEOUT  # max seconds to wait for "playing" via WebSocket
-WS_PAUSE_TIMEOUT = 1.5  # max seconds to wait for non-playing state
 
 
 class HAWebSocketClient:
@@ -547,88 +540,41 @@ class HAClient:
         self._restore_volume(entity_id, saved_volume)
 
     def _auto_pause_bg(self, entity_id: str, wait_sec: float, saved_volume: float | None = None):
-        """Background thread: confirm playback → wait → pause + verify, then restore volume.
-
-        Uses WebSocket state_changed events when available (instant response).
-        Falls back to REST polling when WebSocket is unavailable or times out.
-        """
-        t0 = time.monotonic()
-        ws = self._ws  # local snapshot for type narrowing + thread safety
+        """Background thread: confirm playback → wait → pause + verify, then restore volume."""
+        ws = self._ws
         use_ws = ws is not None and ws.ready
-        playing_confirmed = False
+        client = self
+
+        class _RestBackend:
+            def monotonic(self) -> float:
+                return time.monotonic()
+
+            def get_state(self, eid: str) -> str | None:
+                state = client.state(eid)
+                return state or None
+
+            def sleep(self, seconds: float) -> None:
+                time.sleep(seconds)
+
+            def media_pause(self, eid: str) -> None:
+                client.call("media_player/media_pause", {"entity_id": eid})
+
+            def wait_for_playing(self, eid: str, timeout: float) -> bool | None:
+                if not use_ws:
+                    return None
+                assert ws is not None
+                _logger.info(f"[intercom] {eid} waiting for playing via ws...")
+                return ws.wait_for_state(eid, "playing", timeout)
+
+            def wait_for_paused(self, eid: str, timeout: float) -> bool | None:
+                if not use_ws:
+                    return None
+                assert ws is not None
+                _logger.info(f"[intercom] {eid} waiting for pause via ws...")
+                return ws.wait_for_state(eid, None, timeout)
 
         try:
-            # 1) Confirm "playing" state
-            # Quick REST pre-check (avoid race: state may have changed
-            # before WS waiter was registered)
-            if self.state(entity_id) == "playing":
-                _logger.info(f"[intercom] {entity_id} already playing (already there)")
-                playing_confirmed = True
-            elif use_ws:
-                assert ws is not None
-                _logger.info(f"[intercom] {entity_id} waiting for playing via ws...")
-                if ws.wait_for_state(entity_id, "playing", WS_PLAYING_TIMEOUT):
-                    _logger.info(f"[intercom] {entity_id} playing confirmed (ws)")
-                    playing_confirmed = True
-                else:
-                    _logger.info(f"[intercom] {entity_id} ws timeout for playing, polling")
-            else:
-                _logger.info(f"[intercom] {entity_id} ws not ready, polling")
-
-            if not playing_confirmed:
-                # Polling fallback (ws timed out or not available)
-                for attempt in range(1, PLAYING_CONFIRM_RETRIES + 1):
-                    state = self.state(entity_id)
-                    if state == "playing":
-                        _logger.info(
-                            f"[intercom] {entity_id} playing confirmed (poll attempt {attempt})"
-                        )
-                        playing_confirmed = True
-                        break
-                    time.sleep(STATE_POLL_INTERVAL)
-                if not playing_confirmed:
-                    _logger.info(
-                        f"[intercom] {entity_id} short audio (polling missed 'playing'), pausing"
-                    )
-
-            # 2) Wait for remaining duration + buffer
-            elapsed = time.monotonic() - t0
-            remaining = max(0, wait_sec - elapsed + self._pause_buffer)
-            if remaining > 0:
-                _logger.info(
-                    f"[intercom] {entity_id} elapsed {elapsed:.1f}s, "
-                    f"sleeping {remaining:.1f}s (buffer +{self._pause_buffer:.1f}s)"
-                )
-                time.sleep(remaining)
-
-            # 3) Pause + confirm stopped
-            # Quick REST pre-check (already stopped)
-            if self.state(entity_id) != "playing":
-                _logger.info(f"[intercom] {entity_id} paused (already stopped)")
-                return
-
-            for attempt in range(1, PAUSE_RETRIES + 1):
-                self.call("media_player/media_pause", {"entity_id": entity_id})
-
-                if use_ws:
-                    assert ws is not None  # guarded by use_ws
-                    _logger.info(f"[intercom] {entity_id} waiting for pause via ws...")
-                    if ws.wait_for_state(entity_id, None, WS_PAUSE_TIMEOUT):
-                        _logger.info(f"[intercom] {entity_id} paused (ws)")
-                        return
-
-                time.sleep(STATE_POLL_INTERVAL)
-                state = self.state(entity_id)
-                if state != "playing":
-                    _logger.info(f"[intercom] {entity_id} paused (attempt {attempt})")
-                    return
-                _logger.info(
-                    f"[intercom] {entity_id} still playing, retry pause ({attempt}/{PAUSE_RETRIES})"
-                )
-
-            _logger.warning(
-                f"[intercom] {entity_id} may still be playing after {PAUSE_RETRIES} retries"
-            )
+            run_auto_pause(entity_id, wait_sec, self._pause_buffer, _RestBackend())
         finally:
             self._restore_volume(entity_id, saved_volume)
 

@@ -4,6 +4,9 @@ Audio: both deployment modes use the same PCM→WAV conversion and WAV
 concatenation. Audio constants (PCM_RATE, PCM_BPS, WAV_MAGIC,
 WAV_HEADER_SIZE) come from const.py.
 
+Playback: auto_pause.py holds the Tier-3 confirm→sleep→pause algorithm
+shared by ha_client (sync REST/WS) and player.py (async HA services).
+
 Devices: DeviceStoreBase holds the MAC registry CRUD logic shared by the
 HA integration (persistence via helpers.storage.Store) and the Docker
 server (persistence via a JSON file) — see device_store.py on each side.

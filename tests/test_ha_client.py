@@ -8,11 +8,11 @@ import urllib.request
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # src in pythonpath via pyproject.toml [tool.pytest.ini_options]
+from auto_pause import PAUSE_RETRIES, WS_PLAYING_TIMEOUT
+
 from ha_client import (
-    PAUSE_RETRIES,
     SUPPORT_PLAY_MEDIA,
     SUPPORT_REPEAT_SET,
-    WS_PLAYING_TIMEOUT,
     EntityStatus,
     HAClient,
     HAWebSocketClient,

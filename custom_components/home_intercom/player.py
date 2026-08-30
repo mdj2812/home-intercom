@@ -5,16 +5,19 @@ Uses direct hass.services.async_call() instead of REST — no HA_TOKEN needed.
 Three-tier auto-stop strategy (unchanged from container version):
   1. Music Assistant → music_assistant.play_announcement (self-stopping)
   2. Modern players (SUPPORT_REPEAT_SET) → play_media(announce=True), no timer
-  3. Basic players → play_media(announce=True) + pause timer fallback
+  3. Basic players → play_media(announce=True) + duration timer fallback
 """
 
 from __future__ import annotations
 
 import contextlib
 import logging
+import time
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+
+from .auto_pause import async_run_auto_pause
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,10 +25,6 @@ _LOGGER = logging.getLogger(__name__)
 SUPPORT_PLAY_MEDIA = 1 << 9  # = 512
 SUPPORT_REPEAT_SET = 1 << 18  # = 262144
 
-# Retry / timing constants
-STATE_POLL_INTERVAL = 0.5
-PLAYING_CONFIRM_RETRIES = 10  # 10 × 0.5s = 5s max
-PAUSE_RETRIES = 5
 DEFAULT_PAUSE_BUFFER = 0.0
 
 # Xiaomi screen-speaker display-clear via TTS
@@ -323,57 +322,43 @@ async def _auto_pause(
     pause_buffer: float,
     saved_volume: float | None = None,
 ) -> None:
-    """Background task: wait for playback to finish, then pause + restore volume.
+    """Background task: confirm playing → sleep duration → pause + restore volume."""
 
-    Listens for state_changed events instead of fixed-duration sleep.
-    Falls back to duration-based timeout if state event never arrives.
-    Restores original volume after pausing (if volume was boosted).
-    """
-    import asyncio
+    class _HassBackend:
+        def monotonic(self) -> float:
+            return time.monotonic()
 
-    from homeassistant.helpers.event import async_track_state_change_event
+        def get_state(self, eid: str) -> str | None:
+            state = hass.states.get(eid)
+            return state.state if state else None
 
-    done = asyncio.Event()
+        async def sleep(self, seconds: float) -> None:
+            import asyncio
 
-    def _on_state_change(event):
-        if event.data.get("entity_id") != entity_id:
-            return
-        new_state = event.data.get("new_state")
-        if new_state and new_state.state != "playing":
-            done.set()
+            await asyncio.sleep(seconds)
 
-    # Wait up to 5s for playing, then listen for state change
-    for _ in range(PLAYING_CONFIRM_RETRIES):
-        state = hass.states.get(entity_id)
-        if state and state.state == "playing":
-            break
-        await asyncio.sleep(STATE_POLL_INTERVAL)
-
-    unsub = async_track_state_change_event(hass, [entity_id], _on_state_change)
-
-    try:
-        # Wait for state change with duration-based fallback timeout
-        await asyncio.wait_for(done.wait(), timeout=duration + pause_buffer + 5)
-    except TimeoutError:
-        pass  # fallback: just pause now
-    finally:
-        unsub()
-
-    # Pause with retry
-    for attempt in range(PAUSE_RETRIES):
-        try:
+        async def media_pause(self, eid: str) -> None:
             await hass.services.async_call(
                 "media_player",
                 "media_pause",
-                {"entity_id": entity_id},
+                {"entity_id": eid},
                 blocking=True,
             )
-            break
-        except Exception:
-            if attempt < PAUSE_RETRIES - 1:
-                await asyncio.sleep(0.3)
 
-    # Restore volume if it was boosted
+        async def wait_for_playing(self, eid: str, timeout: float) -> bool | None:
+            return None
+
+        async def wait_for_paused(self, eid: str, timeout: float) -> bool | None:
+            return None
+
+    await async_run_auto_pause(
+        entity_id,
+        duration,
+        pause_buffer,
+        _HassBackend(),
+        logger=_LOGGER,
+    )
+
     if saved_volume is not None:
         with contextlib.suppress(Exception):
             await hass.services.async_call(
@@ -383,5 +368,4 @@ async def _auto_pause(
                 blocking=True,
             )
 
-    # Clear screen metadata on Xiaomi devices via silent TTS
     await _clear_xiaomi_display(hass, entity_id)
