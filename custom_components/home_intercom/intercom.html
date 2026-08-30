@@ -501,12 +501,12 @@ function isChimeCustom(state) {
   return /custom_chime\.wav/i.test(state.url || '');
 }
 
-function setResetButtonState(enabled) {
-  const resetBtn = document.getElementById('chime-reset');
-  if (!resetBtn) return;
-  resetBtn.disabled = !enabled;
-  if (enabled) resetBtn.removeAttribute('disabled');
-  else resetBtn.setAttribute('disabled', '');
+function setSettingsButtonState(id, enabled) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.disabled = !enabled;
+  if (enabled) btn.removeAttribute('disabled');
+  else btn.setAttribute('disabled', '');
 }
 
 function updateChimeStatusUI() {
@@ -515,7 +515,8 @@ function updateChimeStatusUI() {
   if (statusEl) {
     statusEl.textContent = custom ? I18N.t('chimeCustom') : I18N.t('chimeDefault');
   }
-  setResetButtonState(custom);
+  setSettingsButtonState('chime-reset', custom);
+  setSettingsButtonState('chime-preview', custom);
 }
 
 async function refreshChimeStatus() {
@@ -559,6 +560,7 @@ function playChimePreview(audio) {
 }
 
 async function previewChime() {
+  if (!isChimeCustom()) return;
   setChimeMsg('');
   const src = resolveChimePlayUrl(chimeState.url);
   if (chimePreviewAudio) {
