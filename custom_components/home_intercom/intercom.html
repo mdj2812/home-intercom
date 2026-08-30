@@ -79,7 +79,7 @@
         <span data-i18n="chimeUpload">Upload</span>
         <input type="file" id="chime-file" accept="audio/*" hidden>
       </label>
-      <button type="button" id="chime-reset" class="settings-btn settings-btn-muted" data-i18n="chimeReset" disabled>Reset</button>
+      <button type="button" id="chime-reset" class="settings-btn settings-btn-muted" data-i18n="chimeReset">Reset</button>
     </div>
     <p class="settings-msg" id="chime-msg" aria-live="polite"></p>
   </div>
@@ -494,18 +494,36 @@ function setChimeMsg(text) {
   if (el) el.textContent = text || '';
 }
 
+function isChimeCustom(state) {
+  state = state || chimeState;
+  if (state.custom === true) return true;
+  if (state.custom === false) return false;
+  return /custom_chime\.wav/i.test(state.url || '');
+}
+
+function setResetButtonState(enabled) {
+  const resetBtn = document.getElementById('chime-reset');
+  if (!resetBtn) return;
+  resetBtn.disabled = !enabled;
+  if (enabled) resetBtn.removeAttribute('disabled');
+  else resetBtn.setAttribute('disabled', '');
+}
+
 function updateChimeStatusUI() {
   const statusEl = document.getElementById('chime-status');
-  const resetBtn = document.getElementById('chime-reset');
+  const custom = isChimeCustom();
   if (statusEl) {
-    statusEl.textContent = chimeState.custom ? I18N.t('chimeCustom') : I18N.t('chimeDefault');
+    statusEl.textContent = custom ? I18N.t('chimeCustom') : I18N.t('chimeDefault');
   }
-  if (resetBtn) resetBtn.disabled = !chimeState.custom;
+  setResetButtonState(custom);
 }
 
 async function refreshChimeStatus() {
   try {
-    const resp = await fetch(CHIME_URL, { credentials: 'same-origin' });
+    const resp = await fetch(CHIME_URL, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
     if (!resp.ok) return;
     chimeState = await resp.json();
     updateChimeStatusUI();
@@ -514,8 +532,34 @@ async function refreshChimeStatus() {
   }
 }
 
+function playChimePreview(audio) {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      audio.removeEventListener('canplaythrough', onReady);
+      audio.removeEventListener('error', onError);
+    };
+    const onReady = () => {
+      cleanup();
+      audio.play().then(resolve).catch(reject);
+    };
+    const onError = () => {
+      cleanup();
+      reject(audio.error || new Error('audio error'));
+    };
+
+    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      audio.play().then(resolve).catch(reject);
+      return;
+    }
+
+    audio.addEventListener('canplaythrough', onReady, { once: true });
+    audio.addEventListener('error', onError, { once: true });
+    audio.load();
+  });
+}
+
 async function previewChime() {
-  await refreshChimeStatus();
+  setChimeMsg('');
   const src = resolveChimePlayUrl(chimeState.url);
   if (chimePreviewAudio) {
     chimePreviewAudio.pause();
@@ -523,9 +567,10 @@ async function previewChime() {
   }
   chimePreviewAudio = new Audio(src);
   try {
-    await chimePreviewAudio.play();
+    await playChimePreview(chimePreviewAudio);
   } catch (e) {
     setChimeMsg(I18N.t('chimePreviewFail'));
+    console.error('previewChime:', e);
   }
 }
 
@@ -538,12 +583,17 @@ async function uploadChimeFile(file) {
     const resp = await fetch(CHIME_URL, {
       method: 'POST',
       credentials: 'same-origin',
+      cache: 'no-store',
       headers: authHeaders({ 'Content-Type': 'application/octet-stream' }),
       body: wav,
     });
     if (resp.ok) {
-      chimeState = await resp.json();
-      chimeState.custom = true;
+      const data = await resp.json();
+      chimeState = {
+        custom: true,
+        url: data.url || chimeState.url,
+        default_url: chimeState.default_url || '/home_intercom/static/pre_announce.wav',
+      };
       updateChimeStatusUI();
       setChimeMsg(I18N.t('chimeUploadOk'));
       return;
@@ -575,6 +625,7 @@ async function resetChime() {
     const resp = await fetch(CHIME_URL, {
       method: 'DELETE',
       credentials: 'same-origin',
+      cache: 'no-store',
       headers: authHeaders(),
     });
     if (resp.ok) {
@@ -653,6 +704,7 @@ function initChimeSettings() {
   const closeLabel = I18N.t('settingsClose');
   if (closeBtn) closeBtn.setAttribute('aria-label', closeLabel);
   toggle.setAttribute('aria-label', I18N.t('settingsTitle'));
+  updateChimeStatusUI();
 }
 
 window.updateChimeStatusUI = updateChimeStatusUI;

@@ -219,7 +219,7 @@ class ChimeView(HomeAssistantView):
             hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
         )
         url = chime_public_url(base_url, audio_dir=audio_dir, deployment="ha")
-        return web.json_response({"ok": True, "url": url})
+        return web.json_response({"ok": True, "custom": True, "url": url})
 
     async def delete(self, request: web.Request) -> web.Response:
         denied = _verify_pwa_token(request)

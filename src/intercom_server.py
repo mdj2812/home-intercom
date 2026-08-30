@@ -135,7 +135,7 @@ def chime():
         except ValueError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         url = chime_public_url(base, audio_dir=AUDIO_DIR, deployment="docker")
-        return jsonify({"ok": True, "url": url})
+        return jsonify({"ok": True, "custom": True, "url": url})
 
     delete_custom_chime(AUDIO_DIR)
     return jsonify({"ok": True, "custom": False})
