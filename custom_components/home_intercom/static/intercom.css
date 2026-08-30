@@ -52,6 +52,137 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.settings-toggle {
+  background: transparent;
+  border: none;
+  color: #888;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.settings-toggle:hover {
+  color: #ccc;
+}
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 55%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.settings-overlay[hidden] {
+  display: none;
+}
+
+.settings-panel {
+  width: min(100%, 360px);
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 18px 16px 16px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.settings-header h2 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ddd;
+}
+
+.settings-close {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 1.4rem;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.settings-close:hover {
+  color: #ccc;
+}
+
+.chime-status {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 14px;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-btn {
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 999px;
+  color: #ccc;
+  font-size: 0.72rem;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.settings-btn:hover:not(:disabled) {
+  background: #2f2f2f;
+  color: #fff;
+  border-color: #444;
+}
+
+.settings-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-btn-muted {
+  color: #888;
+}
+
+.chime-upload-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-msg {
+  min-height: 1.2em;
+  margin-top: 12px;
+  font-size: 0.72rem;
+  color: #f0a030;
 }
 
 .footer .ver {

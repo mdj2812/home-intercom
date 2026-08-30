@@ -29,6 +29,14 @@ I18N_REQUIRED_KEYS = [
     "statusNetworkError",
     "statusLoadFailed",
     "micError",
+    "settingsTitle",
+    "chimeDefault",
+    "chimeCustom",
+    "chimeUpload",
+    "chimeReset",
+    "chimePreview",
+    "chimeUploadOk",
+    "chimeUploadFail",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -140,6 +148,7 @@ class TestHtmlStructure:
     def test_has_lang_toggle(self, html_content):
         assert 'id="lang-toggle"' in html_content
         assert 'id="lang-dropdown"' in html_content
+        assert 'id="settings-toggle"' in html_content
         assert 'data-lang="zh-CN"' in html_content
         assert 'data-lang="en"' in html_content
 
