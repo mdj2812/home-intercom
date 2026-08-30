@@ -559,7 +559,6 @@ function playChimePreview(audio) {
 }
 
 async function previewChime() {
-  if (!isChimeCustom()) return;
   setChimeMsg('');
   const src = resolveChimePlayUrl(chimeState.url);
   if (chimePreviewAudio) {
