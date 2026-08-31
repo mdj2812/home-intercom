@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.1.0 (2026-08-31)
+
+> **Custom Chime via PWA + Tier-3 Playback Fixes**
+
+### 🆕 Custom Pre-Announce Chime (#66, #67)
+
+- **PWA settings UI** — upload, preview, and reset a custom broadcast chime from the ⚙ settings panel (MP3 auto-converted to 16 kHz mono WAV in the browser).
+- **`/chime` API** — `GET` status, `POST` upload, `DELETE` reset; available on both HA (`/api/home_intercom/chime`) and Docker (`/chime`).
+- **Music Assistant** — when a custom chime exists, MA players use `pre_announce_url` instead of the built-in chime.
+- **Shared backend** — `resolve_chime_wav`, validation, and storage helpers used by HA integration and Docker server.
+
+### 🐛 Fixes
+
+- **Tier-3 auto-pause** — shared `auto_pause.py` for HA and Docker; basic (Xiaomi/miot) speakers no longer stay `playing` indefinitely when state never reports `playing`.
+- **Config entry reload (#64)** — unload platforms before re-setup so saving options no longer triggers `"already been setup"` errors.
+
+---
+
 ## v2.0.3 (2026-07-27)
 
 > **ESP32 Buttons as Native HA Devices + YAML Device Lifecycle Fix**
