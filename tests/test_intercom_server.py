@@ -403,6 +403,39 @@ class TestDeviceRecordAuth:
         assert resp.json["ok"] is True
 
 
+class TestChimeRoutes:
+    """GET/POST/DELETE /chime — Docker custom chime API."""
+
+    WAV = (
+        b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"
+        b"@\x1f\x00\x00\x80>\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00" + b"\x00" * 64
+    )
+
+    def test_get_default(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
+        resp = client.get("/chime")
+        assert resp.status_code == 200
+        assert resp.json["custom"] is False
+
+    def test_post_and_delete(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
+        resp = client.post("/chime", data=self.WAV)
+        assert resp.status_code == 200
+        assert resp.json["ok"] is True
+        assert "custom_chime.wav" in resp.json["url"]
+
+        resp = client.get("/chime")
+        assert resp.json["custom"] is True
+
+        resp = client.delete("/chime")
+        assert resp.status_code == 200
+        assert resp.json["custom"] is False
+
+
 class TestParsePauseBuffer:
     def test_default_zero(self):
         from intercom_server import _parse_pause_buffer

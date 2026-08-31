@@ -3,6 +3,7 @@
 Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /record        → RecordView        (PWA token; POST audio → WAV → play)
   /device/record → DeviceRecordView  (HA auth; POST audio → WAV → play)
+  /chime         → ChimeView         (GET status; POST/DELETE custom chime via PWA token)
   /rooms/status  → StatusView  (GET speaker online status)
   /version       → VersionView (GET version only)
   /rooms         → RoomsView   (GET room config)
@@ -22,8 +23,18 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
+from .shared import (
+    chime_public_url,
+    chime_status_payload,
+    config_payload,
+    delete_custom_chime,
+    device_hello_payload,
+    device_record_auth_error,
+    is_wav,
+    resolve_chime_wav,
+    write_custom_chime_wav,
+)
 from .shared import concat_wavs as _concat_wavs
-from .shared import config_payload, device_hello_payload, device_record_auth_error, is_wav
 from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
 from .shared import handle_wav_passthrough as _handle_wav_passthrough
 
@@ -88,8 +99,8 @@ async def _handle_record(request: web.Request) -> web.Response:
     base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
     audio_url = f"{base_url.rstrip('/')}/local/home_intercom_audio/{filename}"
 
-    # Chime prepend (same logic as Flask version)
-    chime_path = str(_INTEGRATION_DIR / "static" / "pre_announce.wav")
+    chime_path = str(resolve_chime_wav(integration_dir=_INTEGRATION_DIR, audio_dir=audio_dir))
+    chime_url = chime_public_url(base_url, audio_dir=audio_dir, deployment="ha")
     audio_url_with_chime = None
     duration_with_chime = None
     if os.path.exists(chime_path):
@@ -119,6 +130,7 @@ async def _handle_record(request: web.Request) -> web.Response:
             announce_volume=announce_volume,
             audio_url_with_chime=audio_url_with_chime,
             duration_with_chime=duration_with_chime,
+            chime_url=chime_url,
             pause_buffer=pause_buffer,
         )
         if result.ok:
@@ -140,6 +152,16 @@ async def _handle_record(request: web.Request) -> web.Response:
     )
 
 
+def _verify_pwa_token(request: web.Request, *, view: str) -> web.Response | None:
+    """Return 401 response when PWA token is configured but header mismatches."""
+    hass = request.app["hass"]
+    pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
+    if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
+        _LOGGER.warning("%s: invalid or missing X-PWA-Token", view)
+        return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
+    return None
+
+
 class RecordView(HomeAssistantView):
     """POST /api/home_intercom/record using the PWA shared token."""
 
@@ -148,15 +170,60 @@ class RecordView(HomeAssistantView):
     requires_auth = False  # auth via X-PWA-Token header
 
     async def post(self, request: web.Request) -> web.Response:
-        hass = request.app["hass"]
-
-        # Verify shared secret token (injected into PWA HTML by PanelView)
-        pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
-        if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
-            _LOGGER.warning("RecordView: invalid or missing X-PWA-Token")
-            return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
-
+        denied = _verify_pwa_token(request, view="RecordView")
+        if denied is not None:
+            return denied
         return await _handle_record(request)
+
+
+class ChimeView(HomeAssistantView):
+    """GET/POST/DELETE /api/home_intercom/chime — custom pre-announce chime (#66)."""
+
+    url = "/api/home_intercom/chime"
+    name = "api:home_intercom:chime"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        data = _get_hass_data(hass)
+        audio_dir = data.get("audio_dir", "")
+        base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
+        payload = chime_status_payload(base_url=base_url, audio_dir=audio_dir, deployment="ha")
+        return web.json_response(payload)
+
+    async def post(self, request: web.Request) -> web.Response:
+        denied = _verify_pwa_token(request, view="ChimeView")
+        if denied is not None:
+            return denied
+
+        hass = request.app["hass"]
+        audio_dir = _get_hass_data(hass).get("audio_dir", "")
+        if not audio_dir:
+            return web.json_response({"ok": False, "error": "audio dir not configured"}, status=500)
+
+        data = await request.read()
+        if len(data) < WAV_HEADER_SIZE:
+            return web.json_response({"ok": False, "error": "no audio data"}, status=400)
+
+        try:
+            await hass.async_add_executor_job(write_custom_chime_wav, data, audio_dir)
+        except ValueError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=400)
+
+        base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
+        url = chime_public_url(base_url, audio_dir=audio_dir, deployment="ha")
+        return web.json_response({"ok": True, "custom": True, "url": url})
+
+    async def delete(self, request: web.Request) -> web.Response:
+        denied = _verify_pwa_token(request, view="ChimeView")
+        if denied is not None:
+            return denied
+
+        hass = request.app["hass"]
+        audio_dir = _get_hass_data(hass).get("audio_dir", "")
+        if audio_dir:
+            await hass.async_add_executor_job(delete_custom_chime, audio_dir)
+        return web.json_response({"ok": True, "custom": False})
 
 
 class DeviceRecordView(HomeAssistantView):
@@ -429,6 +496,7 @@ class StaticView(HomeAssistantView):
 def register_api_views(hass: HomeAssistant) -> None:
     """Register all HomeAssistantView endpoints."""
     hass.http.register_view(RecordView)
+    hass.http.register_view(ChimeView)
     hass.http.register_view(DeviceRecordView)
     hass.http.register_view(StatusView)
     hass.http.register_view(VersionView)

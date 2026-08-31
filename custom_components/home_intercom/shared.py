@@ -21,13 +21,17 @@ import shutil
 import wave
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
 try:
     from .const import (  # HA integration (relative)
+        CUSTOM_CHIME_FILENAME,
+        DEFAULT_CHIME_STATIC_URL,
         DEVICE_NAME_PREFIX,
         DEVICE_UPDATEABLE_FIELDS,
         MAC_PATTERN,
+        MAX_CHIME_BYTES,
         MAX_RECORD_SECS,
         PCM_BPS,
         PCM_RATE,
@@ -35,9 +39,12 @@ try:
     )
 except ImportError:
     from const import (  # Docker standalone (absolute)
+        CUSTOM_CHIME_FILENAME,
+        DEFAULT_CHIME_STATIC_URL,
         DEVICE_NAME_PREFIX,
         DEVICE_UPDATEABLE_FIELDS,
         MAC_PATTERN,
+        MAX_CHIME_BYTES,
         MAX_RECORD_SECS,
         PCM_BPS,
         PCM_RATE,
@@ -138,6 +145,87 @@ def concat_wavs(chime_path: str, audio_path: str, output_path: str) -> float:
     duration = total_frames / audio_rate
     _LOGGER.info("chime + audio combined: %s (%.1fs)", os.path.basename(output_path), duration)
     return duration
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Custom chime — shared resolve / upload (issue #66)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def default_chime_path(integration_dir: Path) -> Path:
+    """Bundled pre-announce WAV shipped with the integration."""
+    return integration_dir / "static" / "pre_announce.wav"
+
+
+def custom_chime_path(audio_dir: str) -> Path:
+    """User-uploaded chime stored alongside recorded announcements."""
+    return Path(audio_dir) / CUSTOM_CHIME_FILENAME
+
+
+def has_custom_chime(audio_dir: str) -> bool:
+    """True when a user-uploaded custom chime file exists."""
+    return custom_chime_path(audio_dir).is_file()
+
+
+def resolve_chime_wav(*, integration_dir: Path, audio_dir: str) -> Path:
+    """Return custom chime if uploaded, else bundled default."""
+    custom = custom_chime_path(audio_dir)
+    if custom.is_file():
+        return custom
+    return default_chime_path(integration_dir)
+
+
+def chime_public_url(
+    base_url: str, *, audio_dir: str, deployment: Literal["ha", "docker"]
+) -> str | None:
+    """Public URL for MA pre_announce_url; None when using bundled default only."""
+    if not has_custom_chime(audio_dir):
+        return None
+    base = base_url.rstrip("/")
+    if deployment == "ha":
+        return f"{base}/local/home_intercom_audio/{CUSTOM_CHIME_FILENAME}"
+    return f"{base}/audio/{CUSTOM_CHIME_FILENAME}"
+
+
+def chime_status_payload(
+    *,
+    base_url: str,
+    audio_dir: str,
+    deployment: Literal["ha", "docker"],
+) -> dict[str, Any]:
+    """Build GET /chime JSON — active URL plus whether it is custom."""
+    custom = has_custom_chime(audio_dir)
+    if custom:
+        url = chime_public_url(base_url, audio_dir=audio_dir, deployment=deployment)
+    else:
+        url = DEFAULT_CHIME_STATIC_URL
+    return {
+        "custom": custom,
+        "url": url or DEFAULT_CHIME_STATIC_URL,
+        "default_url": DEFAULT_CHIME_STATIC_URL,
+    }
+
+
+def write_custom_chime_wav(data: bytes, audio_dir: str) -> None:
+    """Persist uploaded WAV as the custom chime."""
+    if len(data) > MAX_CHIME_BYTES:
+        raise ValueError("chime too large")
+    if not is_wav(data):
+        raise ValueError("not a wav file")
+    path = custom_chime_path(audio_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    _LOGGER.info("custom chime saved: %s (%dB)", path.name, len(data))
+
+
+def delete_custom_chime(audio_dir: str) -> bool:
+    """Remove custom chime file. Returns True if a file was deleted."""
+    path = custom_chime_path(audio_dir)
+    if path.is_file():
+        path.unlink()
+        _LOGGER.info("custom chime removed: %s", path.name)
+        return True
+    return False
 
 
 # ═══════════════════════════════════════════════════════════════════════

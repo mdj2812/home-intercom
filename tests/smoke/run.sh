@@ -199,4 +199,75 @@ else
     exit 1
 fi
 
+# 9. GET /api/home_intercom/chime — default state (issue #66)
+CHIME=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS "http://localhost:${HA_PORT}/api/home_intercom/chime" 2>/dev/null || echo "")
+echo "${CHIME}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('custom') is False, f'expected default chime: {d}'
+assert 'url' in d and 'default_url' in d, f'missing fields: {d}'
+" 2>&1 && echo "  ✅ GET /api/home_intercom/chime — default" || {
+    echo "  ❌ GET /api/home_intercom/chime — unexpected: ${CHIME}"
+    exit 1
+}
+
+# 10. POST/DELETE /api/home_intercom/chime — upload and reset (PWA token auth)
+PWA_TOKEN=$(echo "${PANEL}" | python3 -c "
+import re, sys
+m = re.search(r'window\._PWA_TOKEN=\"([^\"]+)\"', sys.stdin.read())
+print(m.group(1) if m else '')
+")
+if [ -z "${PWA_TOKEN}" ]; then
+    echo "  ❌ Could not extract PWA token from /home_intercom panel HTML"
+    exit 1
+fi
+
+CHIME_POST=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -X POST -H "X-PWA-Token: ${PWA_TOKEN}" --data-binary @/tmp/test.wav \
+    "http://localhost:${HA_PORT}/api/home_intercom/chime" 2>/dev/null || echo "")
+echo "${CHIME_POST}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'upload failed: {d}'
+assert d.get('custom') is True, f'missing custom flag: {d}'
+assert 'url' in d and 'custom_chime.wav' in d['url'], f'bad url: {d}'
+" 2>&1 && echo "  ✅ POST /api/home_intercom/chime — custom uploaded" || {
+    echo "  ❌ POST /api/home_intercom/chime — unexpected: ${CHIME_POST}"
+    exit 1
+}
+
+CHIME_CUSTOM=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS "http://localhost:${HA_PORT}/api/home_intercom/chime" 2>/dev/null || echo "")
+echo "${CHIME_CUSTOM}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('custom') is True, f'expected custom chime: {d}'
+" 2>&1 && echo "  ✅ GET /api/home_intercom/chime — custom active" || {
+    echo "  ❌ GET /api/home_intercom/chime after upload — unexpected: ${CHIME_CUSTOM}"
+    exit 1
+}
+
+CHIME_DEL=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -X DELETE -H "X-PWA-Token: ${PWA_TOKEN}" \
+    "http://localhost:${HA_PORT}/api/home_intercom/chime" 2>/dev/null || echo "")
+echo "${CHIME_DEL}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True and d.get('custom') is False, f'bad delete response: {d}'
+" 2>&1 && echo "  ✅ DELETE /api/home_intercom/chime — reset to default" || {
+    echo "  ❌ DELETE /api/home_intercom/chime — unexpected: ${CHIME_DEL}"
+    exit 1
+}
+
+CHIME_NOAUTH=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' -X POST --data-binary @/tmp/test.wav \
+    "http://localhost:${HA_PORT}/api/home_intercom/chime" 2>/dev/null || echo "000")
+if [ "${CHIME_NOAUTH}" = "401" ]; then
+    echo "  ✅ POST /api/home_intercom/chime — missing token → 401"
+else
+    echo "  ❌ POST /api/home_intercom/chime — missing token gave HTTP ${CHIME_NOAUTH}, want 401"
+    exit 1
+fi
+
 echo "==> All smoke tests passed! 🎉"

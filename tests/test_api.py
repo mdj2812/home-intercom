@@ -372,6 +372,7 @@ class TestConfigView:
 class TestRegisterApiViews:
     def test_registers_both_record_views(self):
         from custom_components.home_intercom.api import (
+            ChimeView,
             DeviceRecordView,
             RecordView,
             register_api_views,
@@ -382,6 +383,7 @@ class TestRegisterApiViews:
         register_api_views(hass)
         calls = [c.args[0] for c in hass.http.register_view.call_args_list]
         assert RecordView in calls
+        assert ChimeView in calls
         assert DeviceRecordView in calls
 
 
@@ -420,3 +422,61 @@ class TestRoomsView:
         resp = await RoomsView().get(req)
         assert resp.status == 200
         assert json.loads(resp.text) == {}
+
+
+# ——— ChimeView tests (issue #66) ———
+
+
+class TestChimeView:
+    @pytest.mark.asyncio
+    async def test_get_default(self):
+        from custom_components.home_intercom.api import ChimeView
+        from custom_components.home_intercom.const import DEFAULT_CHIME_STATIC_URL
+
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+        resp = await ChimeView().get(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["custom"] is False
+        assert body["url"] == DEFAULT_CHIME_STATIC_URL
+
+    @pytest.mark.asyncio
+    async def test_post_upload(self):
+        from custom_components.home_intercom.api import ChimeView
+
+        req = _make_request(data=WAV_DATA)
+        req.headers = {"X-PWA-Token": PWA_TOKEN}
+        req.app = {"hass": _make_hass()}
+        resp = await ChimeView().post(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["ok"] is True
+        assert "custom_chime.wav" in body["url"]
+
+    @pytest.mark.asyncio
+    async def test_post_unauthorized(self):
+        from custom_components.home_intercom.api import ChimeView
+
+        req = _make_request(data=WAV_DATA)
+        req.headers = {}
+        req.app = {"hass": _make_hass()}
+        resp = await ChimeView().post(req)
+        assert resp.status == 401
+
+    @pytest.mark.asyncio
+    async def test_delete_reset(self):
+        from custom_components.home_intercom.api import ChimeView
+
+        hass = _make_hass()
+        post_req = _make_request(data=WAV_DATA)
+        post_req.headers = {"X-PWA-Token": PWA_TOKEN}
+        post_req.app = {"hass": hass}
+        await ChimeView().post(post_req)
+
+        del_req = _make_request()
+        del_req.headers = {"X-PWA-Token": PWA_TOKEN}
+        del_req.app = {"hass": hass}
+        resp = await ChimeView().delete(del_req)
+        assert resp.status == 200
+        assert json.loads(resp.text)["custom"] is False

@@ -29,6 +29,21 @@ const I18N = (() => {
       micError: "麦克风: ",
       secInsecureTitle: "麦克风不可用",
       secInsecureHint: "浏览器安全策略要求 HTTPS 连接才能使用麦克风。请通过外部 HTTPS 地址访问 Home Assistant。",
+      settingsTitle: "设置",
+      settingsClose: "关闭",
+      chimeTitle: "自定义提示音",
+      chimeDesc: "每次广播前播放",
+      chimeDefault: "默认提示音",
+      chimeReplace: "更换提示音",
+      chimeReplaceHint: "WAV / MP3 · 最多 10 秒",
+      chimeMono: "单声道",
+      chimeReset: "恢复默认",
+      chimePreview: "试听",
+      chimeUploadOk: "提示音已保存",
+      chimeUploadFail: "上传失败",
+      chimeUploadTooLong: "音频过长（最多 10 秒）",
+      chimePreviewFail: "无法播放",
+      chimeResetOk: "已恢复默认提示音",
     },
     en: {
       appTitle: "Home Intercom",
@@ -48,6 +63,21 @@ const I18N = (() => {
       micError: "Mic: ",
       secInsecureTitle: "Microphone Unavailable",
       secInsecureHint: "Browser security requires HTTPS for microphone access. Please use the external HTTPS address to access Home Assistant.",
+      settingsTitle: "Settings",
+      settingsClose: "Close",
+      chimeTitle: "Custom chime",
+      chimeDesc: "Played before every announcement",
+      chimeDefault: "Default chime",
+      chimeReplace: "Replace chime",
+      chimeReplaceHint: "WAV / MP3 · up to 10 seconds",
+      chimeMono: "mono",
+      chimeReset: "Reset to default",
+      chimePreview: "Preview",
+      chimeUploadOk: "Chime saved",
+      chimeUploadFail: "Upload failed",
+      chimeUploadTooLong: "Audio too long (max 10 s)",
+      chimePreviewFail: "Cannot play",
+      chimeResetOk: "Default chime restored",
     },
   };
 
@@ -169,6 +199,13 @@ const I18N = (() => {
       }
       if (key) el.textContent = t(key);
     });
+
+    if (typeof window.updateChimeStatusUI === "function") window.updateChimeStatusUI();
+
+    const settingsToggle = document.getElementById("settings-toggle");
+    const settingsClose = document.getElementById("settings-close");
+    if (settingsToggle) settingsToggle.setAttribute("aria-label", t("settingsTitle"));
+    if (settingsClose) settingsClose.setAttribute("aria-label", t("settingsClose"));
   }
 
   function init() {
@@ -183,7 +220,7 @@ const I18N = (() => {
     }
   }
 
-  return { t, setLang, toggleLang, init, get lang() { return lang; } };
+  return { t, setLang, toggleLang, init, closeLangDropdown, get lang() { return lang; } };
 })();
 
 I18N.init();
