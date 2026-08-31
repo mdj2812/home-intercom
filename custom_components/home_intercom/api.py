@@ -3,6 +3,7 @@
 Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /record        → RecordView        (PWA token; POST audio → WAV → play)
   /device/record → DeviceRecordView  (HA auth; POST audio → WAV → play)
+  /chime         → ChimeView         (GET status; POST/DELETE custom chime via PWA token)
   /rooms/status  → StatusView  (GET speaker online status)
   /version       → VersionView (GET version only)
   /rooms         → RoomsView   (GET room config)
@@ -151,6 +152,16 @@ async def _handle_record(request: web.Request) -> web.Response:
     )
 
 
+def _verify_pwa_token(request: web.Request, *, view: str) -> web.Response | None:
+    """Return 401 response when PWA token is configured but header mismatches."""
+    hass = request.app["hass"]
+    pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
+    if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
+        _LOGGER.warning("%s: invalid or missing X-PWA-Token", view)
+        return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
+    return None
+
+
 class RecordView(HomeAssistantView):
     """POST /api/home_intercom/record using the PWA shared token."""
 
@@ -159,25 +170,10 @@ class RecordView(HomeAssistantView):
     requires_auth = False  # auth via X-PWA-Token header
 
     async def post(self, request: web.Request) -> web.Response:
-        hass = request.app["hass"]
-
-        # Verify shared secret token (injected into PWA HTML by PanelView)
-        pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
-        if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
-            _LOGGER.warning("RecordView: invalid or missing X-PWA-Token")
-            return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
-
+        denied = _verify_pwa_token(request, view="RecordView")
+        if denied is not None:
+            return denied
         return await _handle_record(request)
-
-
-def _verify_pwa_token(request: web.Request) -> web.Response | None:
-    """Return 401 response when PWA token is configured but header mismatches."""
-    hass = request.app["hass"]
-    pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
-    if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
-        _LOGGER.warning("ChimeView: invalid or missing X-PWA-Token")
-        return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
-    return None
 
 
 class ChimeView(HomeAssistantView):
@@ -196,7 +192,7 @@ class ChimeView(HomeAssistantView):
         return web.json_response(payload)
 
     async def post(self, request: web.Request) -> web.Response:
-        denied = _verify_pwa_token(request)
+        denied = _verify_pwa_token(request, view="ChimeView")
         if denied is not None:
             return denied
 
@@ -219,7 +215,7 @@ class ChimeView(HomeAssistantView):
         return web.json_response({"ok": True, "custom": True, "url": url})
 
     async def delete(self, request: web.Request) -> web.Response:
-        denied = _verify_pwa_token(request)
+        denied = _verify_pwa_token(request, view="ChimeView")
         if denied is not None:
             return denied
 
