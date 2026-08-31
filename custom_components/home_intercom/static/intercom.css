@@ -187,13 +187,13 @@ body {
   font-size: 0.65rem;
 }
 
-/* ▶ is left-heavy; ■ (stop) is symmetric */
+/* ▶ is left-heavy and sits low; ■ needs a slight lift too */
 .chime-play-btn:not(.playing) .chime-play-icon {
-  transform: translateX(1px);
+  transform: translate(1px, -1px);
 }
 
 .chime-play-btn.playing .chime-play-icon {
-  transform: none;
+  transform: translateY(-1px);
 }
 
 .chime-play-btn:hover {
