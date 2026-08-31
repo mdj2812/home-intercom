@@ -230,6 +230,61 @@ else
     exit 1
 fi
 
+# 14. GET /chime — default state (issue #66)
+CHIME=$(curl -sS "${URL}/chime" 2>/dev/null || echo "")
+echo "${CHIME}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('custom') is False, f'expected default chime: {d}'
+assert 'url' in d and 'default_url' in d, f'missing fields: {d}'
+print(f'ok: chime={d}')
+" 2>&1 && echo "  ✅ GET /chime — default" || { echo "  ❌ GET /chime — check failed"; exit 1; }
+
+# 15. POST /chime — upload custom WAV
+CHIME_POST=$(curl -sS -X POST --data-binary @"${TMPDIR}/test.wav" \
+    "${URL}/chime" 2>/dev/null || echo "")
+echo "${CHIME_POST}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'upload failed: {d}'
+assert d.get('custom') is True, f'missing custom flag: {d}'
+assert 'url' in d and 'custom_chime.wav' in d['url'], f'bad url: {d}'
+print(f'ok: upload={d}')
+" 2>&1 && echo "  ✅ POST /chime — custom uploaded" || { echo "  ❌ POST /chime — check failed"; exit 1; }
+
+CHIME_CUSTOM=$(curl -sS "${URL}/chime" 2>/dev/null || echo "")
+echo "${CHIME_CUSTOM}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('custom') is True, f'expected custom chime: {d}'
+" 2>&1 && echo "  ✅ GET /chime — custom active" || { echo "  ❌ GET /chime after upload — check failed"; exit 1; }
+
+CHIME_AUDIO_CODE=$(curl -sS -o /dev/null -w '%{http_code}' "${URL}/audio/custom_chime.wav" 2>/dev/null || echo "000")
+if [ "${CHIME_AUDIO_CODE}" = "200" ]; then
+    echo "  ✅ GET /audio/custom_chime.wav — HTTP 200"
+else
+    echo "  ❌ GET /audio/custom_chime.wav — HTTP ${CHIME_AUDIO_CODE}"
+    exit 1
+fi
+
+# 16. DELETE /chime — reset to default
+CHIME_DEL=$(curl -sS -X DELETE "${URL}/chime" 2>/dev/null || echo "")
+echo "${CHIME_DEL}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True and d.get('custom') is False, f'bad delete response: {d}'
+" 2>&1 && echo "  ✅ DELETE /chime — reset to default" || { echo "  ❌ DELETE /chime — check failed"; exit 1; }
+
+CHIME_HA=$(curl -sS "${URL}/api/home_intercom/chime" 2>/dev/null || echo "")
+if [ "${CHIME_HA}" = "${CHIME}" ]; then
+    echo "  ✅ GET /api/home_intercom/chime — matches /chime (default)"
+else
+    echo "  ❌ GET /api/home_intercom/chime — differs from /chime"
+    echo "     /chime:                ${CHIME}"
+    echo "     /api/home_intercom/chime: ${CHIME_HA}"
+    exit 1
+fi
+
 # 13. Registry survives a container restart — record without re-hello
 docker restart "${CONTAINER_NAME}" >/dev/null
 echo "==> Container restarted, waiting for server (persistence check)..."
