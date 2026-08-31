@@ -146,12 +146,33 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 ## 前导提示音
 
-按下对讲按钮时，门铃提示音会先于播报内容播放：
+按下对讲按钮时，门铃提示音会先于播报内容播放。
 
-- **MA 播放器** — 通过 Music Assistant 的原生 pre-announce 流程处理
-- **标准播放器** — 直接拼接到 WAV 文件中（无缝衔接，无间隙）
+### 自定义提示音（PWA 设置）
 
-提示音文件位于 `/static/pre_announce.wav`，可替换为自定义 WAV（需 16kHz 单声道 16-bit）。
+点击 PWA 顶栏 **⚙** 打开 **设置 → 自定义提示音**：
+
+| 操作 | 说明 |
+|------|------|
+| **▶ 试听** | 播放当前提示音（默认或自定义） |
+| **替换提示音** | 上传 WAV 或 MP3（最长 10 秒）。MP3 会在浏览器内转换为 16 kHz 单声道 WAV。 |
+| **恢复默认** | 删除自定义文件，恢复内置提示音 |
+
+自定义提示音会持久保存（HA 集成保存在集成音频目录；Docker 保存在 `AUDIO_DIR`，默认 `/data/audio`）。两种部署方式用法相同。
+
+### 播放方式
+
+- **MA 播放器** — 已设置自定义提示音时，通过 `pre_announce_url` 播放；否则使用 Music Assistant 内置 pre-announce
+- **标准播放器** — 提示音直接拼接到 WAV 文件中（无缝衔接，无间隙）
+
+### 高级：手动替换默认文件
+
+内置提示音为 `pre_announce.wav`（16 kHz 单声道 16-bit）。仍可直接替换：
+
+- **HA 集成：** `custom_components/home_intercom/static/pre_announce.wav`（需重启 HA）
+- **Docker：** 重新构建镜像，或挂载覆盖 `/app/static/pre_announce.wav`
+
+更推荐使用 PWA 上传 — 无需重启，且对 MA 播放器同样生效。
 
 ## HTTPS
 

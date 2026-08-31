@@ -146,12 +146,33 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 ## Pre-announce chime
 
-When you press the intercom button, a doorbell chime plays before your announcement. The chime is:
+When you press the intercom button, a doorbell chime plays before your announcement.
 
-- **MA players** — handled natively via Music Assistant's pre-announce flow
-- **Standard players** — prepended directly into the WAV file (seamless, no gap)
+### Custom chime (PWA settings)
 
-The chime file is served from `/static/pre_announce.wav` and can be replaced with your own WAV (16 kHz mono 16-bit required).
+Tap **⚙** in the PWA header to open **Settings → Custom chime**:
+
+| Action | What it does |
+|--------|----------------|
+| **▶ Preview** | Play the current chime (default or custom) |
+| **Replace chime** | Upload a WAV or MP3 file (max 10 seconds). MP3 is converted to 16 kHz mono WAV in the browser. |
+| **Reset to default** | Remove your custom upload and restore the built-in chime |
+
+Custom chimes persist across restarts (HA integration stores them in the integration audio directory; Docker stores them under `AUDIO_DIR`, default `/data/audio`). Works the same in both deployment modes.
+
+### How it plays
+
+- **MA players** — when a custom chime is set, it is passed via `pre_announce_url`; otherwise Music Assistant's built-in pre-announce is used
+- **Standard players** — chime is prepended into the WAV file (seamless, no gap)
+
+### Advanced: replace the default file manually
+
+The built-in chime is `pre_announce.wav` (16 kHz mono 16-bit). You can still replace it directly:
+
+- **HA integration:** `custom_components/home_intercom/static/pre_announce.wav` (restart HA)
+- **Docker:** rebuild the image or mount over `/app/static/pre_announce.wav`
+
+The PWA upload is preferred — no restart required, and it also applies to MA players.
 
 ## HTTPS
 
