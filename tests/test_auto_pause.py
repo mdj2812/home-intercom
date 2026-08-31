@@ -1,7 +1,6 @@
 """Unit tests for shared auto_pause logic."""
 
 import pytest
-
 from auto_pause import (
     PAUSE_RETRIES,
     PLAYING_CONFIRM_RETRIES,

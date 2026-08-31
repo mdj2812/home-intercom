@@ -124,7 +124,9 @@ def chime():
     base = _request_base_url()
 
     if request.method == "GET":
-        return jsonify(chime_status_payload(base_url=base, audio_dir=AUDIO_DIR, deployment="docker"))
+        return jsonify(
+            chime_status_payload(base_url=base, audio_dir=AUDIO_DIR, deployment="docker")
+        )
 
     data = request.get_data()
     if request.method == "POST":

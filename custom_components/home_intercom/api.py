@@ -22,17 +22,20 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
-from .shared import concat_wavs as _concat_wavs
-from .shared import config_payload, device_hello_payload, device_record_auth_error, is_wav
-from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
-from .shared import handle_wav_passthrough as _handle_wav_passthrough
 from .shared import (
     chime_public_url,
     chime_status_payload,
+    config_payload,
     delete_custom_chime,
+    device_hello_payload,
+    device_record_auth_error,
+    is_wav,
     resolve_chime_wav,
     write_custom_chime_wav,
 )
+from .shared import concat_wavs as _concat_wavs
+from .shared import handle_pcm_to_wav as _handle_pcm_to_wav
+from .shared import handle_wav_passthrough as _handle_wav_passthrough
 
 _LOGGER = logging.getLogger(__name__)
 _INTEGRATION_DIR = Path(__file__).parent
@@ -188,12 +191,8 @@ class ChimeView(HomeAssistantView):
         hass = request.app["hass"]
         data = _get_hass_data(hass)
         audio_dir = data.get("audio_dir", "")
-        base_url = (
-            hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
-        )
-        payload = chime_status_payload(
-            base_url=base_url, audio_dir=audio_dir, deployment="ha"
-        )
+        base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
+        payload = chime_status_payload(base_url=base_url, audio_dir=audio_dir, deployment="ha")
         return web.json_response(payload)
 
     async def post(self, request: web.Request) -> web.Response:
@@ -215,9 +214,7 @@ class ChimeView(HomeAssistantView):
         except ValueError as exc:
             return web.json_response({"ok": False, "error": str(exc)}, status=400)
 
-        base_url = (
-            hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
-        )
+        base_url = hass.config.external_url or hass.config.internal_url or _guess_base_url(request)
         url = chime_public_url(base_url, audio_dir=audio_dir, deployment="ha")
         return web.json_response({"ok": True, "custom": True, "url": url})
 

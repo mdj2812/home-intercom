@@ -51,7 +51,9 @@ class TestChimePublicUrl:
     def test_none_without_custom(self, tmp_path: Path) -> None:
         audio_dir = tmp_path / "audio"
         audio_dir.mkdir()
-        assert chime_public_url("http://host", audio_dir=str(audio_dir), deployment="docker") is None
+        assert (
+            chime_public_url("http://host", audio_dir=str(audio_dir), deployment="docker") is None
+        )
 
     def test_docker_url(self, tmp_path: Path) -> None:
         audio_dir = tmp_path / "audio"
