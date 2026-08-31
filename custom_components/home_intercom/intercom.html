@@ -72,15 +72,33 @@
       <h2 id="settings-title" data-i18n="settingsTitle">Settings</h2>
       <button type="button" id="settings-close" class="settings-close" aria-label="Close">×</button>
     </div>
-    <p class="chime-status" id="chime-status">Default chime</p>
-    <div class="settings-actions">
-      <button type="button" id="chime-preview" class="settings-btn" data-i18n="chimePreview">Preview</button>
-      <label class="settings-btn chime-upload-label">
-        <span data-i18n="chimeUpload">Upload</span>
+    <section class="chime-section" aria-labelledby="chime-heading">
+      <div class="chime-heading">
+        <h3 id="chime-heading" data-i18n="chimeTitle">Custom chime</h3>
+        <p class="chime-desc" data-i18n="chimeDesc">Played before every announcement</p>
+      </div>
+      <div class="chime-card">
+        <button type="button" id="chime-play" class="chime-play-btn" aria-label="Preview">
+          <span class="chime-play-icon" aria-hidden="true">▶</span>
+        </button>
+        <div class="chime-card-info">
+          <div class="chime-filename" id="chime-filename">—</div>
+          <div class="chime-meta" id="chime-meta">—</div>
+          <canvas class="chime-waveform" id="chime-waveform" height="32" aria-hidden="true"></canvas>
+        </div>
+      </div>
+      <label class="chime-replace-card">
+        <span class="chime-replace-icon" aria-hidden="true">＋</span>
+        <span class="chime-replace-text">
+          <span data-i18n="chimeReplace">Replace chime</span>
+          <span class="chime-replace-hint" data-i18n="chimeReplaceHint">WAV / MP3 · up to 10 seconds</span>
+        </span>
         <input type="file" id="chime-file" accept="audio/*" hidden>
       </label>
-      <button type="button" id="chime-reset" class="settings-btn settings-btn-danger" data-i18n="chimeReset">Reset</button>
-    </div>
+      <div class="chime-footer">
+        <button type="button" id="chime-reset" class="chime-reset-btn" data-i18n="chimeReset" disabled>Reset to default</button>
+      </div>
+    </section>
     <p class="settings-msg" id="chime-msg" aria-live="polite"></p>
   </div>
 </div>
@@ -477,8 +495,11 @@ async function pollSpeakerStatus() {
 }
 
 // --- Custom chime settings (issue #66) ---
+const CHIME_FILENAME_KEY = 'intercom-chime-display-name';
 let chimeState = { custom: false, url: '' };
 let chimePreviewAudio = null;
+let chimeMetaCache = null;
+let chimeMetaLoadId = 0;
 
 function resolveChimePlayUrl(url) {
   const staticBase = (window.STATIC_BASE || '/static').replace(/\/$/, '');
@@ -503,22 +524,124 @@ function isChimeCustom(state) {
   return /custom_chime\.wav/i.test(state.url || '');
 }
 
-function setSettingsButtonState(id, enabled) {
-  const btn = document.getElementById(id);
-  if (!btn) return;
-  btn.disabled = !enabled;
-  if (enabled) btn.removeAttribute('disabled');
-  else btn.setAttribute('disabled', '');
+function getChimeDisplayFilename() {
+  if (!isChimeCustom()) return I18N.t('chimeDefault');
+  return localStorage.getItem(CHIME_FILENAME_KEY) || 'custom_chime.wav';
+}
+
+function setChimeDisplayFilename(name) {
+  if (name) localStorage.setItem(CHIME_FILENAME_KEY, name);
+  else localStorage.removeItem(CHIME_FILENAME_KEY);
+}
+
+function formatChimeMeta(duration, sampleRate) {
+  if (!duration || !sampleRate) return '—';
+  const secs = duration < 10 ? duration.toFixed(1) : Math.round(duration).toString();
+  const rateKhz = Math.round(sampleRate / 1000);
+  return secs + ' s · ' + rateKhz + ' kHz ' + I18N.t('chimeMono');
+}
+
+function computeWaveformPeaks(audioBuffer, barCount) {
+  const data = audioBuffer.getChannelData(0);
+  const blockSize = Math.max(1, Math.floor(data.length / barCount));
+  const peaks = [];
+  for (let i = 0; i < barCount; i++) {
+    let peak = 0;
+    const start = i * blockSize;
+    for (let j = 0; j < blockSize; j++) {
+      peak = Math.max(peak, Math.abs(data[start + j] || 0));
+    }
+    peaks.push(peak);
+  }
+  return peaks;
+}
+
+function drawChimeWaveform(peaks) {
+  const canvas = document.getElementById('chime-waveform');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(1, rect.width);
+  const h = Math.max(1, rect.height);
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  if (!peaks || !peaks.length) return;
+
+  const barW = w / peaks.length;
+  const gap = 1;
+  ctx.fillStyle = '#555';
+  for (let i = 0; i < peaks.length; i++) {
+    const barH = Math.max(2, peaks[i] * h * 0.9);
+    const x = i * barW + gap / 2;
+    const y = (h - barH) / 2;
+    ctx.fillRect(x, y, Math.max(1, barW - gap), barH);
+  }
+}
+
+function updateChimeMetaUI() {
+  const filenameEl = document.getElementById('chime-filename');
+  const metaEl = document.getElementById('chime-meta');
+  if (filenameEl) filenameEl.textContent = getChimeDisplayFilename();
+  if (metaEl) {
+    metaEl.textContent = chimeMetaCache
+      ? formatChimeMeta(chimeMetaCache.duration, chimeMetaCache.sampleRate)
+      : '—';
+  }
+  drawChimeWaveform(chimeMetaCache && chimeMetaCache.peaks);
+}
+
+async function loadChimeAudioMeta() {
+  const loadId = ++chimeMetaLoadId;
+  const src = resolveChimePlayUrl(chimeState.url);
+  try {
+    const resp = await fetch(src, { credentials: 'same-origin', cache: 'no-store' });
+    if (!resp.ok) throw new Error('fetch failed');
+    const arrayBuffer = await resp.arrayBuffer();
+    const actx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioBuf = await actx.decodeAudioData(arrayBuffer.slice(0));
+    actx.close();
+    if (loadId !== chimeMetaLoadId) return;
+    chimeMetaCache = {
+      duration: audioBuf.duration,
+      sampleRate: audioBuf.sampleRate,
+      peaks: computeWaveformPeaks(audioBuf, 40),
+    };
+    updateChimeMetaUI();
+  } catch (e) {
+    if (loadId !== chimeMetaLoadId) return;
+    chimeMetaCache = null;
+    updateChimeMetaUI();
+    console.error('loadChimeAudioMeta:', e);
+  }
+}
+
+function setChimePlayButton(playing) {
+  const btn = document.getElementById('chime-play');
+  const icon = btn && btn.querySelector('.chime-play-icon');
+  if (!icon) return;
+  icon.textContent = playing ? '■' : '▶';
+  if (btn) {
+    btn.classList.toggle('playing', playing);
+    btn.setAttribute('aria-label', I18N.t('chimePreview'));
+  }
 }
 
 function updateChimeStatusUI() {
-  const statusEl = document.getElementById('chime-status');
   const custom = isChimeCustom();
-  if (statusEl) {
-    statusEl.textContent = custom ? I18N.t('chimeCustom') : I18N.t('chimeDefault');
+  const resetBtn = document.getElementById('chime-reset');
+  if (resetBtn) {
+    resetBtn.disabled = !custom;
+    if (custom) resetBtn.removeAttribute('disabled');
+    else resetBtn.setAttribute('disabled', '');
   }
-  setSettingsButtonState('chime-reset', custom);
-  setSettingsButtonState('chime-preview', true);
+  updateChimeMetaUI();
+  loadChimeAudioMeta();
 }
 
 async function refreshChimeStatus() {
@@ -567,11 +690,19 @@ async function previewChime() {
   if (chimePreviewAudio) {
     chimePreviewAudio.pause();
     chimePreviewAudio = null;
+    setChimePlayButton(false);
   }
   chimePreviewAudio = new Audio(src);
+  chimePreviewAudio.addEventListener('ended', () => {
+    setChimePlayButton(false);
+    chimePreviewAudio = null;
+  }, { once: true });
   try {
+    setChimePlayButton(true);
     await playChimePreview(chimePreviewAudio);
   } catch (e) {
+    setChimePlayButton(false);
+    chimePreviewAudio = null;
     setChimeMsg(I18N.t('chimePreviewFail'));
     console.error('previewChime:', e);
   }
@@ -597,6 +728,7 @@ async function uploadChimeFile(file) {
         url: data.url || chimeState.url,
         default_url: chimeState.default_url || '/home_intercom/static/pre_announce.wav',
       };
+      setChimeDisplayFilename(file.name);
       updateChimeStatusUI();
       setChimeMsg(I18N.t('chimeUploadOk'));
       return;
@@ -633,6 +765,7 @@ async function resetChime() {
     });
     if (resp.ok) {
       chimeState = { custom: false, url: '' };
+      setChimeDisplayFilename('');
       await refreshChimeStatus();
       setChimeMsg(I18N.t('chimeResetOk'));
       return;
@@ -668,6 +801,7 @@ function closeSettingsPanel() {
   if (chimePreviewAudio) {
     chimePreviewAudio.pause();
     chimePreviewAudio = null;
+    setChimePlayButton(false);
   }
 }
 
@@ -675,7 +809,7 @@ function initChimeSettings() {
   const toggle = document.getElementById('settings-toggle');
   const overlay = document.getElementById('settings-overlay');
   const closeBtn = document.getElementById('settings-close');
-  const previewBtn = document.getElementById('chime-preview');
+  const playBtn = document.getElementById('chime-play');
   const resetBtn = document.getElementById('chime-reset');
   const fileInput = document.getElementById('chime-file');
   if (!toggle || !overlay) return;
@@ -692,12 +826,16 @@ function initChimeSettings() {
   });
   overlay.querySelector('.settings-panel')?.addEventListener('click', (e) => e.stopPropagation());
 
-  previewBtn?.addEventListener('click', previewChime);
+  playBtn?.addEventListener('click', previewChime);
   resetBtn?.addEventListener('click', resetChime);
   fileInput?.addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
     uploadChimeFile(file);
     e.target.value = '';
+  });
+
+  window.addEventListener('resize', () => {
+    drawChimeWaveform(chimeMetaCache && chimeMetaCache.peaks);
   });
 
   document.addEventListener('keydown', (e) => {
@@ -707,6 +845,7 @@ function initChimeSettings() {
   const closeLabel = I18N.t('settingsClose');
   if (closeBtn) closeBtn.setAttribute('aria-label', closeLabel);
   toggle.setAttribute('aria-label', I18N.t('settingsTitle'));
+  if (playBtn) playBtn.setAttribute('aria-label', I18N.t('chimePreview'));
   updateChimeStatusUI();
 }
 
