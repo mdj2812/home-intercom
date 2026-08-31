@@ -19,8 +19,9 @@ MAX_WAIT=30
 POLL_INTERVAL=2
 
 # ── Helpers ──────────────────────────────────────────────────
+# Plain curl wrapper — preserves exit code (do not append || echo here).
 fetch() {
-    curl -sS "$@" 2>/dev/null || echo ""
+    curl -sS "$@" 2>/dev/null
 }
 
 fetch_code() {
@@ -96,7 +97,7 @@ assert_ha_alias() {
     local label="$1"
     local primary="$2"
     local alias_path="$3"
-    assert_eq "${label}" "$(fetch "${URL}${alias_path}")" "${primary}"
+    assert_eq "${label}" "$(fetch "${URL}${alias_path}" || echo "")" "${primary}"
 }
 
 # Serialize concurrent local runs — a second invocation would collide on the
@@ -160,7 +161,7 @@ echo "==> Checking endpoints..."
 make_test_wav "${TMPDIR}/test.wav"
 
 # 1. /version — verify version field
-VER=$(fetch "${URL}/version")
+VER=$(fetch "${URL}/version" || echo "")
 assert_json "GET /version" "${VER}" "
 import sys, json
 d = json.load(sys.stdin)
@@ -169,7 +170,7 @@ print(f'ok: version={d[\"version\"]}')
 "
 
 # 1b. /config — global audio settings (issue #39)
-CFG=$(fetch "${URL}/config")
+CFG=$(fetch "${URL}/config" || echo "")
 assert_json "GET /config" "${CFG}" "
 import sys, json
 d = json.load(sys.stdin)
@@ -180,7 +181,7 @@ print(f'ok: config={d}')
 assert_ha_alias "GET /api/home_intercom/config — matches /config" "${CFG}" "/api/home_intercom/config"
 
 # 2. /rooms — verify matches input rooms.json
-ROOMS=$(fetch "${URL}/rooms")
+ROOMS=$(fetch "${URL}/rooms" || echo "")
 assert_json "GET /rooms — matches input" "${ROOMS}" "
 import sys, json
 got = json.load(sys.stdin)
@@ -190,7 +191,7 @@ print('ok: rooms match input')
 "
 
 # 3. / — PWA frontend
-INDEX=$(fetch "${URL}/")
+INDEX=$(fetch "${URL}/" || echo "")
 if echo "${INDEX}" | grep -q '<'; then
     echo "  ✅ GET / — HTML returned"
 elif [ -n "${INDEX}" ]; then
@@ -212,7 +213,7 @@ assert_http "GET /api/home_intercom/static/icon-192.png" \
 
 # 8. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37)
 HELLO=$(fetch -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
-    -d '{"firmware_version": "smoke-1.0"}' "${URL}/api/home_intercom/devices/hello")
+    -d '{"firmware_version": "smoke-1.0"}' "${URL}/api/home_intercom/devices/hello" || echo "")
 assert_json "POST /api/home_intercom/devices/hello" "${HELLO}" "
 import sys, json
 d = json.load(sys.stdin)
@@ -256,7 +257,7 @@ assert_http "POST /record after restart (no re-hello) — registry reloaded from
         --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test")" "200"
 
 # 14–16. /chime — custom pre-announce (issue #66)
-CHIME=$(fetch "${URL}/chime")
+CHIME=$(fetch "${URL}/chime" || echo "")
 assert_json "GET /chime — default" "${CHIME}" "
 import sys, json
 d = json.load(sys.stdin)
@@ -265,7 +266,7 @@ assert 'url' in d and 'default_url' in d, f'missing fields: {d}'
 print(f'ok: chime={d}')
 "
 
-CHIME_POST=$(fetch -X POST --data-binary @"${TMPDIR}/test.wav" "${URL}/chime")
+CHIME_POST=$(fetch -X POST --data-binary @"${TMPDIR}/test.wav" "${URL}/chime" || echo "")
 assert_json "POST /chime — custom uploaded" "${CHIME_POST}" "
 import sys, json
 d = json.load(sys.stdin)
@@ -275,7 +276,7 @@ assert 'url' in d and 'custom_chime.wav' in d['url'], f'bad url: {d}'
 print(f'ok: upload={d}')
 "
 
-CHIME_CUSTOM=$(fetch "${URL}/chime")
+CHIME_CUSTOM=$(fetch "${URL}/chime" || echo "")
 assert_json "GET /chime — custom active" "${CHIME_CUSTOM}" "
 import sys, json
 d = json.load(sys.stdin)
@@ -286,7 +287,7 @@ print('ok: custom active')
 assert_http "GET /audio/custom_chime.wav" \
     "$(fetch_code "${URL}/audio/custom_chime.wav")" "200"
 
-CHIME_DEL=$(fetch -X DELETE "${URL}/chime")
+CHIME_DEL=$(fetch -X DELETE "${URL}/chime" || echo "")
 assert_json "DELETE /chime — reset to default" "${CHIME_DEL}" "
 import sys, json
 d = json.load(sys.stdin)
