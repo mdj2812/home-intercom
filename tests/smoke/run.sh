@@ -132,20 +132,22 @@ else
     echo "  ⚠️  GET /api/home_intercom/rooms/status — no test room (may need real media_player)"
 fi
 
-# 4. /home_intercom — PWA frontend HTML
-PANEL_CODE=$(docker exec "${CONTAINER_NAME}" \
-    curl -sS -o /dev/null -w '%{http_code}' "http://localhost:${HA_PORT}/home_intercom" 2>/dev/null || echo "000")
-PANEL=$(docker exec "${CONTAINER_NAME}" \
-    curl -sSL "http://localhost:${HA_PORT}/home_intercom" 2>/dev/null || echo "")
-if echo "${PANEL}" | grep -q '<'; then
-    echo "  ✅ GET /home_intercom — HTML returned (HTTP ${PANEL_CODE})"
-elif [ -n "${PANEL}" ]; then
-    echo "  ⚠️  GET /home_intercom — responded but not HTML (HTTP ${PANEL_CODE})"
-    echo "     First 100 chars: ${PANEL:0:100}"
-else
-    echo "  ❌ GET /home_intercom — empty response (HTTP ${PANEL_CODE})"
-    exit 1
-fi
+# 4. /home_intercom and /home-intercom — PWA frontend HTML
+for PANEL_PATH in home_intercom home-intercom; do
+    PANEL_CODE=$(docker exec "${CONTAINER_NAME}" \
+        curl -sS -o /dev/null -w '%{http_code}' "http://localhost:${HA_PORT}/${PANEL_PATH}" 2>/dev/null || echo "000")
+    PANEL=$(docker exec "${CONTAINER_NAME}" \
+        curl -sSL "http://localhost:${HA_PORT}/${PANEL_PATH}" 2>/dev/null || echo "")
+    if echo "${PANEL}" | grep -q '<'; then
+        echo "  ✅ GET /${PANEL_PATH} — HTML returned (HTTP ${PANEL_CODE})"
+    elif [ -n "${PANEL}" ]; then
+        echo "  ⚠️  GET /${PANEL_PATH} — responded but not HTML (HTTP ${PANEL_CODE})"
+        echo "     First 100 chars: ${PANEL:0:100}"
+    else
+        echo "  ❌ GET /${PANEL_PATH} — empty response (HTTP ${PANEL_CODE})"
+        exit 1
+    fi
+done
 
 # 5. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37)
 HELLO=$(docker exec "${CONTAINER_NAME}" \
