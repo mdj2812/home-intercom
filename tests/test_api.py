@@ -374,7 +374,11 @@ class TestRegisterApiViews:
         from custom_components.home_intercom.api import (
             ChimeView,
             DeviceRecordView,
+            PanelAliasView,
+            PanelView,
             RecordView,
+            StaticAliasView,
+            StaticView,
             register_api_views,
         )
 
@@ -385,6 +389,58 @@ class TestRegisterApiViews:
         assert RecordView in calls
         assert ChimeView in calls
         assert DeviceRecordView in calls
+        assert PanelView in calls
+        assert PanelAliasView in calls
+        assert StaticView in calls
+        assert StaticAliasView in calls
+
+
+# ——— PanelView tests ———
+
+
+class TestPanelViews:
+    def test_class_attributes(self):
+        from custom_components.home_intercom.api import PanelAliasView, PanelView
+        from custom_components.home_intercom.const import PANEL_PATH, PANEL_PATH_LEGACY
+
+        assert PanelView.url == PANEL_PATH_LEGACY
+        assert PanelAliasView.url == PANEL_PATH
+
+    @pytest.mark.asyncio
+    async def test_legacy_path_rewrites_static_urls(self):
+        from custom_components.home_intercom.api import PanelView
+
+        req = MagicMock()
+        req.path = "/home_intercom"
+        req.app = {"hass": _make_hass()}
+        resp = await PanelView().get(req)
+        assert resp.status == 200
+        assert 'src="/home_intercom/static/' in resp.text
+        assert 'href="/home_intercom/static/' in resp.text
+        assert f'window._PWA_TOKEN="{PWA_TOKEN}"' in resp.text
+
+    @pytest.mark.asyncio
+    async def test_hyphen_path_rewrites_static_urls(self):
+        from custom_components.home_intercom.api import PanelAliasView
+
+        req = MagicMock()
+        req.path = "/home-intercom"
+        req.app = {"hass": _make_hass()}
+        resp = await PanelAliasView().get(req)
+        assert resp.status == 200
+        assert 'src="/home-intercom/static/' in resp.text
+        assert 'href="/home-intercom/static/' in resp.text
+        assert "/home_intercom/static/" not in resp.text
+
+    @pytest.mark.asyncio
+    async def test_static_alias_serves_asset(self):
+        from custom_components.home_intercom.api import StaticAliasView
+
+        req = MagicMock()
+        req.app = {"hass": _make_hass()}
+        resp = await StaticAliasView().get(req, "intercom.css")
+        assert resp.status == 200
+        assert resp.content_type == "text/css"
 
 
 # ——— RoomsView tests (issue #38) ———

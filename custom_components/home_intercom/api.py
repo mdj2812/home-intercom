@@ -8,7 +8,8 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /version       → VersionView (GET version only)
   /rooms         → RoomsView   (GET room config)
   /audio/<path>  → AudioView   (GET recorded WAV files)
-  /              → PanelView   (GET PWA frontend HTML)
+  /home_intercom  → PanelView        (GET PWA frontend HTML, legacy path)
+  /home-intercom  → PanelAliasView   (GET PWA frontend HTML, sidebar-friendly)
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from aiohttp import web
 from homeassistant.components.http import KEY_HASS_USER, HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PCM_RATE, WAV_HEADER_SIZE
+from .const import DOMAIN, PANEL_PATH, PANEL_PATH_LEGACY, PCM_RATE, WAV_HEADER_SIZE
 from .player import play_announcement
 from .shared import (
     chime_public_url,
@@ -398,99 +399,124 @@ class DevicesHelloView(HomeAssistantView):
         return web.json_response(device_hello_payload(device))
 
 
+def _panel_base_from_path(path: str) -> str:
+    """Return panel URL prefix matching the incoming request path."""
+    if path.startswith(PANEL_PATH):
+        return PANEL_PATH
+    return PANEL_PATH_LEGACY
+
+
+async def _serve_panel(request: web.Request) -> web.Response:
+    """Serve intercom.html with static paths rewritten for the HA panel context."""
+    panel_base = _panel_base_from_path(request.path)
+    html_path = _INTEGRATION_DIR / "intercom.html"
+    try:
+        html = await request.app["hass"].async_add_executor_job(
+            lambda: html_path.read_text(encoding="utf-8")
+        )
+    except FileNotFoundError:
+        return web.Response(
+            text="<h1>Home Intercom</h1><p>Frontend not found</p>",
+            content_type="text/html",
+        )
+    except Exception as exc:
+        _LOGGER.exception("PanelView failed")
+        return web.Response(
+            text=f"<h1>500 Internal Server Error</h1><p>{exc}</p>",
+            content_type="text/html",
+            status=500,
+        )
+
+    html = html.replace('src="/static/', f'src="{panel_base}/static/')
+    html = html.replace('href="/static/', f'href="{panel_base}/static/')
+
+    pwa_token = request.app["hass"].data.get(DOMAIN, {}).get("pwa_token", "")
+    if pwa_token:
+        html = html.replace(
+            "</head>",
+            f'<script>window._PWA_TOKEN="{pwa_token}";</script>\n</head>',
+        )
+
+    return web.Response(
+        text=html,
+        content_type="text/html",
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
+
+
 class PanelView(HomeAssistantView):
-    """GET /home_intercom — PWA frontend HTML.
+    """GET /home_intercom — PWA frontend HTML (legacy underscore path)."""
 
-    Serves the intercom.html PWA page with static asset paths rewritten
-    for the HA panel context (/home_intercom/static/...).
-    """
-
-    url = "/home_intercom"
+    url = PANEL_PATH_LEGACY
     name = "home_intercom:panel"
-    requires_auth = False  # HTML page only — API endpoints still require auth
+    requires_auth = False
 
     async def get(self, request: web.Request) -> web.Response:
-        html_path = _INTEGRATION_DIR / "intercom.html"
-        try:
-            html = await request.app["hass"].async_add_executor_job(
-                lambda: html_path.read_text(encoding="utf-8")
-            )
-        except FileNotFoundError:
-            return web.Response(
-                text="<h1>Home Intercom</h1><p>Frontend not found</p>",
-                content_type="text/html",
-            )
-        except Exception as exc:
-            _LOGGER.exception("PanelView failed")
-            return web.Response(
-                text=f"<h1>500 Internal Server Error</h1><p>{exc}</p>",
-                content_type="text/html",
-                status=500,
-            )
+        return await _serve_panel(request)
 
-        # Rewrite static asset paths for HA panel context.
-        # JS handles API paths via window.API_BASE detection,
-        # but <link>/<script> in <head> load before JS runs.
-        html = html.replace('src="/static/', 'src="/home_intercom/static/')
-        html = html.replace('href="/static/', 'href="/home_intercom/static/')
 
-        # Inject server-generated API token for Companion App compatibility.
-        # Web browsers use localStorage.hassTokens; Companion App WebView
-        # uses OAuth and doesn't populate localStorage — server-side injection
-        # is the only reliable way to get a token into the PWA.
-        pwa_token = request.app["hass"].data.get(DOMAIN, {}).get("pwa_token", "")
-        if pwa_token:
-            html = html.replace(
-                "</head>",
-                f'<script>window._PWA_TOKEN="{pwa_token}";</script>\n</head>',
-            )
+class PanelAliasView(HomeAssistantView):
+    """GET /home-intercom — PWA frontend HTML (hyphen path for HA sidebar/dashboard)."""
 
-        return web.Response(
-            text=html,
-            content_type="text/html",
-            headers={"Cache-Control": "no-store, max-age=0"},
-        )
+    url = PANEL_PATH
+    name = "home_intercom:panel-hyphen"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        return await _serve_panel(request)
+
+
+_STATIC_MIME_TYPES = {
+    ".css": "text/css",
+    ".js": "application/javascript",
+    ".json": "application/json",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".wav": "audio/wav",
+    ".svg": "image/svg+xml",
+    ".woff2": "font/woff2",
+}
+
+
+async def _serve_static(request: web.Request, filename: str) -> web.Response:
+    """Serve a file from the integration static directory."""
+    static_dir = _INTEGRATION_DIR / "static"
+
+    if ".." in filename or filename.startswith("/"):
+        return web.Response(status=404)
+
+    filepath = static_dir / filename
+    if not filepath.is_file():
+        return web.Response(status=404)
+
+    content_type = _STATIC_MIME_TYPES.get(filepath.suffix, "application/octet-stream")
+    body = await request.app["hass"].async_add_executor_job(filepath.read_bytes)
+    return web.Response(
+        body=body,
+        content_type=content_type,
+    )
 
 
 class StaticView(HomeAssistantView):
-    """Serve static assets (CSS, JS, icons, manifest) for the PWA.
+    """Serve static assets under the legacy panel path."""
 
-    Replaces async_register_static_paths which has API compatibility issues
-    across HA versions.
-    """
-
-    url = "/home_intercom/static/{filename}"
+    url = f"{PANEL_PATH_LEGACY}/static/{{filename}}"
     name = "home_intercom:static"
     requires_auth = False
 
-    _MIME_TYPES = {
-        ".css": "text/css",
-        ".js": "application/javascript",
-        ".json": "application/json",
-        ".png": "image/png",
-        ".ico": "image/x-icon",
-        ".wav": "audio/wav",
-        ".svg": "image/svg+xml",
-        ".woff2": "font/woff2",
-    }
+    async def get(self, request: web.Request, filename: str) -> web.Response:
+        return await _serve_static(request, filename)
+
+
+class StaticAliasView(HomeAssistantView):
+    """Serve static assets under the hyphen panel path."""
+
+    url = f"{PANEL_PATH}/static/{{filename}}"
+    name = "home_intercom:static-hyphen"
+    requires_auth = False
 
     async def get(self, request: web.Request, filename: str) -> web.Response:
-        static_dir = _INTEGRATION_DIR / "static"
-
-        # Security: prevent path traversal
-        if ".." in filename or filename.startswith("/"):
-            return web.Response(status=404)
-
-        filepath = static_dir / filename
-        if not filepath.is_file():
-            return web.Response(status=404)
-
-        content_type = self._MIME_TYPES.get(filepath.suffix, "application/octet-stream")
-        body = await request.app["hass"].async_add_executor_job(filepath.read_bytes)
-        return web.Response(
-            body=body,
-            content_type=content_type,
-        )
+        return await _serve_static(request, filename)
 
 
 def register_api_views(hass: HomeAssistant) -> None:
@@ -504,4 +530,6 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(RoomsView)
     hass.http.register_view(DevicesHelloView)
     hass.http.register_view(PanelView)
+    hass.http.register_view(PanelAliasView)
     hass.http.register_view(StaticView)
+    hass.http.register_view(StaticAliasView)

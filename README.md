@@ -65,7 +65,16 @@ home_intercom:
 
 YAML rooms appear as a separate config entry labeled "YAML". Use the UI integration for editable management. For YAML rooms, edit `configuration.yaml` and restart HA.
 
-4. **Add to sidebar**: create a Dashboard → add Webpage card → URL: `/home_intercom`
+4. **Add to sidebar** (HA requires a hyphen `-` in dashboard/webpage URLs):
+
+   **Option A — direct panel URL (simplest):** open or bookmark `https://<your-ha>/home-intercom`
+
+   **Option B — sidebar dashboard:**
+   1. **Settings → Dashboards → Add dashboard** — URL path: `home-intercom`, enable **Show in sidebar**
+   2. Open the dashboard → **Add card → Webpage** — URL: `/home-intercom`
+   3. Save — the sidebar entry opens the intercom PWA
+
+   The legacy `/home_intercom` path still works when opened directly in the browser, but HA will reject it for sidebar/webpage cards.
 
 ### Authenticated device upload
 

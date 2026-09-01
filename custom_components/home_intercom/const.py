@@ -44,4 +44,9 @@ PWA_TOKEN_STORAGE_VERSION = 1
 # ——— Custom chime (issue #66) ———
 CUSTOM_CHIME_FILENAME = "custom_chime.wav"
 MAX_CHIME_BYTES = 2 * 1024 * 1024  # 2 MB upload cap
-DEFAULT_CHIME_STATIC_URL = "/home_intercom/static/pre_announce.wav"
+
+# ——— HA panel URLs ———
+# Legacy underscore path still works; hyphen path satisfies HA sidebar/dashboard rules.
+PANEL_PATH_LEGACY = "/home_intercom"
+PANEL_PATH = "/home-intercom"
+DEFAULT_CHIME_STATIC_URL = f"{PANEL_PATH}/static/pre_announce.wav"

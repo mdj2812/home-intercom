@@ -16,11 +16,11 @@
 // Detect running context: container vs HA integration panel
 (function(){
   var path = window.location.pathname;
-  // HA panel mode: page served at /home_intercom
-  var isHA = path.indexOf('/home_intercom') === 0;
+  var isHA = path.indexOf('/home-intercom') === 0 || path.indexOf('/home_intercom') === 0;
+  var panelBase = path.indexOf('/home-intercom') === 0 ? '/home-intercom' : '/home_intercom';
   window.API_BASE = isHA ? '/api/home_intercom' : '';
-  window.STATIC_BASE = isHA ? '/home_intercom/static' : '/static';
-  window.PANEL_BASE = isHA ? '/home_intercom' : '';
+  window.STATIC_BASE = isHA ? panelBase + '/static' : '/static';
+  window.PANEL_BASE = isHA ? panelBase : '';
 })();
 </script>
 <script>
@@ -726,7 +726,7 @@ async function uploadChimeFile(file) {
       chimeState = {
         custom: true,
         url: data.url || chimeState.url,
-        default_url: chimeState.default_url || '/home_intercom/static/pre_announce.wav',
+        default_url: chimeState.default_url || ((window.STATIC_BASE || '/static') + '/pre_announce.wav'),
       };
       setChimeDisplayFilename(file.name);
       updateChimeStatusUI();
