@@ -402,12 +402,12 @@ class TestDeviceRecordAuth:
         monkeypatch.setattr(intercom_server, "AUDIO_DIR", str(tmp_path))
         return client, store
 
-    def _post(self, client, mac=None):
+    def _post(self, client, mac=None, path="/record"):
         import intercom_server
 
         headers = {"X-Device-ID": mac} if mac else {}
         with patch.object(intercom_server.haclient, "play_announcement", return_value={"ok": True}):
-            return client.post("/record?target=living", data=self.WAV, headers=headers)
+            return client.post(f"{path}?target=living", data=self.WAV, headers=headers)
 
     def test_registered_mac_allowed(self, mac_client):
         client, store = mac_client
@@ -435,6 +435,24 @@ class TestDeviceRecordAuth:
         resp = self._post(client)
         assert resp.status_code == 200
         assert resp.json["ok"] is True
+
+    @pytest.mark.parametrize(
+        "path",
+        ["/device/record", "/api/home_intercom/device/record"],
+    )
+    def test_device_record_alias_registered_mac(self, mac_client, path):
+        """Firmware path aliases share /record auth (issue #70)."""
+        client, store = mac_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        resp = self._post(client, "AA:BB:CC:DD:EE:FF", path)
+        assert resp.status_code == 200
+        assert resp.json["ok"] is True
+
+    def test_ha_device_record_alias_unknown_mac_403(self, mac_client):
+        client, _store = mac_client
+        resp = self._post(client, "AA:BB:CC:DD:EE:FF", "/api/home_intercom/device/record")
+        assert resp.status_code == 403
+        assert resp.json["error"] == "unknown device"
 
 
 class TestChimeRoutes:
