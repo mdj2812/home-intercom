@@ -24,13 +24,21 @@
 })();
 </script>
 <script>
-// Set initial title from saved language before i18n.js loads
+// Set initial title + theme before CSS/i18n to avoid a flash of the wrong look
 (function(){
   var lang = localStorage.getItem("intercom-lang") || "";
   // Read HA user language from localStorage (same origin)
   var haLang = localStorage.getItem("selectedLanguage") || "";
   var isEn = lang === "en" || (!lang && (haLang.includes("en") || haLang.includes("en-")));
   document.title = isEn ? "Home Intercom" : "家庭广播";
+
+  var pref = localStorage.getItem("intercom-theme") || "auto";
+  if (pref !== "light" && pref !== "dark") pref = "auto";
+  var dark = !window.matchMedia || window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var theme = pref === "light" ? "light" : pref === "dark" ? "dark" : (dark ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", theme);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", theme === "light" ? "#f3f3f4" : "#0f0f0f");
 })();
 </script>
 <script src="/static/i18n.js"></script>
@@ -64,6 +72,16 @@
       <button type="button" id="settings-toggle" class="settings-toggle" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings-overlay">
         <span aria-hidden="true">⚙</span>
       </button>
+      <div class="theme-dropdown" id="theme-dropdown">
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-haspopup="listbox" aria-expanded="false" aria-label="Theme">
+        <span id="theme-toggle-icon" aria-hidden="true"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path fill="currentColor" d="M8 2a6 6 0 0 0 0 12z"/></svg></span>
+      </button>
+      <div class="lang-dropdown-menu" role="listbox" hidden>
+        <button type="button" role="option" class="lang-option" data-theme-pref="auto" data-i18n="themeAuto">自动</button>
+        <button type="button" role="option" class="lang-option" data-theme-pref="light" data-i18n="themeLight">浅色</button>
+        <button type="button" role="option" class="lang-option" data-theme-pref="dark" data-i18n="themeDark">深色</button>
+      </div>
+      </div>
       <div class="lang-dropdown" id="lang-dropdown">
       <button type="button" id="lang-toggle" aria-haspopup="listbox" aria-expanded="false" aria-label="Language">
         <span id="lang-toggle-label">中文</span>
@@ -653,7 +671,7 @@ function drawChimeWaveform(peaks) {
 
   const barW = w / peaks.length;
   const gap = 1;
-  ctx.fillStyle = '#555';
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#555';
   for (let i = 0; i < peaks.length; i++) {
     const barH = Math.max(2, peaks[i] * h * 0.9);
     const x = i * barW + gap / 2;
@@ -865,6 +883,7 @@ function openSettingsPanel() {
   const toggle = document.getElementById('settings-toggle');
   if (!overlay || !toggle) return;
   if (typeof I18N.closeLangDropdown === 'function') I18N.closeLangDropdown();
+  if (typeof THEME !== 'undefined' && typeof THEME.closeDropdown === 'function') THEME.closeDropdown();
   overlay.hidden = false;
   toggle.setAttribute('aria-expanded', 'true');
   setChimeMsg('');

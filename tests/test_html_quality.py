@@ -40,6 +40,10 @@ I18N_REQUIRED_KEYS = [
     "chimePreview",
     "chimeUploadOk",
     "chimeUploadFail",
+    "themeTitle",
+    "themeAuto",
+    "themeLight",
+    "themeDark",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -154,6 +158,16 @@ class TestHtmlStructure:
         assert 'id="settings-toggle"' in html_content
         assert 'data-lang="zh-CN"' in html_content
         assert 'data-lang="en"' in html_content
+
+    def test_has_theme_toggle(self, html_content):
+        """Theme switcher: auto / light / dark, persisted and FOUC-safe."""
+        assert 'id="theme-toggle"' in html_content
+        assert 'id="theme-dropdown"' in html_content
+        assert 'data-theme-pref="auto"' in html_content
+        assert 'data-theme-pref="light"' in html_content
+        assert 'data-theme-pref="dark"' in html_content
+        assert "intercom-theme" in html_content
+        assert "prefers-color-scheme" in html_content
 
     def test_has_data_i18n_attributes(self, html_content):
         """Broadcast name should use data-i18n, not fragile nth-child selectors."""
@@ -276,6 +290,23 @@ class TestDomConsistency:
             css = f.read()
         assert ".room-card.unavailable" in css
         assert "pointer-events: none" in css
+
+    def test_theme_tokens_exist(self):
+        """Light/dark themes are CSS custom properties, not duplicated palettes in JS."""
+        css_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "custom_components",
+            "home_intercom",
+            "static",
+            "intercom.css",
+        )
+        with open(css_path) as f:
+            css = f.read()
+        assert "--bg:" in css
+        assert ':root[data-theme="light"]' in css
+        assert "color-scheme: dark" in css
+        assert "color-scheme: light" in css
 
 
 class TestI18N:
