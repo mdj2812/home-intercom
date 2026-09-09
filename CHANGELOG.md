@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.1.1 (2026-09-09)
+
+> **PWA Theme Switcher + Device List + HA Language Sync**
+
+### ✨ Features
+
+- **Theme switcher (#69)** — Auto / Light / Dark in the PWA footer. Auto follows the OS `prefers-color-scheme`; the choice is persisted. Glyphs are static SVG assets painted with CSS masks.
+- **Intercom button list (#52, #59)** — read-only registered buttons in the PWA, collapsed by default.
+- **HA language sync (#35)** — PWA language inherits the HA user language from `localStorage`.
+
+### 🐛 Fixes
+
+- **Hyphen panel path (#68)** — `/home-intercom` works for HA sidebar and webpage cards (underscore path still works as a direct URL). README updated.
+
+---
+
 ## v2.1.0 (2026-08-31)
 
 > **Custom Chime via PWA + Tier-3 Playback Fixes**
