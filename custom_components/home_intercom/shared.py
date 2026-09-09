@@ -527,9 +527,7 @@ def device_record_auth_error(device: dict[str, Any] | None) -> DeviceRecordFault
     return None
 
 
-def devices_payload(
-    store: DeviceStoreBase, latest_firmware: str = ""
-) -> dict[str, dict[str, Any]]:
+def devices_payload(store: DeviceStoreBase, latest_firmware: str = "") -> dict[str, dict[str, Any]]:
     """GET /devices response — read-only registry listing for the PWA (issue #52).
 
     The store's snapshot is already a defensive copy keyed by MAC. When
