@@ -38,8 +38,17 @@ class FakeStore:
 
 
 def install_fake_homeassistant() -> None:
-    """Register a fake `homeassistant` package hierarchy in sys.modules."""
+    """Register a fake `homeassistant` package hierarchy in sys.modules.
+
+    Idempotent: a second call keeps the already-installed fakes so test
+    modules that each call this at import time share one mock tree.
+    """
+    existing = sys.modules.get("homeassistant")
+    if existing is not None and getattr(existing, "_hi_fake", False):
+        return
+
     _ha = types.ModuleType("homeassistant")
+    _ha._hi_fake = True
     _ha.const = types.ModuleType("homeassistant.const")
     _ha.config_entries = types.ModuleType("homeassistant.config_entries")
     _ha.exceptions = types.ModuleType("homeassistant.exceptions")

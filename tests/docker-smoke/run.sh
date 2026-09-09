@@ -145,6 +145,7 @@ docker run -d \
     -p "${PORT}:${PORT}" \
     -e HA_URL="http://ha:8123" \
     -e HA_TOKEN="fake-token" \
+    -e HOME_INTERCOM_PENDING_HELLO_WAIT="0" \
     "${IMAGE}"
 
 # ── Wait for server to be ready ──────────────────────────────
@@ -211,16 +212,14 @@ assert_ha_alias "GET /api/home_intercom/rooms — matches /rooms" "${ROOMS}" "/a
 assert_http "GET /api/home_intercom/static/icon-192.png" \
     "$(fetch_code "${URL}/api/home_intercom/static/icon-192.png")" "200"
 
-# 8. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37)
+# 8. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37, #51)
 HELLO=$(fetch -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
     -d '{"firmware_version": "smoke-1.0"}' "${URL}/api/home_intercom/devices/hello" || echo "")
-assert_json "POST /api/home_intercom/devices/hello" "${HELLO}" "
+assert_json "POST /api/home_intercom/devices/hello — pending until approve" "${HELLO}" "
 import sys, json
 d = json.load(sys.stdin)
-assert d.get('status') == 'ok', f'bad status: {d}'
-assert d.get('sample_rate') == 16000, f'bad sample_rate: {d}'
-assert d.get('max_record_secs') == 60, f'bad max_record_secs: {d}'
-assert 'device_name' in d and 'room' in d, f'missing fields: {d}'
+assert d.get('status') == 'pending', f'expected pending, got: {d}'
+assert 'device_name' not in d, f'pending hello must not deliver config: {d}'
 print(f'ok: hello={d}')
 "
 
@@ -237,9 +236,34 @@ dev = d.get('AA:BB:CC:DD:EE:FF')
 assert dev, f'registered MAC missing: {d}'
 assert dev.get('name') == 'Device EE:FF', f'bad name: {dev}'
 assert dev.get('firmware_version') == 'smoke-1.0', f'bad firmware: {dev}'
+assert dev.get('pending') is True, f'new device should be pending: {dev}'
 print(f'ok: devices={list(d)}')
 "
 assert_ha_alias "GET /api/home_intercom/devices — matches /devices" "${DEVICES}" "/api/home_intercom/devices"
+
+# 9c. POST /record before approve — pending MAC → 403 (issue #51)
+assert_http "POST /record — pending MAC → 403" \
+    "$(fetch_code -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+        --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test")" "403"
+
+# 9d. POST /devices/approve — then hello delivers config
+APPROVE=$(fetch -X POST -H "Content-Type: application/json" \
+    -d '{"mac": "AA:BB:CC:DD:EE:FF"}' "${URL}/api/home_intercom/devices/approve" || echo "")
+assert_json "POST /api/home_intercom/devices/approve" "${APPROVE}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'approve failed: {d}'
+print(f'ok: approve={d}')
+"
+HELLO_OK=$(fetch -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
+    -d '{"firmware_version": "smoke-1.0"}' "${URL}/api/home_intercom/devices/hello" || echo "")
+assert_json "POST /devices/hello after approve — status ok" "${HELLO_OK}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('status') == 'ok', f'expected ok after approve, got: {d}'
+assert d.get('sample_rate') == 16000, f'bad sample_rate: {d}'
+print(f'ok: hello={d}')
+"
 
 # 10–11. POST /record — MAC allow/deny (issue #47)
 assert_http "POST /record — registered MAC → 200" \
@@ -276,6 +300,33 @@ fi
 assert_http "POST /record after restart (no re-hello) — registry reloaded from disk → 200" \
     "$(fetch_code -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
         --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test")" "200"
+
+# 13b. POST /devices/manage delete — store-only (no HA device registry)
+MANAGE_DEL=$(fetch -X POST -H "Content-Type: application/json" \
+    -d '{"mac": "AA:BB:CC:DD:EE:FF", "action": "delete"}' \
+    "${URL}/api/home_intercom/devices/manage" || echo "")
+assert_json "POST /api/home_intercom/devices/manage delete" "${MANAGE_DEL}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True and d.get('deleted') is True, f'bad delete: {d}'
+print(f'ok: delete={d}')
+"
+DEVICES_AFTER=$(fetch "${URL}/devices" || echo "")
+assert_json "GET /devices — MAC gone after delete" "${DEVICES_AFTER}" "
+import sys, json
+d = json.load(sys.stdin)
+assert 'AA:BB:CC:DD:EE:FF' not in d, f'MAC still listed: {d}'
+print('ok: store empty of deleted MAC')
+"
+if docker exec "${CONTAINER_NAME}" grep -q "AA:BB:CC:DD:EE:FF" /data/device_registry.json 2>/dev/null; then
+    echo "  ❌ /data/device_registry.json still has deleted MAC"
+    docker exec "${CONTAINER_NAME}" cat /data/device_registry.json 2>&1 || true
+    exit 1
+fi
+echo "  ✅ device registry file no longer contains deleted MAC"
+assert_http "POST /record after delete — unknown MAC → 403" \
+    "$(fetch_code -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+        --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test")" "403"
 
 # 14–16. /chime — custom pre-announce (issue #66)
 CHIME=$(fetch "${URL}/chime" || echo "")

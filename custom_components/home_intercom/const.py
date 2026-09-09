@@ -32,10 +32,12 @@ KEY_BUTTON_ENTRY_ID = "button_entry_id"
 DEVICE_STORAGE_KEY = f"{DOMAIN}.devices"  # HA .storage key
 DEVICE_STORAGE_VERSION = 1
 DEVICE_NAME_PREFIX = "Device"  # auto-register: "Device EE:FF"
-DEVICE_UPDATEABLE_FIELDS = frozenset({"name", "room", "revoked"})
+DEVICE_UPDATEABLE_FIELDS = frozenset({"name", "room", "revoked", "pending"})
 MAC_PATTERN = r"^([0-9A-F]{2}:){5}[0-9A-F]{2}$"  # normalized uppercase form
 DEVICE_REGISTRY_DEFAULT_PATH = "/data/device_registry.json"  # Docker default
 MAX_RECORD_SECS = 60  # recording cap delivered to ESP32 via hello/config
+# ESP32 hellos every 10s while idle; 30s ≈ three missed heartbeats.
+DEVICE_ONLINE_WINDOW_SECS = 30
 
 # ——— PWA shared token (issue #54) ———
 PWA_TOKEN_STORAGE_KEY = f"{DOMAIN}.pwa_token"  # HA .storage key

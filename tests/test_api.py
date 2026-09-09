@@ -313,6 +313,20 @@ class TestDeviceRecordViewMacAuth:
         mock_handle.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_pending_mac_403(self):
+        from custom_components.home_intercom.api import DeviceRecordView
+
+        device = {"name": "Study Button", "room": "study", "revoked": False, "pending": True}
+        req = self._req_with_mac("AA:BB:CC:DD:EE:FF", self._hass_with_device(device))
+        with patch(
+            "custom_components.home_intercom.api._handle_record", new=self._ok_response()
+        ) as mock_handle:
+            resp = await DeviceRecordView().post(req)
+        assert resp.status == 403
+        assert json.loads(resp.text)["error"] == "device pending"
+        mock_handle.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_unrevoked_mac_record_succeeds(self):
         """Revoke → un-revoke → record should succeed."""
         from custom_components.home_intercom.api import DeviceRecordView
@@ -424,6 +438,116 @@ class TestDevicesView:
         assert json.loads(resp.text) == {}
 
 
+class TestDevicesApproveView:
+    """POST /api/home_intercom/devices/approve (issue #51)."""
+
+    def _req(
+        self, token: str | None, store: MagicMock | None, body: dict | None = None
+    ) -> MagicMock:
+        req = _make_request()
+        hass = _make_hass()
+        if store is not None:
+            hass.data["home_intercom"]["device_store"] = store
+        req.app = {"hass": hass}
+        req.headers = {"X-PWA-Token": token} if token else {}
+        req.json = AsyncMock(
+            return_value=body if body is not None else {"mac": "AA:BB:CC:DD:EE:FF"}
+        )
+        return req
+
+    @pytest.mark.asyncio
+    async def test_approve_with_valid_token(self):
+        from custom_components.home_intercom.api import DevicesApproveView
+
+        store = MagicMock()
+        store.approve = AsyncMock(return_value={"pending": False, "name": "Device EE:FF"})
+        req = self._req(PWA_TOKEN, store)
+        resp = await DevicesApproveView().post(req)
+        assert resp.status == 200
+        assert json.loads(resp.text)["ok"] is True
+        store.approve.assert_awaited_once_with("AA:BB:CC:DD:EE:FF")
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_token(self):
+        from custom_components.home_intercom.api import DevicesApproveView
+
+        store = MagicMock()
+        store.approve = AsyncMock()
+        req = self._req(None, store)
+        resp = await DevicesApproveView().post(req)
+        assert resp.status == 401
+        store.approve.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unknown_mac_404(self):
+        from custom_components.home_intercom.api import DevicesApproveView
+
+        store = MagicMock()
+        store.approve = AsyncMock(return_value=None)
+        req = self._req(PWA_TOKEN, store)
+        resp = await DevicesApproveView().post(req)
+        assert resp.status == 404
+
+
+class TestDevicesManageView:
+    """POST /api/home_intercom/devices/manage."""
+
+    def _req(self, token: str | None, store: MagicMock | None, body: dict | None) -> MagicMock:
+        req = _make_request()
+        hass = _make_hass()
+        if store is not None:
+            hass.data["home_intercom"]["device_store"] = store
+        req.app = {"hass": hass}
+        req.headers = {"X-PWA-Token": token} if token else {}
+        req.json = AsyncMock(return_value=body if body is not None else {})
+        return req
+
+    @pytest.mark.asyncio
+    async def test_revoke_with_valid_token(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        store.revoke = AsyncMock(return_value={"pending": False, "revoked": True})
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "revoke"})
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 200
+        assert json.loads(resp.text)["revoked"] is True
+        store.revoke.assert_awaited_once_with("AA:BB:CC:DD:EE:FF")
+
+    @pytest.mark.asyncio
+    async def test_delete_notifies_store_changed(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        store.get = MagicMock(return_value={"name": "Device EE:FF"})
+        store.remove = AsyncMock()
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "delete"})
+        with patch("custom_components.home_intercom.api._remove_button_ha_device") as remove_ha:
+            resp = await DevicesManageView().post(req)
+        assert resp.status == 200
+        assert json.loads(resp.text)["deleted"] is True
+        store.remove.assert_awaited_once_with("AA:BB:CC:DD:EE:FF")
+        remove_ha.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_token(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        req = self._req(None, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "revoke"})
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 401
+
+    @pytest.mark.asyncio
+    async def test_invalid_action_400(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "nope"})
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 400
+
+
 # ——— register_api_views tests ———
 
 
@@ -432,6 +556,8 @@ class TestRegisterApiViews:
         from custom_components.home_intercom.api import (
             ChimeView,
             DeviceRecordView,
+            DevicesApproveView,
+            DevicesManageView,
             PanelAliasView,
             PanelView,
             RecordView,
@@ -447,6 +573,8 @@ class TestRegisterApiViews:
         assert RecordView in calls
         assert ChimeView in calls
         assert DeviceRecordView in calls
+        assert DevicesApproveView in calls
+        assert DevicesManageView in calls
         assert PanelView in calls
         assert PanelAliasView in calls
         assert StaticView in calls

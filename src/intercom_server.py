@@ -20,7 +20,9 @@ from shared import (
     handle_pcm_to_wav,
     handle_wav_passthrough,
     is_wav,
+    parse_device_manage_body,
     resolve_chime_wav,
+    wait_for_pending_hello,
     write_custom_chime_wav,
 )
 
@@ -169,6 +171,55 @@ def devices_list():
     return jsonify(devices_payload(device_store))
 
 
+@app.route("/devices/approve", methods=["POST"])
+def devices_approve():
+    """Approve a pending intercom button (issue #51). LAN trust, same as /chime POST."""
+    body = request.get_json(silent=True) or {}
+    mac = body.get("mac", "") if isinstance(body, dict) else ""
+    if not mac:
+        return jsonify({"ok": False, "error": "missing mac"}), 400
+    device = device_store.approve(mac)
+    if device is None:
+        return jsonify({"ok": False, "error": "unknown device"}), 404
+    return jsonify({"ok": True, "pending": False})
+
+
+@app.route("/devices/manage", methods=["POST"])
+def devices_manage():
+    """Approve, deapprove, revoke, unrevoke, or delete a button. LAN trust."""
+    parsed = parse_device_manage_body(request.get_json(silent=True) or {})
+    if isinstance(parsed, str):
+        return jsonify({"ok": False, "error": parsed}), 400
+    mac, action = parsed
+
+    if action == "delete":
+        # Store-only: Docker has no HA device registry. HA delete also
+        # removes the native device card (DevicesManageView).
+        if device_store.get(mac) is None:
+            return jsonify({"ok": False, "error": "unknown device"}), 404
+        device_store.remove(mac)
+        return jsonify({"ok": True, "deleted": True})
+
+    if action == "approve":
+        device = device_store.approve(mac)
+    elif action == "deapprove":
+        device = device_store.update_field(mac, "pending", True)
+    elif action == "revoke":
+        device = device_store.revoke(mac)
+    else:
+        device = device_store.update_field(mac, "revoked", False)
+
+    if device is None:
+        return jsonify({"ok": False, "error": "unknown device"}), 404
+    return jsonify(
+        {
+            "ok": True,
+            "pending": bool(device.get("pending")),
+            "revoked": bool(device.get("revoked")),
+        }
+    )
+
+
 @app.route("/record", methods=["POST"])
 def record():
     """Receive audio → write WAV → prepend chime → HA playback.
@@ -177,9 +228,9 @@ def record():
     - Raw PCM (PWA): body is 16-bit mono PCM, wrapped into WAV
     - WAV passthrough (ESP32): body is a complete WAV file, written as-is
 
-    Auth (issue #47): when X-Device-ID is present the MAC must be
-    registered and not revoked. Without the header the route stays open
-    for the PWA (LAN trust), same as before.
+    Auth (issue #47, #51): when X-Device-ID is present the MAC must be
+    registered, approved, and not revoked. Without the header the route
+    stays open for the PWA (LAN trust), same as before.
     """
     mac = request.headers.get("X-Device-ID", "")
     if mac:
@@ -263,8 +314,9 @@ def record():
 def devices_hello():
     """ESP32 boot registration + config delivery (issue #37).
 
-    Trust-on-first-use: unknown MACs auto-register with a default name.
-    Revoked devices are rejected. No secrets on the device — MAC identity only.
+    Trust-on-first-use: unknown MACs auto-register as pending (issue #51)
+    until an admin approves. Revoked devices are rejected. No secrets on
+    the device — MAC identity only.
     """
     mac = request.headers.get("X-Device-ID", "")
     if not mac:
@@ -283,6 +335,12 @@ def devices_hello():
     except ValueError:
         return jsonify({"status": "error", "error": "invalid X-Device-ID (MAC)"}), 400
 
+    device = wait_for_pending_hello(device_store.get, mac)
+    if device is None:
+        return jsonify({"status": "error", "error": "unknown device"}), 404
+    if device.get("revoked"):
+        return jsonify({"status": "error", "error": "device revoked"}), 403
+
     return jsonify(device_hello_payload(device))
 
 
@@ -291,6 +349,12 @@ def devices_hello():
 # `gunicorn intercom_server:app` pick up the extra routes.
 _HA_PREFIX = "/api/home_intercom"
 app.add_url_rule(f"{_HA_PREFIX}/devices/hello", "ha_devices_hello", devices_hello, methods=["POST"])
+app.add_url_rule(
+    f"{_HA_PREFIX}/devices/approve", "ha_devices_approve", devices_approve, methods=["POST"]
+)
+app.add_url_rule(
+    f"{_HA_PREFIX}/devices/manage", "ha_devices_manage", devices_manage, methods=["POST"]
+)
 app.add_url_rule(f"{_HA_PREFIX}/devices", "ha_devices", devices_list)
 app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
 app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)

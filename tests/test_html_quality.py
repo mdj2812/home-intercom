@@ -44,6 +44,20 @@ I18N_REQUIRED_KEYS = [
     "themeAuto",
     "themeLight",
     "themeDark",
+    "devicePending",
+    "deviceApprove",
+    "deviceDeapprove",
+    "deviceRevoke",
+    "deviceUnrevoke",
+    "deviceDelete",
+    "deviceDeleteConfirm",
+    "deviceRevoked",
+    "deviceOnline",
+    "deviceOffline",
+    "deviceJustNow",
+    "deviceMinutesAgo",
+    "deviceHoursAgo",
+    "deviceNeverSeen",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -190,6 +204,8 @@ class TestHtmlStructure:
             r'<div[^>]*id="devices-list"[^>]*\bhidden\b',
             html_content,
         )
+        assert "/devices/manage" in html_content
+        assert "device-card" in html_content
 
 
 class TestJsSyntax:

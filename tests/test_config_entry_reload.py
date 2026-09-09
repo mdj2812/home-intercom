@@ -151,3 +151,36 @@ async def test_reload_cycle_unloads_before_forward(hass):
 
     hass.config_entries.async_unload_platforms.assert_awaited_once()
     hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(entry, PLATFORMS)
+
+
+@pytest.mark.asyncio
+async def test_button_registry_sync_registers_on_store_changed():
+    """First hello has no buttons-entry listener — YAML/UI entry must register HA devices."""
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    from custom_components.home_intercom import __init__ as hi
+
+    hass = MagicMock()
+    store = MagicMock()
+    hass.data = {DOMAIN: {"device_store": store}}
+    entry = _make_entry(YAML_UNIQUE_ID, "yaml-entry")
+
+    captured: dict = {}
+
+    def fake_connect(_hass, _signal, cb):
+        captured["cb"] = cb
+        return MagicMock()
+
+    async_dispatcher_connect.side_effect = fake_connect
+    try:
+        hi._setup_button_registry_sync(hass, entry)
+        with (
+            patch.object(hi, "_ensure_button_entry", AsyncMock(return_value="btn-id")) as ensure,
+            patch.object(hi, "_register_button_devices") as register,
+        ):
+            await captured["cb"]()
+        ensure.assert_awaited_once_with(hass, store)
+        register.assert_called_once_with(hass, "btn-id", store)
+        assert hass.data[DOMAIN][hi.KEY_BUTTON_ENTRY_ID] == "btn-id"
+    finally:
+        async_dispatcher_connect.side_effect = None

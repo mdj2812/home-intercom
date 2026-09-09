@@ -17,6 +17,74 @@ HA_PORT="8123"
 HA_URL="http://localhost:${HA_PORT}"
 MAX_WAIT=300
 POLL_INTERVAL=3
+SMOKE_MAC="AA:BB:CC:DD:EE:FF"
+
+wait_for_ha() {
+    local elapsed=0
+    echo "==> Waiting for Home Assistant to start (max ${MAX_WAIT}s)..."
+    while [ "${elapsed}" -lt "${MAX_WAIT}" ]; do
+        if docker exec "${CONTAINER_NAME}" \
+            curl -sf "${HA_URL}/api/onboarding" -o /dev/null 2>/dev/null; then
+            echo "==> Home Assistant is ready after ${elapsed}s"
+            return 0
+        fi
+        sleep "${POLL_INTERVAL}"
+        elapsed=$((elapsed + POLL_INTERVAL))
+    done
+    echo "ERROR: HA did not start within ${MAX_WAIT}s"
+    docker logs "${CONTAINER_NAME}" --tail 50
+    return 1
+}
+
+# True if HA's device registry currently has identifier (home_intercom, $1).
+ha_device_registry_has() {
+    local ident="$1"
+    docker exec "${CONTAINER_NAME}" python3 -c '
+import json, sys
+ident = sys.argv[1]
+try:
+    data = json.load(open("/config/.storage/core.device_registry"))
+except FileNotFoundError:
+    sys.exit(1)
+for device in data.get("data", {}).get("devices", []):
+    for pair in device.get("identifiers") or []:
+        if list(pair) == ["home_intercom", ident]:
+            sys.exit(0)
+sys.exit(1)
+' "${ident}"
+}
+
+wait_ha_device_registry() {
+    local ident="$1"
+    local want="$2"  # present | absent
+    local elapsed=0
+    local max=45
+    while [ "${elapsed}" -lt "${max}" ]; do
+        if ha_device_registry_has "${ident}"; then
+            [ "${want}" = "present" ] && return 0
+        else
+            [ "${want}" = "absent" ] && return 0
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    return 1
+}
+
+read_pwa_token() {
+    docker exec "${CONTAINER_NAME}" \
+        python3 -c "import json; print(json.load(open('/config/.storage/home_intercom.pwa_token'))['data']['token'])" \
+        2>/dev/null || echo ""
+}
+
+dump_ha_button_debug() {
+    echo "----- core.device_registry -----"
+    docker exec "${CONTAINER_NAME}" cat /config/.storage/core.device_registry 2>&1 || true
+    echo "----- home_intercom.devices -----"
+    docker exec "${CONTAINER_NAME}" cat /config/.storage/home_intercom.devices 2>&1 || true
+    echo "----- Home Intercom logs -----"
+    docker logs "${CONTAINER_NAME}" 2>&1 | grep -i "home_intercom\|Home Intercom\|button" | tail -40 || true
+}
 
 cleanup() {
     echo "==> Tearing down container..."
@@ -45,21 +113,7 @@ docker run -d \
     "${IMAGE}"
 
 # ── Wait for HA to be ready ─────────────────────────────────
-echo "==> Waiting for Home Assistant to start (max ${MAX_WAIT}s)..."
-elapsed=0
-while [ "${elapsed}" -lt "${MAX_WAIT}" ]; do
-    if docker exec "${CONTAINER_NAME}" \
-        curl -sf "${HA_URL}/api/onboarding" -o /dev/null 2>/dev/null; then
-        echo "==> Home Assistant is ready after ${elapsed}s"
-        break
-    fi
-    sleep "${POLL_INTERVAL}"
-    elapsed=$((elapsed + POLL_INTERVAL))
-done
-
-if [ "${elapsed}" -ge "${MAX_WAIT}" ]; then
-    echo "ERROR: HA did not start within ${MAX_WAIT}s"
-    docker logs "${CONTAINER_NAME}" --tail 50
+if ! wait_for_ha; then
     exit 1
 fi
 
@@ -149,15 +203,15 @@ for PANEL_PATH in home_intercom home-intercom; do
     fi
 done
 
-# 5. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37)
+# 5. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37, #51)
 HELLO=$(docker exec "${CONTAINER_NAME}" \
-    curl -sS -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
+    curl -sS -X POST -H "X-Device-ID: ${SMOKE_MAC}" -H "Content-Type: application/json" \
     -d '{"firmware_version": "smoke-1.0"}' \
     "http://localhost:${HA_PORT}/api/home_intercom/devices/hello" 2>/dev/null || echo "")
-if echo "${HELLO}" | grep -q '"status": *"ok"'; then
-    echo "  ✅ POST /api/home_intercom/devices/hello — ${HELLO}"
+if echo "${HELLO}" | grep -q '"status": *"pending"'; then
+    echo "  ✅ POST /api/home_intercom/devices/hello — pending: ${HELLO}"
 else
-    echo "  ❌ POST /api/home_intercom/devices/hello — unexpected: ${HELLO}"
+    echo "  ❌ POST /api/home_intercom/devices/hello — expected pending, got: ${HELLO}"
     exit 1
 fi
 
@@ -173,18 +227,42 @@ else
 fi
 
 # 6b. GET /api/home_intercom/devices — PWA-token-gated read-only listing (issue #52)
-PWA_TOKEN=$(docker exec "${CONTAINER_NAME}" \
-    python3 -c "import json; print(json.load(open('/config/.storage/home_intercom.pwa_token'))['data']['token'])" 2>/dev/null || echo "")
+PWA_TOKEN=$(read_pwa_token)
 DEV_NOAUTH=$(docker exec "${CONTAINER_NAME}" \
     curl -sS -o /dev/null -w '%{http_code}' \
     "http://localhost:${HA_PORT}/api/home_intercom/devices" 2>/dev/null || echo "000")
 DEVICES=$(docker exec "${CONTAINER_NAME}" \
     curl -sS -H "X-PWA-Token: ${PWA_TOKEN}" \
     "http://localhost:${HA_PORT}/api/home_intercom/devices" 2>/dev/null || echo "")
-if [ "${DEV_NOAUTH}" = "401" ] && echo "${DEVICES}" | grep -q "AA:BB:CC:DD:EE:FF"; then
+if [ "${DEV_NOAUTH}" = "401" ] && echo "${DEVICES}" | grep -q "${SMOKE_MAC}"; then
     echo "  ✅ GET /api/home_intercom/devices — no token → 401, valid token lists registered MAC"
 else
     echo "  ❌ GET /api/home_intercom/devices — noauth=${DEV_NOAUTH} (want 401), with token: ${DEVICES}"
+    exit 1
+fi
+
+# Hello creates the buttons config entry and HA device (YAML-entry store listener).
+if ! wait_ha_device_registry "${SMOKE_MAC}" present; then
+    echo "  ❌ HA device registry missing button ${SMOKE_MAC} after hello"
+    dump_ha_button_debug
+    exit 1
+fi
+if ! ha_device_registry_has "test"; then
+    echo "  ❌ HA device registry missing YAML room device 'test'"
+    dump_ha_button_debug
+    exit 1
+fi
+echo "  ✅ HA device registry has button ${SMOKE_MAC} and YAML room 'test'"
+
+# 6c. POST /api/home_intercom/devices/approve — then record is allowed (issue #51)
+APPROVE=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -X POST -H "X-PWA-Token: ${PWA_TOKEN}" -H "Content-Type: application/json" \
+    -d "{\"mac\": \"${SMOKE_MAC}\"}" \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices/approve" 2>/dev/null || echo "")
+if echo "${APPROVE}" | grep -q '"ok": *true'; then
+    echo "  ✅ POST /api/home_intercom/devices/approve — ${APPROVE}"
+else
+    echo "  ❌ POST /api/home_intercom/devices/approve — unexpected: ${APPROVE}"
     exit 1
 fi
 
@@ -195,7 +273,7 @@ hdr = b'RIFF' + struct.pack('<I', 36+64) + b'WAVEfmt ' + struct.pack('<I',16) + 
 open('/tmp/test.wav','wb').write(hdr + b'\x00' * 64)
 "
 REC_CODE=$(docker exec "${CONTAINER_NAME}" \
-    curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+    curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: ${SMOKE_MAC}" \
     --data-binary @/tmp/test.wav \
     "http://localhost:${HA_PORT}/api/home_intercom/device/record?target=test" 2>/dev/null || echo "000")
 if [ "${REC_CODE}" = "200" ]; then
@@ -214,6 +292,62 @@ if [ "${REC_BAD}" = "403" ]; then
     echo "  ✅ POST /api/home_intercom/device/record — unknown MAC → 403"
 else
     echo "  ❌ POST /api/home_intercom/device/record — unknown MAC gave HTTP ${REC_BAD}, want 403"
+    exit 1
+fi
+
+# 8b. POST /api/home_intercom/devices/manage delete — store + HA device registry
+PWA_TOKEN=$(read_pwa_token)
+MANAGE_NOAUTH=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' -X POST -H "Content-Type: application/json" \
+    -d "{\"mac\": \"${SMOKE_MAC}\", \"action\": \"delete\"}" \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices/manage" 2>/dev/null || echo "000")
+if [ "${MANAGE_NOAUTH}" = "401" ]; then
+    echo "  ✅ POST /api/home_intercom/devices/manage — missing token → 401"
+else
+    echo "  ❌ POST /api/home_intercom/devices/manage — missing token gave HTTP ${MANAGE_NOAUTH}, want 401"
+    exit 1
+fi
+
+MANAGE_DEL=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -X POST -H "X-PWA-Token: ${PWA_TOKEN}" -H "Content-Type: application/json" \
+    -d "{\"mac\": \"${SMOKE_MAC}\", \"action\": \"delete\"}" \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices/manage" 2>/dev/null || echo "")
+if echo "${MANAGE_DEL}" | grep -q '"deleted": *true'; then
+    echo "  ✅ POST /api/home_intercom/devices/manage delete — ${MANAGE_DEL}"
+else
+    echo "  ❌ POST /api/home_intercom/devices/manage delete — unexpected: ${MANAGE_DEL}"
+    exit 1
+fi
+
+DEVICES_AFTER=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -H "X-PWA-Token: ${PWA_TOKEN}" \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices" 2>/dev/null || echo "")
+if echo "${DEVICES_AFTER}" | grep -q "${SMOKE_MAC}"; then
+    echo "  ❌ GET /api/home_intercom/devices — MAC still listed after delete: ${DEVICES_AFTER}"
+    exit 1
+fi
+echo "  ✅ GET /api/home_intercom/devices — MAC gone from store after delete"
+
+if ! wait_ha_device_registry "${SMOKE_MAC}" absent; then
+    echo "  ❌ HA device registry still has button ${SMOKE_MAC} after PWA delete"
+    dump_ha_button_debug
+    exit 1
+fi
+if ! ha_device_registry_has "test"; then
+    echo "  ❌ YAML room device 'test' was removed from HA registry on button delete"
+    dump_ha_button_debug
+    exit 1
+fi
+echo "  ✅ HA device registry dropped button ${SMOKE_MAC}; YAML room 'test' kept"
+
+REC_DELETED=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' -X POST -H "X-Device-ID: ${SMOKE_MAC}" \
+    --data-binary @/tmp/test.wav \
+    "http://localhost:${HA_PORT}/api/home_intercom/device/record?target=test" 2>/dev/null || echo "000")
+if [ "${REC_DELETED}" = "403" ]; then
+    echo "  ✅ POST /api/home_intercom/device/record — deleted MAC → 403"
+else
+    echo "  ❌ POST /api/home_intercom/device/record — deleted MAC gave HTTP ${REC_DELETED}, want 403"
     exit 1
 fi
 

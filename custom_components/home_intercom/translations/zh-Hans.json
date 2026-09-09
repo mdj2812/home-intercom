@@ -116,6 +116,9 @@
         "switch": {
             "revoked": {
                 "name": "已撤销"
+            },
+            "approved": {
+                "name": "已批准"
             }
         }
     }

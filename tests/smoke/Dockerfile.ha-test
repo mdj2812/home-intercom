@@ -12,5 +12,8 @@ COPY tests/smoke/configuration.yaml /config/configuration.yaml
 # Copy the custom component
 COPY custom_components/home_intercom/ /config/custom_components/home_intercom/
 
+# Unit-style smoke: do not hold pending hello for 22s
+ENV HOME_INTERCOM_PENDING_HELLO_WAIT=0
+
 # Ensure correct owner
 RUN chmod -R 755 /config/custom_components/home_intercom/

@@ -1072,7 +1072,7 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
 .broadcast-card .waves::before,
 .broadcast-card .waves::after { border-color: var(--accent); }
 
-/* ──── Device list (read-only, issue #52) ──── */
+/* ──── Device cards ──── */
 .devices-section {
   margin-top: 18px;
 }
@@ -1123,46 +1123,192 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
 .devices-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .devices-list[hidden] {
   display: none;
 }
 
-.device-row {
+.device-card {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
   background: var(--surface);
   border: 1px solid var(--border-device);
-  border-radius: 10px;
+  border-radius: 14px;
+  transition: border-color 0.2s, opacity 0.2s;
 }
 
-.device-row .device-name {
-  font-size: 0.85rem;
-  color: var(--text-heading);
+.device-card.pending {
+  border-color: var(--accent);
+}
+
+.device-card.revoked {
+  border-color: var(--danger-btn-border);
+}
+
+.device-card.online {
+  border-color: var(--success-border-soft);
+}
+
+.device-card.busy {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.device-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.device-card-identity {
+  min-width: 0;
   flex: 1;
+}
+
+.device-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.device-card-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot-idle);
+}
+
+.device-card-dot.on {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.device-card-dot.wait {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.device-card-dot.off {
+  background: var(--dot-idle);
+}
+
+.device-card-name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-heading);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.device-row .device-room {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.device-row .device-meta {
-  font-size: 0.7rem;
+.device-card-mac {
+  margin-top: 3px;
+  padding-left: 16px;
+  font-size: 0.68rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--text-muted);
-  white-space: nowrap;
+  letter-spacing: 0.02em;
+  user-select: text;
+  /* stylelint-disable-next-line property-no-vendor-prefix */
+  -webkit-user-select: text;
 }
 
-.device-row.revoked .device-name,
-.device-row.revoked .device-room,
-.device-row.revoked .device-meta {
-  opacity: 0.45;
-  text-decoration: line-through;
+.device-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.device-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.device-badge.pending {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.device-badge.revoked {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.device-badge.online {
+  color: var(--success);
+  border-color: var(--success-border);
+}
+
+.device-badge.offline {
+  color: var(--text-muted);
+}
+
+.device-card-meta {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  padding-left: 16px;
+  line-height: 1.35;
+}
+
+.device-card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.device-action {
+  appearance: none;
+  margin: 0;
+  padding: 7px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-2);
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.device-action:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-3);
+}
+
+.device-action.primary {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: transparent;
+}
+
+.device-action.primary:hover {
+  background: var(--surface-hover);
+}
+
+.device-action.danger {
+  color: var(--danger);
+  border-color: var(--danger-btn-border);
+  background: var(--danger-btn-bg);
+}
+
+.device-action.danger:hover {
+  color: var(--danger-hover);
+  border-color: var(--danger-btn-border-hover);
+  background: var(--danger-btn-bg-hover);
 }

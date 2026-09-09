@@ -16,12 +16,11 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import BUTTONS_UNIQUE_ID, CONF_ROOMS, DOMAIN
+from .const import BUTTONS_UNIQUE_ID, CONF_ROOMS, DEVICE_ONLINE_WINDOW_SECS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-# A device is "online" if it checked in within this window
-_ONLINE_WINDOW = timedelta(minutes=5)
+_ONLINE_WINDOW = timedelta(seconds=DEVICE_ONLINE_WINDOW_SECS)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -122,7 +121,7 @@ class ConnectedSensor(BinarySensorEntity):
 
 
 class ButtonOnlineSensor(BinarySensorEntity):
-    """Binary sensor: is this intercom button online (seen within 24h)? (issue #48)."""
+    """Binary sensor: is this intercom button online (seen within the hello window)."""
 
     _attr_has_entity_name = True
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY

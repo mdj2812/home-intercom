@@ -7,9 +7,12 @@ HA: DevicesHelloView in custom_components/home_intercom/api.py.
 from __future__ import annotations
 
 import json
+import threading
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from shared import pending_hello_hub
 
 import intercom_server
 from device_store import DeviceStore as DockerDeviceStore
@@ -46,26 +49,31 @@ class TestDockerDevicesHello:
         resp = client.post(url, headers={"X-Device-ID": MAC}, json={"firmware_version": "1.0.0"})
         assert resp.status_code == 200
         body = resp.get_json()
-        assert body["status"] == "ok"
-        assert body["device_name"] == "Device EE:FF"
-        assert body["room"] == ""
-        assert body["sample_rate"] == 16000
-        assert body["max_record_secs"] == 60
-        # persisted in registry
+        assert body["status"] == "pending"
+        assert "device_name" not in body
         assert client.store.get(MAC)["firmware_version"] == "1.0.0"
+        assert client.store.get(MAC)["pending"] is True
 
     def test_known_device_returns_binding(self, client):
         client.store.register_or_update(MAC, "1.0.0")
+        client.store.approve(MAC)
         client.store.update_field(MAC, "name", "Study Button")
         client.store.update_field(MAC, "room", "study")
         resp = client.post(
             "/devices/hello", headers={"X-Device-ID": MAC}, json={"firmware_version": "2.0.0"}
         )
         body = resp.get_json()
+        assert body["status"] == "ok"
         assert body["device_name"] == "Study Button"
         assert body["room"] == "study"
         # firmware refreshed
         assert client.store.get(MAC)["firmware_version"] == "2.0.0"
+
+    def test_pending_hello_stays_pending(self, client):
+        client.store.register_or_update(MAC)
+        resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "pending"
 
     def test_revoked_device_rejected(self, client):
         client.store.register_or_update(MAC)
@@ -77,6 +85,7 @@ class TestDockerDevicesHello:
     def test_unrevoked_device_hello_succeeds(self, client):
         """Revoke → un-revoke → hello should succeed."""
         client.store.register_or_update(MAC)
+        client.store.approve(MAC)
         client.store.revoke(MAC)
         # un-revoke
         client.store.update_field(MAC, "revoked", False)
@@ -104,7 +113,44 @@ class TestDockerDevicesHello:
             "/devices/hello", headers={"X-Device-ID": MAC}, content_type="application/json"
         )
         assert resp.status_code == 200
+        assert resp.get_json()["status"] == "pending"
+
+    def test_approve_during_held_hello_returns_ok(self, client, monkeypatch):
+        """Approve should wake the in-flight hello so the button goes online now."""
+        monkeypatch.setenv("HOME_INTERCOM_PENDING_HELLO_WAIT", "2")
+        client.store.register_or_update(MAC)
+        ready = threading.Event()
+        original_wait = pending_hello_hub.wait
+
+        def wrapped_wait(mac, timeout, still_waiting=None):
+            ready.set()
+            return original_wait(mac, timeout, still_waiting)
+
+        monkeypatch.setattr(pending_hello_hub, "wait", wrapped_wait)
+
+        def approve():
+            assert ready.wait(timeout=2)
+            client.store.approve(MAC)
+
+        worker = threading.Thread(target=approve)
+        worker.start()
+        started = time.monotonic()
+        resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        worker.join(timeout=3)
+        elapsed = time.monotonic() - started
+        assert resp.status_code == 200
         assert resp.get_json()["status"] == "ok"
+        assert elapsed < 1.5
+
+    def test_pending_hello_wait_times_out(self, client, monkeypatch):
+        monkeypatch.setenv("HOME_INTERCOM_PENDING_HELLO_WAIT", "0.15")
+        client.store.register_or_update(MAC)
+        started = time.monotonic()
+        resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        elapsed = time.monotonic() - started
+        assert resp.status_code == 200
+        assert resp.get_json()["status"] == "pending"
+        assert elapsed >= 0.1
 
 
 # ——— HA side (HomeAssistantView) ———
@@ -125,6 +171,7 @@ def _make_hello_request(mac: str | None, body: dict | None, hass: MagicMock) -> 
 def _make_hass_with_store(store) -> MagicMock:
     hass = MagicMock()
     hass.data = {"home_intercom": {"device_store": store}}
+    hass.async_add_executor_job = AsyncMock(side_effect=lambda fn, *args, **kw: fn(*args, **kw))
     return hass
 
 
@@ -153,17 +200,16 @@ class TestHADevicesHelloView:
     async def test_new_device_auto_registers(self):
         resp, body, store = await self._post(body={"firmware_version": "1.0.0"})
         assert resp.status == 200
-        assert body["status"] == "ok"
-        assert body["device_name"] == "Device EE:FF"
-        assert body["room"] == ""
-        assert body["sample_rate"] == 16000
-        assert body["max_record_secs"] == 60
+        assert body["status"] == "pending"
+        assert "device_name" not in body
         assert store.get(MAC)["firmware_version"] == "1.0.0"
+        assert store.get(MAC)["pending"] is True
 
     @pytest.mark.asyncio
     async def test_known_device_returns_binding(self):
         store = await _fresh_ha_store()
         await store.register_or_update(MAC)
+        await store.approve(MAC)
         await store.update_field(MAC, "name", "Study Button")
         await store.update_field(MAC, "room", "study")
         hass = _make_hass_with_store(store)
@@ -187,6 +233,7 @@ class TestHADevicesHelloView:
         """Revoke → un-revoke → hello should succeed."""
         store = await _fresh_ha_store()
         await store.register_or_update(MAC)
+        await store.approve(MAC)
         await store.revoke(MAC)
         # un-revoke
         await store.update_field(MAC, "revoked", False)
@@ -211,7 +258,7 @@ class TestHADevicesHelloView:
     async def test_malformed_json_body_ok(self):
         resp, body, _ = await self._post(body=None)  # req.json raises
         assert resp.status == 200
-        assert body["status"] == "ok"
+        assert body["status"] == "pending"
 
     @pytest.mark.asyncio
     async def test_store_unavailable_500(self):
@@ -237,8 +284,8 @@ class TestHADevicesHelloView:
         hass = _make_hass_with_store(store)
         resp, body, _ = await self._post(body={"firmware_version": "3.0.0"}, hass=hass)
         assert resp.status == 200
-        assert body["status"] == "ok"
-        assert body["device_name"] == "Device EE:FF"  # default name again
+        assert body["status"] == "pending"
+        assert "device_name" not in body
 
         # Verify device is back in store
         dev = store.get(MAC)
@@ -246,6 +293,7 @@ class TestHADevicesHelloView:
         assert dev["name"] == "Device EE:FF"
         assert dev["firmware_version"] == "3.0.0"
         assert not dev.get("revoked")
+        assert dev.get("pending") is True
 
     @pytest.mark.asyncio
     async def test_delete_rehello_dispaches_signal(self):

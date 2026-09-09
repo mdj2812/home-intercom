@@ -353,7 +353,7 @@ function setCardState(card, state, msg) {
   card.querySelector('.status').textContent = msg;
 }
 
-// ——— Read-only device list (issue #52) ———
+// ——— Device list + pending approval (issues #52, #51) ———
 // window._DEVICES caches the last fetch so language switches re-render instantly.
 window._DEVICES = null;
 
@@ -365,35 +365,123 @@ window.renderDevices = function () {
     section.hidden = true;
     return;
   }
-  const macs = Object.keys(devices).sort((a, b) =>
-    (devices[a].name || a).localeCompare(devices[b].name || b));
+  const macs = Object.keys(devices).sort((a, b) => {
+    const na = devices[a].name || a;
+    const nb = devices[b].name || b;
+    const byName = na.localeCompare(nb);
+    return byName || a.localeCompare(b);
+  });
   list.innerHTML = '';
+  let anyPending = false;
   for (const mac of macs) {
     const d = devices[mac];
-    const row = document.createElement('div');
-    row.className = 'device-row' + (d.revoked ? ' revoked' : '');
+    const pending = !!d.pending;
+    const revoked = !!d.revoked;
+    const online = !revoked && !pending && deviceIsOnline(d.last_seen);
+    if (pending) anyPending = true;
 
-    const name = document.createElement('span');
-    name.className = 'device-name';
-    name.textContent = d.name || mac;
+    const card = el('article',
+      'device-card' + (pending ? ' pending' : '') + (revoked ? ' revoked' : '') + (online ? ' online' : ''));
 
-    const room = document.createElement('span');
-    room.className = 'device-room';
-    room.textContent = (d.room && ROOM_NAMES[d.room]) || '—';
+    const top = el('div', 'device-card-top');
+    const identity = el('div', 'device-card-identity');
+    const title = el('div', 'device-card-title');
+    const dotState = online ? ' on' : pending ? ' wait' : ' off';
+    title.appendChild(el('span', 'device-card-dot' + dotState));
+    title.appendChild(el('span', 'device-card-name', d.name || mac));
+    identity.appendChild(title);
+    identity.appendChild(el('div', 'device-card-mac', mac));
 
-    const meta = document.createElement('span');
-    meta.className = 'device-meta';
-    const lastSeen = (d.last_seen || '').replace('T', ' ').slice(0, 16);
-    meta.textContent = [d.firmware_version, lastSeen].filter(Boolean).join(' · ');
+    const badges = el('div', 'device-card-badges');
+    if (pending) badges.appendChild(el('span', 'device-badge pending', I18N.t('devicePending')));
+    if (revoked) badges.appendChild(el('span', 'device-badge revoked', I18N.t('deviceRevoked')));
+    if (!pending && !revoked) {
+      badges.appendChild(el('span', 'device-badge ' + (online ? 'online' : 'offline'),
+        I18N.t(online ? 'deviceOnline' : 'deviceOffline')));
+    }
+    top.appendChild(identity);
+    top.appendChild(badges);
 
-    row.appendChild(name);
-    row.appendChild(room);
-    row.appendChild(meta);
-    row.title = mac;
-    list.appendChild(row);
+    const meta = [];
+    if (d.room && ROOM_NAMES[d.room]) meta.push(ROOM_NAMES[d.room]);
+    if (d.firmware_version) meta.push(d.firmware_version);
+    meta.push(formatDeviceSeen(d.last_seen));
+
+    const actions = el('div', 'device-card-actions');
+    actions.appendChild(deviceActionButton(
+      I18N.t(pending ? 'deviceApprove' : 'deviceDeapprove'),
+      pending ? 'primary' : '',
+      () => manageDevice(mac, pending ? 'approve' : 'deapprove', card)
+    ));
+    actions.appendChild(deviceActionButton(
+      I18N.t(revoked ? 'deviceUnrevoke' : 'deviceRevoke'),
+      revoked ? 'primary' : '',
+      () => manageDevice(mac, revoked ? 'unrevoke' : 'revoke', card)
+    ));
+    actions.appendChild(deviceActionButton(I18N.t('deviceDelete'), 'danger', () => {
+      if (!confirm(I18N.t('deviceDeleteConfirm'))) return;
+      manageDevice(mac, 'delete', card);
+    }));
+
+    card.appendChild(top);
+    card.appendChild(el('div', 'device-card-meta', meta.join(' · ')));
+    card.appendChild(actions);
+    list.appendChild(card);
   }
   section.hidden = false;
+  if (anyPending) {
+    const toggle = document.getElementById('devices-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    list.hidden = false;
+  }
 };
+
+function el(tag, className, text) {
+  const n = document.createElement(tag);
+  if (className) n.className = className;
+  if (text != null && text !== '') n.textContent = text;
+  return n;
+}
+
+function deviceActionButton(label, extraClass, onClick) {
+  const btn = el('button', 'device-action' + (extraClass ? ' ' + extraClass : ''), label);
+  btn.type = 'button';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onClick();
+  });
+  return btn;
+}
+
+function deviceIsOnline(lastSeen) {
+  const t = Date.parse(lastSeen || '');
+  return !Number.isNaN(t) && (Date.now() - t) <= 30 * 1000;
+}
+
+function formatDeviceSeen(lastSeen) {
+  const t = Date.parse(lastSeen || '');
+  if (Number.isNaN(t)) return I18N.t('deviceNeverSeen');
+  const sec = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (sec < 45) return I18N.t('deviceJustNow');
+  if (sec < 3600) return I18N.t('deviceMinutesAgo').replace('%s', String(Math.max(1, Math.floor(sec / 60))));
+  if (sec < 86400) return I18N.t('deviceHoursAgo').replace('%s', String(Math.max(1, Math.floor(sec / 3600))));
+  return String(lastSeen).replace('T', ' ').slice(0, 16);
+}
+
+async function manageDevice(mac, action, card) {
+  if (card) card.classList.add('busy');
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/devices/manage', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ mac, action }),
+    });
+    if (!resp.ok) return;
+    await loadDevices();
+  } catch (e) { /* ignore */ }
+  if (card) card.classList.remove('busy');
+}
 
 function initDevicesToggle() {
   const toggle = document.getElementById('devices-toggle');
@@ -968,6 +1056,7 @@ window.updateChimeStatusUI = updateChimeStatusUI;
 
 loadRooms().then(() => { pollSpeakerStatus(); loadDevices(); });
 setInterval(pollSpeakerStatus, 30000);
+setInterval(() => { if (window._DEVICES) window.renderDevices(); }, 10000);
 initDevicesToggle();
 initChimeSettings();
 

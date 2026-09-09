@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 from typing import Any
 
@@ -33,6 +34,7 @@ from .const import (
     CONF_ROOMS,
     DOMAIN,
     KEY_BUTTON_ENTRY_ID,
+    MAC_PATTERN,
     PLATFORMS,
     PWA_TOKEN_STORAGE_KEY,
     PWA_TOKEN_STORAGE_VERSION,
@@ -266,6 +268,10 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if button_entry_id:
         _register_button_devices(hass, button_entry_id, device_store)
 
+    # First hello has no buttons-entry listener yet — keep HA's device
+    # registry in sync from this YAML/UI entry instead (PWA delete, #51).
+    _setup_button_registry_sync(hass, entry)
+
     # Forward to sensor/number/binary_sensor platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -388,6 +394,30 @@ def _handle_button_device_delete(hass: HomeAssistant, device_entry: Any) -> None
         _LOGGER.info("Button %s deleted from HA — removing from device_store", ident)
         hass.async_create_task(store.remove(ident))
         return
+
+
+def _setup_button_registry_sync(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Create/update HA button devices when the store changes.
+
+    The dedicated buttons config entry is only created once a device
+    exists, so the first ``/devices/hello`` has no buttons-entry listener.
+    Subscribe the YAML/UI entry so Settings → Devices gets the button
+    without a restart, and PWA delete can remove that HA device.
+    """
+    from homeassistant.helpers.dispatcher import async_dispatcher_connect
+
+    async def _on_store_changed() -> None:
+        store = hass.data.get(DOMAIN, {}).get("device_store")
+        if store is None:
+            return
+        button_entry_id = await _ensure_button_entry(hass, store)
+        hass.data[DOMAIN][KEY_BUTTON_ENTRY_ID] = button_entry_id
+        if button_entry_id:
+            _register_button_devices(hass, button_entry_id, store)
+
+    entry.async_on_unload(
+        async_dispatcher_connect(hass, f"{DOMAIN}_device_store_changed", _on_store_changed)
+    )
 
 
 def _setup_device_store_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
@@ -526,12 +556,48 @@ def _register_button_devices(hass: HomeAssistant, entry_id: str, device_store: D
         if updates:
             registry.async_update_device(device.id, **updates)
 
-    # Listen for HA-side edits (rename, area change) → sync back to device_store
-    @callback
-    def _on_device_registry_updated(event: Any) -> None:
-        _async_device_registry_updated(hass, event, device_store)
+    _reconcile_button_devices(hass, entry_id, device_store)
 
-    hass.bus.async_listen("device_registry_updated", _on_device_registry_updated)
+    # Listen once for HA-side edits (rename, area change) → sync back to store.
+    # Look up the live store so reloads do not stack stale closures.
+    if not hass.data.get(DOMAIN, {}).get("_button_devreg_unsub"):
+
+        @callback
+        def _on_device_registry_updated(event: Any) -> None:
+            store = hass.data.get(DOMAIN, {}).get("device_store")
+            if store is not None:
+                _async_device_registry_updated(hass, event, store)
+
+        hass.data[DOMAIN]["_button_devreg_unsub"] = hass.bus.async_listen(
+            "device_registry_updated", _on_device_registry_updated
+        )
+
+
+def _reconcile_button_devices(
+    hass: HomeAssistant, entry_id: str, device_store: DeviceStore
+) -> None:
+    """Remove HA devices for buttons that are gone from the store.
+
+    ``_register_button_devices`` only creates; without this, a PWA/API
+    delete leaves an empty card in Settings → Devices.
+    """
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+    known = set(device_store.devices)
+    mac_re = re.compile(MAC_PATTERN)
+
+    for device in list(registry.devices.get_devices_for_config_entry_id(entry_id)):
+        for domain, ident in device.identifiers:
+            if domain != DOMAIN:
+                continue
+            mac = ident.upper()
+            if not mac_re.match(mac):
+                continue
+            if mac not in known:
+                _LOGGER.info("Removing HA device for deleted button %s", mac)
+                registry.async_remove_device(device.id)
+            break
 
 
 @callback
