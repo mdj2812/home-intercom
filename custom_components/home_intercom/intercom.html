@@ -37,6 +37,7 @@
   var dark = !window.matchMedia || window.matchMedia("(prefers-color-scheme: dark)").matches;
   var theme = pref === "light" ? "light" : pref === "dark" ? "dark" : (dark ? "dark" : "light");
   document.documentElement.setAttribute("data-theme", theme);
+  document.documentElement.setAttribute("data-theme-pref", pref);
   var meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", theme === "light" ? "#f3f3f4" : "#0f0f0f");
 })();
@@ -74,7 +75,7 @@
       </button>
       <div class="theme-dropdown" id="theme-dropdown">
       <button type="button" id="theme-toggle" class="theme-toggle" aria-haspopup="listbox" aria-expanded="false" aria-label="Theme">
-        <span id="theme-toggle-icon" aria-hidden="true"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><path fill="currentColor" d="M8 2a6 6 0 0 0 0 12z"/></svg></span>
+        <span id="theme-toggle-icon" aria-hidden="true"></span>
       </button>
       <div class="lang-dropdown-menu" role="listbox" hidden>
         <button type="button" role="option" class="lang-option" data-theme-pref="auto" data-i18n="themeAuto">自动</button>

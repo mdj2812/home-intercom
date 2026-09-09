@@ -163,6 +163,10 @@ class TestHtmlStructure:
         """Theme switcher: auto / light / dark, persisted and FOUC-safe."""
         assert 'id="theme-toggle"' in html_content
         assert 'id="theme-dropdown"' in html_content
+        assert re.search(
+            r'<span id="theme-toggle-icon"[^>]*></span>',
+            html_content,
+        )
         assert 'data-theme-pref="auto"' in html_content
         assert 'data-theme-pref="light"' in html_content
         assert 'data-theme-pref="dark"' in html_content
@@ -307,6 +311,9 @@ class TestDomConsistency:
         assert ':root[data-theme="light"]' in css
         assert "color-scheme: dark" in css
         assert "color-scheme: light" in css
+        assert 'url("theme-auto.svg")' in css
+        assert 'url("theme-light.svg")' in css
+        assert 'url("theme-dark.svg")' in css
 
 
 class TestI18N:
@@ -339,6 +346,13 @@ class TestI18N:
                 f"Key '{key}' appears only {count} time(s) in i18n.js — "
                 f"expected at least 2 (zh-CN + en)"
             )
+
+    def test_theme_icons_not_inlined(self):
+        """Theme glyphs live as static SVG files, not markup inside i18n.js."""
+        with open(I18N_PATH) as f:
+            i18n = f.read()
+        assert "<svg" not in i18n
+        assert "ICONS" not in i18n
 
     def test_html_uses_i18n_t(self, html_content):
         """All user-facing strings in JS should use I18N.t()."""
@@ -390,6 +404,9 @@ class TestManifestAndIcons:
             "apple-touch-icon.png",
             "i18n.js",
             "intercom.css",
+            "theme-auto.svg",
+            "theme-light.svg",
+            "theme-dark.svg",
         ]
         for fname in expected:
             path = os.path.join(static_dir, fname)
