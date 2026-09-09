@@ -8,6 +8,7 @@ with homeassistant.helpers.storage.Store.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ class DeviceStore(DeviceStoreBase):
         super().__init__()
         self._path = path
         self._lock = threading.Lock()
+        self._atomic_replace = True
         self._load()
 
     def _load(self) -> None:
@@ -44,16 +46,39 @@ class DeviceStore(DeviceStoreBase):
             _LOGGER.info("Device registry loaded: %d devices", len(self._devices))
 
     def _save_locked(self) -> None:
-        """Persist under self._lock. Atomic via tmp file + replace."""
+        """Persist under self._lock.
+
+        Prefer tmp + ``os.replace``. Docker file bind-mounts (QNAP) reject
+        that with EBUSY/EXDEV, so fall back to writing the mounted file
+        in place.
+        """
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
-        tmp_path = f"{self._path}.tmp"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(
-                {"version": DEVICE_STORAGE_VERSION, "devices": self._devices},
-                f,
-                indent=2,
-            )
-        os.replace(tmp_path, self._path)
+        payload = json.dumps(
+            {"version": DEVICE_STORAGE_VERSION, "devices": self._devices},
+            indent=2,
+        )
+        if self._atomic_replace:
+            tmp_path = f"{self._path}.tmp"
+            try:
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    f.write(payload)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(tmp_path, self._path)
+                return
+            except OSError as exc:
+                self._atomic_replace = False
+                _LOGGER.warning(
+                    "atomic replace of %s failed (%s); writing in place from now on",
+                    self._path,
+                    exc,
+                )
+                with contextlib.suppress(OSError):
+                    os.remove(tmp_path)
+        with open(self._path, "w", encoding="utf-8") as f:
+            f.write(payload)
+            f.flush()
+            os.fsync(f.fileno())
 
     def get(self, mac: str) -> dict[str, Any] | None:
         """Return a copy of the device info for a MAC, or None if unknown."""
@@ -119,6 +144,16 @@ class DeviceStore(DeviceStoreBase):
                 return None
             self._save_locked()
             _LOGGER.info("Device approved: %s (%s)", mac, device["name"])
+            return device
+
+    def request_ota(self, mac: str, target_version: str) -> dict[str, Any] | None:
+        """Flag a device to flash on its next hello (manage action ``ota``)."""
+        with self._lock:
+            device = self._request_ota(mac, target_version)
+            if device is None:
+                return None
+            self._save_locked()
+            _LOGGER.info("OTA requested: %s → %s", mac, target_version)
             return device
 
     def remove(self, mac: str) -> None:

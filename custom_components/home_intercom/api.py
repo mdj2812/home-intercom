@@ -9,7 +9,9 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /rooms         → RoomsView   (GET room config)
   /devices       → DevicesView        (GET registry)
   /devices/approve → DevicesApproveView
-  /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete)
+  /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete/ota)
+  /firmware        → FirmwareView (GET cached .bin)
+  /firmware.sig    → FirmwareSigView
   /audio/<path>  → AudioView   (GET recorded WAV files)
   /home_intercom  → PanelView        (GET PWA frontend HTML, legacy path)
   /home-intercom  → PanelAliasView   (GET PWA frontend HTML, sidebar-friendly)
@@ -25,7 +27,21 @@ from aiohttp import web
 from homeassistant.components.http import KEY_HASS_USER, HomeAssistantView
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PANEL_PATH, PANEL_PATH_LEGACY, PCM_RATE, WAV_HEADER_SIZE
+from .const import (
+    DOMAIN,
+    FIRMWARE_CACHE_SUBDIR,
+    PANEL_PATH,
+    PANEL_PATH_LEGACY,
+    PCM_RATE,
+    WAV_HEADER_SIZE,
+)
+from .firmware import (
+    FirmwareError,
+    ensure_latest_firmware,
+    firmware_checksum_headers,
+    load_cached_firmware,
+    schedule_firmware_refresh,
+)
 from .player import play_announcement
 from .shared import (
     chime_public_url,
@@ -33,6 +49,7 @@ from .shared import (
     config_payload,
     delete_custom_chime,
     device_hello_payload,
+    device_ota_reject_reason,
     device_record_auth_error,
     devices_payload,
     is_wav,
@@ -59,6 +76,21 @@ def _guess_base_url(request: web.Request) -> str:
     scheme = request.headers.get("X-Forwarded-Proto", request.scheme)
     host = request.host
     return f"{scheme}://{host}"
+
+
+def _firmware_dir(hass: HomeAssistant) -> str:
+    """HA cache: ``www/home_intercom_audio/firmware/`` (or explicit override)."""
+    data = _get_hass_data(hass)
+    explicit = data.get("firmware_dir")
+    if explicit:
+        return str(explicit)
+    audio_dir = data.get("audio_dir", "")
+    return os.path.join(audio_dir, FIRMWARE_CACHE_SUBDIR) if audio_dir else ""
+
+
+def _kick_firmware_cache(hass: HomeAssistant) -> None:
+    """Start a GitHub cache refresh after the first button registers."""
+    schedule_firmware_refresh(_firmware_dir(hass))
 
 
 def _get_hass_data(hass: HomeAssistant) -> dict:
@@ -403,6 +435,7 @@ class DevicesHelloView(HomeAssistantView):
             _LOGGER.warning("hello from revoked device %s — rejected", mac)
             return web.json_response({"status": "error", "error": "device revoked"}, status=403)
 
+        was_empty = not store.devices
         is_new = existing is None  # before register_or_update
         try:
             device = await store.register_or_update(mac, firmware_version)
@@ -410,6 +443,9 @@ class DevicesHelloView(HomeAssistantView):
             return web.json_response(
                 {"status": "error", "error": "invalid X-Device-ID (MAC)"}, status=400
             )
+
+        if was_empty:
+            _kick_firmware_cache(hass)
 
         # New device → reload to register HA device + entities (issue #48)
         if is_new:
@@ -491,7 +527,11 @@ class DevicesView(HomeAssistantView):
         if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
             return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
         store = _get_hass_data(hass).get("device_store")
-        return web.json_response(devices_payload(store) if store is not None else {})
+        latest = ""
+        cached = await hass.async_add_executor_job(load_cached_firmware, _firmware_dir(hass))
+        if cached is not None:
+            latest = cached.version
+        return web.json_response(devices_payload(store, latest) if store is not None else {})
 
 
 class DevicesApproveView(HomeAssistantView):
@@ -530,7 +570,7 @@ class DevicesApproveView(HomeAssistantView):
 class DevicesManageView(HomeAssistantView):
     """POST /api/home_intercom/devices/manage — PWA device actions.
 
-    Body: ``{"mac": "AA:BB:...", "action": "approve"|"deapprove"|"revoke"|"unrevoke"|"delete"}``.
+    Body: ``{"mac": "AA:BB:...", "action": "approve"|"deapprove"|"revoke"|"unrevoke"|"delete"|"ota"}``.
     """
 
     url = "/api/home_intercom/devices/manage"
@@ -565,6 +605,24 @@ class DevicesManageView(HomeAssistantView):
 
             async_dispatcher_send(hass, f"{DOMAIN}_device_store_changed")
             return web.json_response({"ok": True, "deleted": True})
+
+        if action == "ota":
+            reason = device_ota_reject_reason(store.get(mac))
+            if reason == "unknown device":
+                return web.json_response({"ok": False, "error": reason}, status=404)
+            if reason:
+                return web.json_response({"ok": False, "error": reason}, status=400)
+            try:
+                cached = await hass.async_add_executor_job(
+                    ensure_latest_firmware, _firmware_dir(hass)
+                )
+            except FirmwareError as exc:
+                _LOGGER.warning("OTA firmware fetch failed: %s", exc)
+                return web.json_response({"ok": False, "error": "firmware unavailable"}, status=502)
+            updated = await store.request_ota(mac, cached.version)
+            if updated is None:
+                return web.json_response({"ok": False, "error": "unknown device"}, status=404)
+            return web.json_response({"ok": True, "target_version": cached.version})
 
         if action == "approve":
             device = await store.approve(mac)
@@ -639,6 +697,42 @@ async def _serve_static(request: web.Request, filename: str) -> web.Response:
     )
 
 
+class FirmwareView(HomeAssistantView):
+    """GET /api/home_intercom/firmware — cached GitHub .bin for ESP32 OTA."""
+
+    url = "/api/home_intercom/firmware"
+    name = "api:home_intercom:firmware"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        cached = load_cached_firmware(_firmware_dir(hass))
+        if cached is None:
+            return web.Response(status=404)
+        body = await hass.async_add_executor_job(Path(cached.bin_path).read_bytes)
+        return web.Response(
+            body=body,
+            content_type="application/octet-stream",
+            headers=firmware_checksum_headers(cached.sha256),
+        )
+
+
+class FirmwareSigView(HomeAssistantView):
+    """GET /api/home_intercom/firmware.sig — optional ECDSA signature bytes."""
+
+    url = "/api/home_intercom/firmware.sig"
+    name = "api:home_intercom:firmware-sig"
+    requires_auth = False
+
+    async def get(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        cached = load_cached_firmware(_firmware_dir(hass))
+        if cached is None or not cached.sig_path:
+            return web.Response(status=404)
+        body = await hass.async_add_executor_job(Path(cached.sig_path).read_bytes)
+        return web.Response(body=body, content_type="application/octet-stream")
+
+
 class StaticView(HomeAssistantView):
     """Serve static assets under the legacy panel path."""
 
@@ -674,6 +768,8 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(DevicesApproveView)
     hass.http.register_view(DevicesManageView)
     hass.http.register_view(DevicesView)
+    hass.http.register_view(FirmwareView)
+    hass.http.register_view(FirmwareSigView)
     hass.http.register_view(PanelView)
     hass.http.register_view(PanelAliasView)
     hass.http.register_view(StaticView)

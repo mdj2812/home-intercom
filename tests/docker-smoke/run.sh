@@ -170,6 +170,10 @@ assert 'version' in d and d['version'], 'missing version'
 print(f'ok: version={d[\"version\"]}')
 "
 
+# 1c. GET /api/home_intercom/firmware — empty cache is 404
+assert_http "GET /api/home_intercom/firmware — empty cache → 404" \
+    "$(fetch_code "${URL}/api/home_intercom/firmware")" "404"
+
 # 1b. /config — global audio settings (issue #39)
 CFG=$(fetch "${URL}/config" || echo "")
 assert_json "GET /config" "${CFG}" "

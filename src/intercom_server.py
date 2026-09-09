@@ -6,7 +6,15 @@ import os
 import sys
 from pathlib import Path
 
-from const import DEVICE_REGISTRY_DEFAULT_PATH, PCM_RATE, WAV_HEADER_SIZE
+from const import DEVICE_REGISTRY_DEFAULT_PATH, FIRMWARE_DIR_DEFAULT, PCM_RATE, WAV_HEADER_SIZE
+from firmware import (
+    FirmwareError,
+    ensure_latest_firmware,
+    firmware_checksum_headers,
+    load_cached_firmware,
+    schedule_firmware_refresh,
+    start_firmware_poller,
+)
 from flask import Flask, jsonify, request, send_from_directory
 from shared import (
     chime_public_url,
@@ -15,6 +23,7 @@ from shared import (
     config_payload,
     delete_custom_chime,
     device_hello_payload,
+    device_ota_reject_reason,
     device_record_auth_error,
     devices_payload,
     handle_pcm_to_wav,
@@ -35,6 +44,7 @@ HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 AUDIO_DIR = os.environ.get("AUDIO_DIR", "/data/audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
+FIRMWARE_DIR = os.environ.get("FIRMWARE_DIR", FIRMWARE_DIR_DEFAULT)
 
 
 def _parse_pause_buffer() -> float:
@@ -168,7 +178,9 @@ def config():
 @app.route("/devices")
 def devices_list():
     """Read-only registry listing for the PWA (issue #52). LAN trust, same as /record."""
-    return jsonify(devices_payload(device_store))
+    cached = load_cached_firmware(FIRMWARE_DIR)
+    latest = cached.version if cached is not None else ""
+    return jsonify(devices_payload(device_store, latest))
 
 
 @app.route("/devices/approve", methods=["POST"])
@@ -186,7 +198,7 @@ def devices_approve():
 
 @app.route("/devices/manage", methods=["POST"])
 def devices_manage():
-    """Approve, deapprove, revoke, unrevoke, or delete a button. LAN trust."""
+    """Approve, deapprove, revoke, unrevoke, delete, or OTA a button. LAN trust."""
     parsed = parse_device_manage_body(request.get_json(silent=True) or {})
     if isinstance(parsed, str):
         return jsonify({"ok": False, "error": parsed}), 400
@@ -199,6 +211,22 @@ def devices_manage():
             return jsonify({"ok": False, "error": "unknown device"}), 404
         device_store.remove(mac)
         return jsonify({"ok": True, "deleted": True})
+
+    if action == "ota":
+        reason = device_ota_reject_reason(device_store.get(mac))
+        if reason == "unknown device":
+            return jsonify({"ok": False, "error": reason}), 404
+        if reason:
+            return jsonify({"ok": False, "error": reason}), 400
+        try:
+            cached = ensure_latest_firmware(FIRMWARE_DIR)
+        except FirmwareError as exc:
+            app.logger.warning("[intercom] OTA firmware fetch failed: %s", exc)
+            return jsonify({"ok": False, "error": "firmware unavailable"}), 502
+        updated = device_store.request_ota(mac, cached.version)
+        if updated is None:
+            return jsonify({"ok": False, "error": "unknown device"}), 404
+        return jsonify({"ok": True, "target_version": cached.version})
 
     if action == "approve":
         device = device_store.approve(mac)
@@ -330,10 +358,13 @@ def devices_hello():
         app.logger.warning(f"[intercom] hello from revoked device {mac} — rejected")
         return jsonify({"status": "error", "error": "device revoked"}), 403
 
+    was_empty = not device_store.devices
     try:
         device = device_store.register_or_update(mac, firmware_version)
     except ValueError:
         return jsonify({"status": "error", "error": "invalid X-Device-ID (MAC)"}), 400
+    if was_empty:
+        schedule_firmware_refresh(FIRMWARE_DIR)
 
     device = wait_for_pending_hello(device_store.get, mac)
     if device is None:
@@ -342,6 +373,35 @@ def devices_hello():
         return jsonify({"status": "error", "error": "device revoked"}), 403
 
     return jsonify(device_hello_payload(device))
+
+
+@app.route("/api/home_intercom/firmware")
+def firmware_bin():
+    """Cached GitHub .bin for ESP32 OTA (LAN HTTP)."""
+    cached = load_cached_firmware(FIRMWARE_DIR)
+    if cached is None:
+        return ("", 404)
+    resp = send_from_directory(
+        FIRMWARE_DIR,
+        os.path.basename(cached.bin_path),
+        mimetype="application/octet-stream",
+    )
+    for key, value in firmware_checksum_headers(cached.sha256).items():
+        resp.headers[key] = value
+    return resp
+
+
+@app.route("/api/home_intercom/firmware.sig")
+def firmware_sig():
+    """Optional ECDSA signature; 404 until CI publishes one."""
+    cached = load_cached_firmware(FIRMWARE_DIR)
+    if cached is None or not cached.sig_path:
+        return ("", 404)
+    return send_from_directory(
+        FIRMWARE_DIR,
+        os.path.basename(cached.sig_path),
+        mimetype="application/octet-stream",
+    )
 
 
 # ── HA-compatible `/api/home_intercom/…` aliases ─────────────────────────
@@ -381,8 +441,10 @@ if __name__ == "__main__":
 
     print(f"[intercom] HA URL: {HA_URL}", flush=True)
     print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
+    print(f"[intercom] Firmware dir: {FIRMWARE_DIR}", flush=True)
     print(f"[intercom] Trusted proxy: {trusted_proxy}", flush=True)
     print("[intercom] Starting on http://0.0.0.0:8764", flush=True)
+    start_firmware_poller(FIRMWARE_DIR, should_run=lambda: bool(device_store.devices))
     serve(
         app,
         host="0.0.0.0",

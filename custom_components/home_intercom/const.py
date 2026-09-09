@@ -47,6 +47,21 @@ PWA_TOKEN_STORAGE_VERSION = 1
 CUSTOM_CHIME_FILENAME = "custom_chime.wav"
 MAX_CHIME_BYTES = 2 * 1024 * 1024  # 2 MB upload cap
 
+# ——— Firmware OTA (GitHub release cached for LAN HTTP) ———
+FIRMWARE_GITHUB_LATEST_URL = "https://api.github.com/repos/mdj2812/intercom-button/releases/latest"
+FIRMWARE_GITHUB_LATEST_PAGE = "https://github.com/mdj2812/intercom-button/releases/latest"
+FIRMWARE_GITHUB_DOWNLOAD_URL = (
+    "https://github.com/mdj2812/intercom-button/releases/download/{tag}/{name}"
+)
+FIRMWARE_ASSET_BIN_RE = r"^intercom-button-.+\.bin$"
+FIRMWARE_CACHE_SUBDIR = "firmware"
+FIRMWARE_CACHE_BIN = "firmware.bin"
+FIRMWARE_CACHE_SIG = "firmware.sig"
+FIRMWARE_CACHE_META = "firmware.json"
+FIRMWARE_DIR_DEFAULT = "/data/firmware"  # Docker default
+# Background GitHub poll: metadata every hour; .bin download only when newer.
+FIRMWARE_POLL_INTERVAL_SECS = 60 * 60
+
 # ——— HA panel URLs ———
 # Legacy underscore path still works; hyphen path satisfies HA sidebar/dashboard rules.
 PANEL_PATH_LEGACY = "/home_intercom"

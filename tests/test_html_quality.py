@@ -51,6 +51,10 @@ I18N_REQUIRED_KEYS = [
     "deviceUnrevoke",
     "deviceDelete",
     "deviceDeleteConfirm",
+    "deviceUpdate",
+    "deviceUpdateConfirm",
+    "deviceUpdateAvailable",
+    "deviceUpToDate",
     "deviceRevoked",
     "deviceOnline",
     "deviceOffline",
@@ -206,6 +210,18 @@ class TestHtmlStructure:
         )
         assert "/devices/manage" in html_content
         assert "device-card" in html_content
+        assert "deviceUpdate" in html_content
+        assert "firmware_update_available" in html_content
+        assert "deviceUpToDate" in html_content
+        assert "!online || !needsUpdate" in html_content
+
+    def test_devices_refetch_when_tab_visible(self, html_content):
+        """Online uses last_seen vs Date.now(); re-rendering a stale cache goes offline."""
+        js = _extract_inline_js(html_content)
+        assert "visibilitychange" in js
+        assert "document.visibilityState" in js
+        assert "refreshDevicesIfVisible" in js
+        assert "if (window._DEVICES) window.renderDevices();" not in js
 
 
 class TestJsSyntax:

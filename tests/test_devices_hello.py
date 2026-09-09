@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from shared import pending_hello_hub
@@ -37,6 +37,7 @@ def client(tmp_path, monkeypatch):
     """Flask test client with an isolated device registry."""
     store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
     monkeypatch.setattr(intercom_server, "device_store", store)
+    monkeypatch.setattr(intercom_server, "schedule_firmware_refresh", lambda *_a, **_k: None)
     intercom_server.app.config["TESTING"] = True
     with intercom_server.app.test_client() as c:
         c.store = store  # convenience handle for seeding/assertions
@@ -54,6 +55,17 @@ class TestDockerDevicesHello:
         assert client.store.get(MAC)["firmware_version"] == "1.0.0"
         assert client.store.get(MAC)["pending"] is True
 
+    def test_first_hello_kicks_firmware_refresh(self, tmp_path, monkeypatch):
+        store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
+        monkeypatch.setattr(intercom_server, "device_store", store)
+        kicked: list[str] = []
+        monkeypatch.setattr(intercom_server, "schedule_firmware_refresh", kicked.append)
+        intercom_server.app.config["TESTING"] = True
+        with intercom_server.app.test_client() as c:
+            c.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+            c.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        assert kicked == [intercom_server.FIRMWARE_DIR]
+
     def test_known_device_returns_binding(self, client):
         client.store.register_or_update(MAC, "1.0.0")
         client.store.approve(MAC)
@@ -68,6 +80,41 @@ class TestDockerDevicesHello:
         assert body["room"] == "study"
         # firmware refreshed
         assert client.store.get(MAC)["firmware_version"] == "2.0.0"
+
+    def test_hello_includes_ota_when_requested(self, client):
+        client.store.register_or_update(MAC, "0.1.0")
+        client.store.approve(MAC)
+        client.store.request_ota(MAC, "v0.2.0")
+        resp = client.post(
+            "/devices/hello", headers={"X-Device-ID": MAC}, json={"firmware_version": "0.1.0"}
+        )
+        body = resp.get_json()
+        assert body["status"] == "ok"
+        assert body["ota"] is True
+        assert client.store.get(MAC)["ota_requested"] is True
+
+    def test_hello_omits_ota_when_pending(self, client):
+        client.store.register_or_update(MAC)
+        client.store.request_ota(MAC, "0.2.0")
+        resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        body = resp.get_json()
+        assert body["status"] == "pending"
+        assert "ota" not in body
+
+    def test_hello_clears_ota_when_version_matches(self, client):
+        client.store.register_or_update(MAC, "0.1.0")
+        client.store.approve(MAC)
+        client.store.request_ota(MAC, "v0.2.0")
+        resp = client.post(
+            "/devices/hello", headers={"X-Device-ID": MAC}, json={"firmware_version": "0.2.0"}
+        )
+        body = resp.get_json()
+        assert body["status"] == "ok"
+        assert "ota" not in body
+        stored = client.store.get(MAC)
+        assert stored["ota_requested"] is False
+        assert stored["ota_target_version"] == ""
+        assert stored["firmware_version"] == "0.2.0"
 
     def test_pending_hello_stays_pending(self, client):
         client.store.register_or_update(MAC)
@@ -206,6 +253,25 @@ class TestHADevicesHelloView:
         assert store.get(MAC)["pending"] is True
 
     @pytest.mark.asyncio
+    async def test_first_hello_kicks_firmware_cache(self):
+        store = await _fresh_ha_store()
+        hass = _make_hass_with_store(store)
+        hass.data["home_intercom"]["firmware_dir"] = "/tmp/hi-firmware"
+        with patch("custom_components.home_intercom.api.schedule_firmware_refresh") as kick:
+            await self._post(body={"firmware_version": "1.0.0"}, hass=hass)
+        kick.assert_called_once_with("/tmp/hi-firmware")
+
+    @pytest.mark.asyncio
+    async def test_known_hello_does_not_kick_firmware_cache(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        hass = _make_hass_with_store(store)
+        hass.data["home_intercom"]["firmware_dir"] = "/tmp/hi-firmware"
+        with patch("custom_components.home_intercom.api.schedule_firmware_refresh") as kick:
+            await self._post(body={"firmware_version": "1.0.0"}, hass=hass)
+        kick.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_known_device_returns_binding(self):
         store = await _fresh_ha_store()
         await store.register_or_update(MAC)
@@ -217,6 +283,29 @@ class TestHADevicesHelloView:
         assert body["device_name"] == "Study Button"
         assert body["room"] == "study"
         assert store.get(MAC)["firmware_version"] == "2.0.0"
+
+    @pytest.mark.asyncio
+    async def test_hello_includes_ota_when_requested(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "0.1.0")
+        await store.approve(MAC)
+        await store.request_ota(MAC, "0.2.0")
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={"firmware_version": "0.1.0"}, hass=hass)
+        assert body["status"] == "ok"
+        assert body["ota"] is True
+
+    @pytest.mark.asyncio
+    async def test_hello_clears_ota_when_version_matches(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "0.1.0")
+        await store.approve(MAC)
+        await store.request_ota(MAC, "v0.2.0")
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={"firmware_version": "0.2.0"}, hass=hass)
+        assert body["status"] == "ok"
+        assert "ota" not in body
+        assert store.get(MAC)["ota_requested"] is False
 
     @pytest.mark.asyncio
     async def test_revoked_device_rejected(self):

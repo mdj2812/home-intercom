@@ -166,6 +166,17 @@ assert d.get('max_record_secs') == 60, f'bad max_record_secs: {d}'
     exit 1
 }
 
+# 1c. GET /api/home_intercom/firmware — empty cache is 404
+FW_CODE=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -o /dev/null -w '%{http_code}' \
+    "http://localhost:${HA_PORT}/api/home_intercom/firmware" 2>/dev/null || echo "000")
+if [ "${FW_CODE}" = "404" ]; then
+    echo "  ✅ GET /api/home_intercom/firmware — empty cache → 404"
+else
+    echo "  ❌ GET /api/home_intercom/firmware — HTTP ${FW_CODE}, want 404"
+    exit 1
+fi
+
 # 2. /api/home_intercom/rooms
 ROOMS=$(docker exec "${CONTAINER_NAME}" \
     curl -sS "http://localhost:${HA_PORT}/api/home_intercom/rooms" 2>/dev/null || echo "")

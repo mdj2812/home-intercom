@@ -1258,6 +1258,11 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   color: var(--text-muted);
 }
 
+.device-badge.update {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .device-card-meta {
   font-size: 0.72rem;
   color: var(--text-secondary);
@@ -1267,7 +1272,7 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
 
 .device-card-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   margin-top: 2px;
 }
@@ -1289,6 +1294,16 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
 .device-action:hover {
   background: var(--surface-hover);
   border-color: var(--border-3);
+}
+
+.device-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.device-action:disabled:hover {
+  background: var(--surface-3);
+  border-color: var(--border-2);
 }
 
 .device-action.primary {

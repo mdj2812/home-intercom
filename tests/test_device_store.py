@@ -7,7 +7,9 @@ Covers both implementations:
 
 from __future__ import annotations
 
+import errno
 import json
+import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -96,6 +98,32 @@ class TestDockerDeviceStore:
         store.register_or_update(MAC)
         with pytest.raises(ValueError):
             store.update_field(MAC, "created_at", "yesterday")
+        with pytest.raises(ValueError):
+            store.update_field(MAC, "ota_requested", True)
+
+    def test_request_ota_persists(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC)
+        store.approve(MAC)
+        device = store.request_ota(MAC, "v0.2.0")
+        assert device["ota_requested"] is True
+        assert device["ota_target_version"] == "0.2.0"
+        reloaded = _fresh_docker_store(tmp_path)
+        assert reloaded.get(MAC)["ota_requested"] is True
+        assert reloaded.get(MAC)["ota_target_version"] == "0.2.0"
+
+    def test_request_ota_unknown_returns_none(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        assert store.request_ota(MAC, "0.2.0") is None
+
+    def test_register_clears_ota_on_version_match(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC, "0.1.0")
+        store.approve(MAC)
+        store.request_ota(MAC, "0.2.0")
+        device = store.register_or_update(MAC, "0.2.0")
+        assert device["ota_requested"] is False
+        assert device["ota_target_version"] == ""
 
     def test_revoke_flags_not_deletes(self, tmp_path):
         store = _fresh_docker_store(tmp_path)
@@ -152,6 +180,21 @@ class TestDockerDeviceStore:
         on_disk = json.loads(path.read_text(encoding="utf-8"))
         assert on_disk["version"] == 1
         assert MAC in on_disk["devices"]
+
+    def test_save_falls_back_when_replace_busy(self, tmp_path, monkeypatch):
+        """QNAP file bind-mounts reject os.replace with EBUSY."""
+        path = tmp_path / "device_registry.json"
+        store = DockerDeviceStore(str(path))
+
+        def _busy(_src, _dst):
+            raise OSError(errno.EBUSY, "Device or resource busy")
+
+        monkeypatch.setattr(os, "replace", _busy)
+        store.register_or_update(MAC, "1.0.0")
+        store.register_or_update(MAC, "1.0.1")
+        assert not (tmp_path / "device_registry.json.tmp").exists()
+        reloaded = DockerDeviceStore(str(path))
+        assert reloaded.get(MAC)["firmware_version"] == "1.0.1"
 
     def test_two_devices_independent(self, tmp_path):
         store = _fresh_docker_store(tmp_path)
@@ -256,6 +299,19 @@ class TestHADeviceStore:
         await store.register_or_update(MAC)
         with pytest.raises(ValueError):
             await store.update_field(MAC, "last_seen", "tomorrow")
+        with pytest.raises(ValueError):
+            await store.update_field(MAC, "ota_requested", True)
+
+    @pytest.mark.asyncio
+    async def test_request_ota_and_clear_on_match(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "0.1.0")
+        await store.approve(MAC)
+        device = await store.request_ota(MAC, "v0.2.0")
+        assert device["ota_requested"] is True
+        assert device["ota_target_version"] == "0.2.0"
+        cleared = await store.register_or_update(MAC, "0.2.0")
+        assert cleared["ota_requested"] is False
 
     @pytest.mark.asyncio
     async def test_revoke_flags_not_deletes(self):

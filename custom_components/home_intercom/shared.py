@@ -242,6 +242,25 @@ def normalize_mac(mac: str) -> str:
     return mac.strip().upper()
 
 
+def normalize_firmware_version(value: str) -> str:
+    """Strip a leading ``v`` so GitHub tags match ESP32 FIRMWARE_VERSION."""
+    text = (value or "").strip()
+    if len(text) >= 2 and text[0] in "vV" and text[1].isdigit():
+        return text[1:]
+    return text
+
+
+def firmware_update_available(current: str, latest: str) -> bool:
+    """True when both sides are known and the device is not on ``latest``."""
+    lat = normalize_firmware_version(latest)
+    if not lat:
+        return False
+    cur = normalize_firmware_version(current)
+    if not cur:
+        return True
+    return cur != lat
+
+
 def default_device_name(mac: str) -> str:
     """Default name for auto-registered devices: "Device EE:FF"."""
     return f"{DEVICE_NAME_PREFIX} {':'.join(mac.split(':')[-2:])}"
@@ -307,6 +326,7 @@ class DeviceStoreBase:
             device["last_seen"] = now
             if firmware_version:
                 device["firmware_version"] = firmware_version
+                self._clear_ota_if_matched(device, firmware_version)
         return dict(device), created
 
     def _update_field(self, mac: str, key: str, value: Any) -> dict[str, Any] | None:
@@ -344,6 +364,26 @@ class DeviceStoreBase:
         key = normalize_mac(mac)
         self._devices.pop(key, None)
         pending_hello_hub.notify(key)
+
+    @staticmethod
+    def _clear_ota_if_matched(device: dict[str, Any], firmware_version: str) -> None:
+        """Drop OTA flags once hello reports the requested firmware version."""
+        if not device.get("ota_requested"):
+            return
+        target = normalize_firmware_version(str(device.get("ota_target_version") or ""))
+        current = normalize_firmware_version(firmware_version)
+        if target and current == target:
+            device["ota_requested"] = False
+            device["ota_target_version"] = ""
+
+    def _request_ota(self, mac: str, target_version: str) -> dict[str, Any] | None:
+        """Mark an approved device to flash on its next hello."""
+        device = self._devices.get(normalize_mac(mac))
+        if device is None:
+            return None
+        device["ota_requested"] = True
+        device["ota_target_version"] = normalize_firmware_version(target_version)
+        return dict(device)
 
 
 class PendingHelloHub:
@@ -433,13 +473,16 @@ def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
     """
     if device.get("pending"):
         return {"status": "pending"}
-    return {
+    payload: dict[str, Any] = {
         "status": "ok",
         "device_name": device["name"],
         "room": device.get("room", ""),
         "sample_rate": PCM_RATE,
         "max_record_secs": MAX_RECORD_SECS,
     }
+    if device.get("ota_requested"):
+        payload["ota"] = True
+    return payload
 
 
 def config_payload() -> dict[str, Any]:
@@ -462,6 +505,17 @@ class DeviceRecordFault(StrEnum):
     DEVICE_PENDING = "device pending"
 
 
+def device_ota_reject_reason(device: dict[str, Any] | None) -> str | None:
+    """Why manage action ``ota`` is refused, or None if it may proceed."""
+    if device is None:
+        return "unknown device"
+    if device.get("pending"):
+        return "device pending"
+    if device.get("revoked"):
+        return "device revoked"
+    return None
+
+
 def device_record_auth_error(device: dict[str, Any] | None) -> DeviceRecordFault | None:
     """Return why a device may not record, or None if it may (issue #47, #51)."""
     if device is None:
@@ -473,15 +527,28 @@ def device_record_auth_error(device: dict[str, Any] | None) -> DeviceRecordFault
     return None
 
 
-def devices_payload(store: DeviceStoreBase) -> dict[str, dict[str, Any]]:
+def devices_payload(store: DeviceStoreBase, latest_firmware: str = "") -> dict[str, dict[str, Any]]:
     """GET /devices response — read-only registry listing for the PWA (issue #52).
 
-    The store's snapshot is already a defensive copy keyed by MAC.
+    The store's snapshot is already a defensive copy keyed by MAC. When
+    ``latest_firmware`` is known (cached GitHub image), each device gets
+    ``firmware_latest`` and ``firmware_update_available`` for the PWA.
     """
-    return store.devices
+    latest = normalize_firmware_version(latest_firmware)
+    if not latest:
+        return store.devices
+    out: dict[str, dict[str, Any]] = {}
+    for mac, device in store.devices.items():
+        item = dict(device)
+        item["firmware_latest"] = latest
+        item["firmware_update_available"] = firmware_update_available(
+            str(device.get("firmware_version") or ""), latest
+        )
+        out[mac] = item
+    return out
 
 
-DEVICE_MANAGE_ACTIONS = frozenset({"approve", "deapprove", "revoke", "unrevoke", "delete"})
+DEVICE_MANAGE_ACTIONS = frozenset({"approve", "deapprove", "revoke", "unrevoke", "delete", "ota"})
 
 
 def parse_device_manage_body(body: Any) -> tuple[str, str] | str:

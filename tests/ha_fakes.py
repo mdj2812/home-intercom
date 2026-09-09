@@ -45,6 +45,16 @@ def install_fake_homeassistant() -> None:
     """
     existing = sys.modules.get("homeassistant")
     if existing is not None and getattr(existing, "_hi_fake", False):
+        if "homeassistant.helpers.event" not in sys.modules:
+            event = types.ModuleType("homeassistant.helpers.event")
+            event.async_track_time_interval = MagicMock(return_value=MagicMock())
+            event.async_call_later = MagicMock(return_value=MagicMock())
+            existing.helpers.event = event
+            sys.modules["homeassistant.helpers.event"] = event
+        else:
+            event = sys.modules["homeassistant.helpers.event"]
+            if not hasattr(event, "async_call_later"):
+                event.async_call_later = MagicMock(return_value=MagicMock())
         return
 
     _ha = types.ModuleType("homeassistant")
@@ -94,6 +104,9 @@ def install_fake_homeassistant() -> None:
     _ha.helpers.typing.ConfigType = dict
     _ha.helpers.storage = types.ModuleType("homeassistant.helpers.storage")
     _ha.helpers.storage.Store = FakeStore
+    _ha.helpers.event = types.ModuleType("homeassistant.helpers.event")
+    _ha.helpers.event.async_track_time_interval = MagicMock(return_value=MagicMock())
+    _ha.helpers.event.async_call_later = MagicMock(return_value=MagicMock())
 
     sys.modules["homeassistant"] = _ha
     sys.modules["homeassistant.const"] = _ha.const
@@ -109,6 +122,7 @@ def install_fake_homeassistant() -> None:
     sys.modules["homeassistant.helpers.config_validation"] = _ha.helpers.config_validation
     sys.modules["homeassistant.helpers.typing"] = _ha.helpers.typing
     sys.modules["homeassistant.helpers.storage"] = _ha.helpers.storage
+    sys.modules["homeassistant.helpers.event"] = _ha.helpers.event
     sys.modules["homeassistant.components"] = types.ModuleType("homeassistant.components")
     sys.modules["homeassistant.components.http"] = MagicMock()
     sys.modules["homeassistant.components.http"].HomeAssistantView = type(

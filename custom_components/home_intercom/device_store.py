@@ -91,6 +91,15 @@ class DeviceStore(DeviceStoreBase):
         _LOGGER.info("Device approved: %s (%s)", mac, device["name"])
         return device
 
+    async def request_ota(self, mac: str, target_version: str) -> dict[str, Any] | None:
+        """Flag a device to flash on its next hello (manage action ``ota``)."""
+        device = self._request_ota(mac, target_version)
+        if device is None:
+            return None
+        await self._async_save()
+        _LOGGER.info("OTA requested: %s → %s", mac, target_version)
+        return device
+
     async def remove(self, mac: str) -> None:
         """Permanently delete a device from the registry.
 
