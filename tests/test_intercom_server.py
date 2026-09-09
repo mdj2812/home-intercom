@@ -88,6 +88,26 @@ class TestDevicesRoute:
         assert resp.status_code == 200
         assert "AA:BB:CC:DD:EE:FF" in resp.json
 
+    def test_devices_marks_update_from_cache(self, dev_client, monkeypatch, tmp_path):
+        import hashlib
+        import json
+
+        import intercom_server
+
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF", "1.0.0")
+        cache = tmp_path / "firmware"
+        cache.mkdir()
+        blob = b"esp32-bin"
+        sha = hashlib.sha256(blob).hexdigest()
+        (cache / "firmware.bin").write_bytes(blob)
+        (cache / "firmware.json").write_text(json.dumps({"version": "0.2.1", "sha256": sha}))
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(cache))
+        resp = client.get("/devices")
+        dev = resp.json["AA:BB:CC:DD:EE:FF"]
+        assert dev["firmware_latest"] == "0.2.1"
+        assert dev["firmware_update_available"] is True
+
 
 class TestDevicesApprove:
     """POST /devices/approve — pending → active (issue #51)."""

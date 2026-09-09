@@ -16,7 +16,7 @@ from firmware import (
     ensure_latest_firmware,
     load_cached_firmware,
 )
-from shared import normalize_firmware_version
+from shared import devices_payload, firmware_update_available, normalize_firmware_version
 
 API_URL = "https://api.github.com/repos/mdj2812/intercom-button/releases/latest"
 BIN_URL = "https://github.example/intercom-button-v0.2.0.bin"
@@ -76,6 +76,39 @@ def test_normalize_firmware_version():
     assert normalize_firmware_version("0.2.0") == "0.2.0"
     assert normalize_firmware_version("V1.0.0") == "1.0.0"
     assert normalize_firmware_version("") == ""
+
+
+def test_firmware_update_available():
+    assert firmware_update_available("0.2.0", "0.2.1") is True
+    assert firmware_update_available("0.2.1", "v0.2.1") is False
+    assert firmware_update_available("0.2.0", "") is False
+    assert firmware_update_available("", "0.2.1") is True
+    assert firmware_update_available("0.2.1-local", "0.2.1") is True
+
+
+class _Store:
+    def __init__(self, devices):
+        self.devices = devices
+
+
+def test_devices_payload_omits_update_fields_without_latest():
+    store = _Store({"AA:BB:CC:DD:EE:FF": {"firmware_version": "0.2.0", "name": "Btn"}})
+    out = devices_payload(store, "")
+    assert "firmware_latest" not in out["AA:BB:CC:DD:EE:FF"]
+    assert "firmware_update_available" not in out["AA:BB:CC:DD:EE:FF"]
+
+
+def test_devices_payload_marks_outdated_and_current():
+    store = _Store(
+        {
+            "AA:BB:CC:DD:EE:01": {"firmware_version": "0.2.0", "name": "Old"},
+            "AA:BB:CC:DD:EE:02": {"firmware_version": "0.2.1", "name": "New"},
+        }
+    )
+    out = devices_payload(store, "v0.2.1")
+    assert out["AA:BB:CC:DD:EE:01"]["firmware_latest"] == "0.2.1"
+    assert out["AA:BB:CC:DD:EE:01"]["firmware_update_available"] is True
+    assert out["AA:BB:CC:DD:EE:02"]["firmware_update_available"] is False
 
 
 def test_load_cached_firmware_empty(tmp_path):

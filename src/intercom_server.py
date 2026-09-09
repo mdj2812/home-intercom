@@ -176,7 +176,9 @@ def config():
 @app.route("/devices")
 def devices_list():
     """Read-only registry listing for the PWA (issue #52). LAN trust, same as /record."""
-    return jsonify(devices_payload(device_store))
+    cached = load_cached_firmware(FIRMWARE_DIR)
+    latest = cached.version if cached is not None else ""
+    return jsonify(devices_payload(device_store, latest))
 
 
 @app.route("/devices/approve", methods=["POST"])

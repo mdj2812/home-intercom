@@ -517,7 +517,15 @@ class DevicesView(HomeAssistantView):
         if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
             return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
         store = _get_hass_data(hass).get("device_store")
-        return web.json_response(devices_payload(store) if store is not None else {})
+        latest = ""
+        cached = await hass.async_add_executor_job(
+            load_cached_firmware, _firmware_dir(hass)
+        )
+        if cached is not None:
+            latest = cached.version
+        return web.json_response(
+            devices_payload(store, latest) if store is not None else {}
+        )
 
 
 class DevicesApproveView(HomeAssistantView):

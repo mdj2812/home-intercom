@@ -420,6 +420,23 @@ class TestDevicesView:
         body = json.loads(resp.text)
         assert body["AA:BB:CC:DD:EE:FF"]["name"] == "Device EE:FF"
         assert body["AA:BB:CC:DD:EE:FF"]["room"] == "living_room"
+        assert "firmware_update_available" not in body["AA:BB:CC:DD:EE:FF"]
+
+    @pytest.mark.asyncio
+    async def test_marks_update_available_from_firmware_cache(self):
+        from custom_components.home_intercom.api import DevicesView
+
+        req = self._req(PWA_TOKEN, self._store_with_device())
+        hass = req.app["hass"]
+        _seed_firmware_cache(
+            Path(hass.data["home_intercom"]["audio_dir"]) / "firmware", b"esp32-bin"
+        )
+        resp = await DevicesView().get(req)
+        body = json.loads(resp.text)
+        dev = body["AA:BB:CC:DD:EE:FF"]
+        assert dev["firmware_latest"] == "0.2.0"
+        assert dev["firmware_update_available"] is True
+        assert dev["firmware_version"] == "1.0.0"
 
     @pytest.mark.asyncio
     async def test_rejects_missing_or_wrong_token(self):

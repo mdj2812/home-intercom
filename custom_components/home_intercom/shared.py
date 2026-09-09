@@ -250,6 +250,17 @@ def normalize_firmware_version(value: str) -> str:
     return text
 
 
+def firmware_update_available(current: str, latest: str) -> bool:
+    """True when both sides are known and the device is not on ``latest``."""
+    lat = normalize_firmware_version(latest)
+    if not lat:
+        return False
+    cur = normalize_firmware_version(current)
+    if not cur:
+        return True
+    return cur != lat
+
+
 def default_device_name(mac: str) -> str:
     """Default name for auto-registered devices: "Device EE:FF"."""
     return f"{DEVICE_NAME_PREFIX} {':'.join(mac.split(':')[-2:])}"
@@ -516,12 +527,27 @@ def device_record_auth_error(device: dict[str, Any] | None) -> DeviceRecordFault
     return None
 
 
-def devices_payload(store: DeviceStoreBase) -> dict[str, dict[str, Any]]:
+def devices_payload(
+    store: DeviceStoreBase, latest_firmware: str = ""
+) -> dict[str, dict[str, Any]]:
     """GET /devices response — read-only registry listing for the PWA (issue #52).
 
-    The store's snapshot is already a defensive copy keyed by MAC.
+    The store's snapshot is already a defensive copy keyed by MAC. When
+    ``latest_firmware`` is known (cached GitHub image), each device gets
+    ``firmware_latest`` and ``firmware_update_available`` for the PWA.
     """
-    return store.devices
+    latest = normalize_firmware_version(latest_firmware)
+    if not latest:
+        return store.devices
+    out: dict[str, dict[str, Any]] = {}
+    for mac, device in store.devices.items():
+        item = dict(device)
+        item["firmware_latest"] = latest
+        item["firmware_update_available"] = firmware_update_available(
+            str(device.get("firmware_version") or ""), latest
+        )
+        out[mac] = item
+    return out
 
 
 DEVICE_MANAGE_ACTIONS = frozenset({"approve", "deapprove", "revoke", "unrevoke", "delete", "ota"})

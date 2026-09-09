@@ -398,13 +398,19 @@ window.renderDevices = function () {
     if (!pending && !revoked) {
       badges.appendChild(el('span', 'device-badge ' + (online ? 'online' : 'offline'),
         I18N.t(online ? 'deviceOnline' : 'deviceOffline')));
+      if (d.firmware_update_available) {
+        badges.appendChild(el('span', 'device-badge update', I18N.t('deviceUpdateAvailable')));
+      }
     }
     top.appendChild(identity);
     top.appendChild(badges);
 
     const meta = [];
     if (d.room && ROOM_NAMES[d.room]) meta.push(ROOM_NAMES[d.room]);
-    if (d.firmware_version) meta.push(d.firmware_version);
+    const fw = d.firmware_version || '';
+    const latestFw = d.firmware_latest || '';
+    if (fw && latestFw && d.firmware_update_available) meta.push(fw + ' → ' + latestFw);
+    else if (fw) meta.push(fw);
     meta.push(formatDeviceSeen(d.last_seen));
 
     const actions = el('div', 'device-card-actions');
@@ -418,12 +424,19 @@ window.renderDevices = function () {
       revoked ? 'primary' : '',
       () => manageDevice(mac, revoked ? 'unrevoke' : 'revoke', card)
     ));
-    if (!pending && !revoked) {
-      actions.appendChild(deviceActionButton(I18N.t('deviceUpdate'), '', () => {
+    const needsUpdate = !!d.firmware_update_available;
+    const upToDate = !!(d.firmware_latest && !needsUpdate);
+    const updateBtn = deviceActionButton(
+      I18N.t('deviceUpdate'),
+      needsUpdate && online ? 'primary' : '',
+      () => {
         if (!confirm(I18N.t('deviceUpdateConfirm'))) return;
         manageDevice(mac, 'ota', card);
-      }));
-    }
+      },
+      !online || upToDate
+    );
+    if (upToDate && online) updateBtn.title = I18N.t('deviceUpToDate');
+    actions.appendChild(updateBtn);
     actions.appendChild(deviceActionButton(I18N.t('deviceDelete'), 'danger', () => {
       if (!confirm(I18N.t('deviceDeleteConfirm'))) return;
       manageDevice(mac, 'delete', card);
@@ -449,9 +462,12 @@ function el(tag, className, text) {
   return n;
 }
 
-function deviceActionButton(label, extraClass, onClick) {
+function deviceActionButton(label, extraClass, onClick, disabled) {
   const btn = el('button', 'device-action' + (extraClass ? ' ' + extraClass : ''), label);
   btn.type = 'button';
+  if (disabled) {
+    btn.disabled = true;
+  }
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     onClick();

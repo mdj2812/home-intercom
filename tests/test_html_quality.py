@@ -53,6 +53,8 @@ I18N_REQUIRED_KEYS = [
     "deviceDeleteConfirm",
     "deviceUpdate",
     "deviceUpdateConfirm",
+    "deviceUpdateAvailable",
+    "deviceUpToDate",
     "deviceRevoked",
     "deviceOnline",
     "deviceOffline",
@@ -209,6 +211,8 @@ class TestHtmlStructure:
         assert "/devices/manage" in html_content
         assert "device-card" in html_content
         assert "deviceUpdate" in html_content
+        assert "firmware_update_available" in html_content
+        assert "deviceUpToDate" in html_content
 
 
 class TestJsSyntax:
