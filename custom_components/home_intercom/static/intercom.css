@@ -919,17 +919,57 @@ body {
   margin-top: 18px;
 }
 
+.devices-heading {
+  margin: 0 0 8px;
+}
+
+.devices-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 0;
+  min-height: 28px;
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.devices-toggle:hover {
+  color: #888;
+}
+
 .devices-title {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #555;
-  margin: 0 0 8px;
+}
+
+.devices-chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentcolor;
+  border-bottom: 1px solid currentcolor;
+  transform: rotate(-45deg);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.devices-toggle[aria-expanded="true"] .devices-chevron {
+  transform: rotate(45deg);
 }
 
 .devices-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.devices-list[hidden] {
+  display: none;
 }
 
 .device-row {

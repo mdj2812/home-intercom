@@ -49,8 +49,13 @@
   <div class="grid" id="grid"></div>
 
   <div class="devices-section" id="devices-section" hidden>
-    <h2 class="devices-title" data-i18n="devicesTitle">对讲按钮</h2>
-    <div class="devices-list" id="devices-list"></div>
+    <h2 class="devices-heading">
+      <button type="button" id="devices-toggle" class="devices-toggle" aria-expanded="false" aria-controls="devices-list">
+        <span class="devices-title" data-i18n="devicesTitle">对讲按钮</span>
+        <span class="devices-chevron" aria-hidden="true"></span>
+      </button>
+    </h2>
+    <div class="devices-list" id="devices-list" hidden></div>
   </div>
 
   <footer class="footer">
@@ -371,6 +376,18 @@ window.renderDevices = function () {
   }
   section.hidden = false;
 };
+
+function initDevicesToggle() {
+  const toggle = document.getElementById('devices-toggle');
+  const list = document.getElementById('devices-list');
+  if (!toggle || !list || toggle.dataset.bound) return;
+  toggle.dataset.bound = '1';
+  toggle.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    list.hidden = !open;
+  });
+}
 
 async function loadDevices() {
   try {
@@ -932,6 +949,7 @@ window.updateChimeStatusUI = updateChimeStatusUI;
 
 loadRooms().then(() => { pollSpeakerStatus(); loadDevices(); });
 setInterval(pollSpeakerStatus, 30000);
+initDevicesToggle();
 initChimeSettings();
 
 // Show version number

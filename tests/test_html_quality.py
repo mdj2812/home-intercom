@@ -159,6 +159,20 @@ class TestHtmlStructure:
         """Broadcast name should use data-i18n, not fragile nth-child selectors."""
         assert 'data-i18n="broadcastAll"' in html_content
 
+    def test_devices_list_collapsed_by_default(self, html_content):
+        """Intercom button list is a disclosure that starts collapsed."""
+        assert 'id="devices-section"' in html_content
+        assert 'id="devices-toggle"' in html_content
+        assert 'id="devices-list"' in html_content
+        assert re.search(
+            r'<button[^>]*id="devices-toggle"[^>]*aria-expanded="false"',
+            html_content,
+        )
+        assert re.search(
+            r'<div[^>]*id="devices-list"[^>]*\bhidden\b',
+            html_content,
+        )
+
 
 class TestJsSyntax:
     def test_node_check_passes(self):
