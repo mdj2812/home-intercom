@@ -7,7 +7,9 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /rooms/status  → StatusView  (GET speaker online status)
   /version       → VersionView (GET version only)
   /rooms         → RoomsView   (GET room config)
-  /devices       → DevicesView (GET registry; POST /devices/approve)
+  /devices       → DevicesView        (GET registry)
+  /devices/approve → DevicesApproveView
+  /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete)
   /audio/<path>  → AudioView   (GET recorded WAV files)
   /home_intercom  → PanelView        (GET PWA frontend HTML, legacy path)
   /home-intercom  → PanelAliasView   (GET PWA frontend HTML, sidebar-friendly)
@@ -34,6 +36,7 @@ from .shared import (
     device_record_auth_error,
     devices_payload,
     is_wav,
+    parse_device_manage_body,
     resolve_chime_wav,
     wait_for_pending_hello,
     write_custom_chime_wav,
@@ -403,9 +406,7 @@ class DevicesHelloView(HomeAssistantView):
         # waiting for its next heartbeat (issue #51).
         device = await hass.async_add_executor_job(wait_for_pending_hello, store.get, mac)
         if device is None:
-            return web.json_response(
-                {"status": "error", "error": "device registry unavailable"}, status=500
-            )
+            return web.json_response({"status": "error", "error": "unknown device"}, status=404)
         if device.get("revoked"):
             return web.json_response({"status": "error", "error": "device revoked"}, status=403)
 
@@ -462,7 +463,7 @@ class DevicesView(HomeAssistantView):
 
     Gated by the PWA shared token (same as RecordView): device names and
     MACs are the registry's only auth material, so this isn't public.
-    Management actions live in the options flow (#48).
+    Mutations use DevicesApproveView / DevicesManageView.
     """
 
     url = "/api/home_intercom/devices"
@@ -509,6 +510,64 @@ class DevicesApproveView(HomeAssistantView):
         if device is None:
             return web.json_response({"ok": False, "error": "unknown device"}, status=404)
         return web.json_response({"ok": True, "pending": False})
+
+
+class DevicesManageView(HomeAssistantView):
+    """POST /api/home_intercom/devices/manage — PWA device actions.
+
+    Body: ``{"mac": "AA:BB:...", "action": "approve"|"deapprove"|"revoke"|"unrevoke"|"delete"}``.
+    """
+
+    url = "/api/home_intercom/devices/manage"
+    name = "api:home_intercom:devices-manage"
+    requires_auth = False  # auth via X-PWA-Token header
+
+    async def post(self, request: web.Request) -> web.Response:
+        denied = _verify_pwa_token(request, view="DevicesManageView")
+        if denied is not None:
+            return denied
+        hass = request.app["hass"]
+        store = _get_hass_data(hass).get("device_store")
+        if store is None:
+            return web.json_response(
+                {"ok": False, "error": "device registry unavailable"}, status=500
+            )
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        parsed = parse_device_manage_body(body)
+        if isinstance(parsed, str):
+            return web.json_response({"ok": False, "error": parsed}, status=400)
+        mac, action = parsed
+
+        if action == "delete":
+            if store.get(mac) is None:
+                return web.json_response({"ok": False, "error": "unknown device"}, status=404)
+            await store.remove(mac)
+            from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+            async_dispatcher_send(hass, f"{DOMAIN}_device_store_changed")
+            return web.json_response({"ok": True, "deleted": True})
+
+        if action == "approve":
+            device = await store.approve(mac)
+        elif action == "deapprove":
+            device = await store.update_field(mac, "pending", True)
+        elif action == "revoke":
+            device = await store.revoke(mac)
+        else:
+            device = await store.update_field(mac, "revoked", False)
+
+        if device is None:
+            return web.json_response({"ok": False, "error": "unknown device"}, status=404)
+        return web.json_response(
+            {
+                "ok": True,
+                "pending": bool(device.get("pending")),
+                "revoked": bool(device.get("revoked")),
+            }
+        )
 
 
 class PanelView(HomeAssistantView):
@@ -597,6 +656,7 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(RoomsView)
     hass.http.register_view(DevicesHelloView)
     hass.http.register_view(DevicesApproveView)
+    hass.http.register_view(DevicesManageView)
     hass.http.register_view(DevicesView)
     hass.http.register_view(PanelView)
     hass.http.register_view(PanelAliasView)

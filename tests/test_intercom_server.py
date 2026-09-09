@@ -139,6 +139,81 @@ class TestDevicesApprove:
         assert resp.status_code == 400
 
 
+class TestDevicesManage:
+    """POST /devices/manage — approve / deapprove / revoke / unrevoke / delete."""
+
+    @pytest.fixture
+    def dev_client(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
+        monkeypatch.setattr(intercom_server, "device_store", store)
+        return client, store
+
+    def test_deapprove_sets_pending(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "deapprove"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json["pending"] is True
+        assert store.get("AA:BB:CC:DD:EE:FF")["pending"] is True
+
+    def test_revoke_and_unrevoke(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "revoke"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json["revoked"] is True
+        resp = client.post(
+            "/api/home_intercom/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "unrevoke"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert store.get("AA:BB:CC:DD:EE:FF")["revoked"] is False
+
+    def test_delete_removes_device(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "delete"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json["deleted"] is True
+        assert store.get("AA:BB:CC:DD:EE:FF") is None
+
+    def test_invalid_action_400(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "explode"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+
+    def test_unknown_mac_404(self, dev_client):
+        client, _store = dev_client
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "revoke"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 404
+
+
 class TestVersionRoute:
     def test_returns_version_json(self, client):
         resp = client.get("/version")

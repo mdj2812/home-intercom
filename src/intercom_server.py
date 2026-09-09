@@ -20,6 +20,7 @@ from shared import (
     handle_pcm_to_wav,
     handle_wav_passthrough,
     is_wav,
+    parse_device_manage_body,
     resolve_chime_wav,
     wait_for_pending_hello,
     write_custom_chime_wav,
@@ -183,6 +184,40 @@ def devices_approve():
     return jsonify({"ok": True, "pending": False})
 
 
+@app.route("/devices/manage", methods=["POST"])
+def devices_manage():
+    """Approve, deapprove, revoke, unrevoke, or delete a button. LAN trust."""
+    parsed = parse_device_manage_body(request.get_json(silent=True) or {})
+    if isinstance(parsed, str):
+        return jsonify({"ok": False, "error": parsed}), 400
+    mac, action = parsed
+
+    if action == "delete":
+        if device_store.get(mac) is None:
+            return jsonify({"ok": False, "error": "unknown device"}), 404
+        device_store.remove(mac)
+        return jsonify({"ok": True, "deleted": True})
+
+    if action == "approve":
+        device = device_store.approve(mac)
+    elif action == "deapprove":
+        device = device_store.update_field(mac, "pending", True)
+    elif action == "revoke":
+        device = device_store.revoke(mac)
+    else:
+        device = device_store.update_field(mac, "revoked", False)
+
+    if device is None:
+        return jsonify({"ok": False, "error": "unknown device"}), 404
+    return jsonify(
+        {
+            "ok": True,
+            "pending": bool(device.get("pending")),
+            "revoked": bool(device.get("revoked")),
+        }
+    )
+
+
 @app.route("/record", methods=["POST"])
 def record():
     """Receive audio → write WAV → prepend chime → HA playback.
@@ -300,7 +335,7 @@ def devices_hello():
 
     device = wait_for_pending_hello(device_store.get, mac)
     if device is None:
-        return jsonify({"status": "error", "error": "device registry unavailable"}), 500
+        return jsonify({"status": "error", "error": "unknown device"}), 404
     if device.get("revoked"):
         return jsonify({"status": "error", "error": "device revoked"}), 403
 
@@ -314,6 +349,9 @@ _HA_PREFIX = "/api/home_intercom"
 app.add_url_rule(f"{_HA_PREFIX}/devices/hello", "ha_devices_hello", devices_hello, methods=["POST"])
 app.add_url_rule(
     f"{_HA_PREFIX}/devices/approve", "ha_devices_approve", devices_approve, methods=["POST"]
+)
+app.add_url_rule(
+    f"{_HA_PREFIX}/devices/manage", "ha_devices_manage", devices_manage, methods=["POST"]
 )
 app.add_url_rule(f"{_HA_PREFIX}/devices", "ha_devices", devices_list)
 app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)

@@ -343,6 +343,7 @@ class DeviceStoreBase:
         """Shared remove logic: permanently deletes from registry."""
         key = normalize_mac(mac)
         self._devices.pop(key, None)
+        pending_hello_hub.notify(key)
 
 
 class PendingHelloHub:
@@ -478,3 +479,19 @@ def devices_payload(store: DeviceStoreBase) -> dict[str, dict[str, Any]]:
     The store's snapshot is already a defensive copy keyed by MAC.
     """
     return store.devices
+
+
+DEVICE_MANAGE_ACTIONS = frozenset({"approve", "deapprove", "revoke", "unrevoke", "delete"})
+
+
+def parse_device_manage_body(body: Any) -> tuple[str, str] | str:
+    """Parse POST /devices/manage JSON. Returns ``(mac, action)`` or an error string."""
+    if not isinstance(body, dict):
+        return "invalid body"
+    mac = str(body.get("mac") or "").strip()
+    action = str(body.get("action") or "").strip()
+    if not mac:
+        return "missing mac"
+    if action not in DEVICE_MANAGE_ACTIONS:
+        return "invalid action"
+    return mac, action
