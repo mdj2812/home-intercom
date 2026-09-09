@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.1.2 (2026-09-09)
+
+> **Pending Device Approval + PWA Device Cards**
+
+Closes the **Server-Driven Configuration** milestone: ESP32 identity is MAC-only; the server owns pairing, auth, and device lifecycle.
+
+### ✨ Features
+
+- **Pending approval (#51)** — new buttons stay pending until approved in the PWA or the HA Approved switch. Hello is held so approve can return `status: ok` without waiting for the next heartbeat.
+- **PWA device cards** — approve/deapprove, revoke/unrevoke, and delete in place. List stays sorted by name.
+- **Docker `/device/record` alias (#70)** — firmware upload path works on the Flask server, same as HA.
+
+### 🐛 Fixes
+
+- **HA device leftover** — PWA delete also removes the native Settings → Devices card. First hello registers that HA device so it exists to remove.
+- **Online window** — a button is online for 30s (three missed hellos) instead of 5 minutes; the PWA list re-renders every 10s.
+
+---
+
 ## v2.1.1 (2026-09-09)
 
 > **PWA Theme Switcher + Device List + HA Language Sync**
