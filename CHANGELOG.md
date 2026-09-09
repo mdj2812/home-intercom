@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.1.3 (2026-09-10)
+
+> **Server-Triggered OTA from GitHub over LAN**
+
+ESP32 OTA is HTTP-only. Home Intercom downloads the latest `intercom-button` GitHub `.bin` (and `.sig` when present), caches it, and serves it on the LAN so a PWA **Update** can flash buttons without HTTPS.
+
+### ✨ Features
+
+- **Server-triggered OTA (#79)** — PWA Update fetches/caches the latest GitHub firmware; the next hello returns `ota: true` and the ESP32 flashes from `GET /api/home_intercom/firmware`.
+- **Update status on device cards** — “可更新” when behind the cached latest image; Update is enabled only when an update is known and the button is online.
+- **Background GitHub poll** — hourly cache refresh while at least one button is registered; first hello on an empty registry kicks a fetch so you do not wait an hour.
+
+### 🐛 Fixes
+
+- **Docker hello 500** — QNAP file bind-mounts reject `os.replace` of `device_registry.json` (EBUSY); the store falls back to writing in place.
+- **Stale online status** — returning to the PWA no longer marks live buttons offline; `/devices` is refetched when the tab becomes visible.
+- **Stale firmware.sig** — replacing the cache drops a previous version’s signature and leftover `.tmp` files.
+
+---
+
 ## v2.1.2 (2026-09-09)
 
 > **Pending Device Approval + PWA Device Cards**
