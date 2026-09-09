@@ -51,6 +51,8 @@ I18N_REQUIRED_KEYS = [
     "deviceUnrevoke",
     "deviceDelete",
     "deviceDeleteConfirm",
+    "deviceUpdate",
+    "deviceUpdateConfirm",
     "deviceRevoked",
     "deviceOnline",
     "deviceOffline",
@@ -206,6 +208,7 @@ class TestHtmlStructure:
         )
         assert "/devices/manage" in html_content
         assert "device-card" in html_content
+        assert "deviceUpdate" in html_content
 
 
 class TestJsSyntax:

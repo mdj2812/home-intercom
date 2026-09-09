@@ -96,6 +96,32 @@ class TestDockerDeviceStore:
         store.register_or_update(MAC)
         with pytest.raises(ValueError):
             store.update_field(MAC, "created_at", "yesterday")
+        with pytest.raises(ValueError):
+            store.update_field(MAC, "ota_requested", True)
+
+    def test_request_ota_persists(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC)
+        store.approve(MAC)
+        device = store.request_ota(MAC, "v0.2.0")
+        assert device["ota_requested"] is True
+        assert device["ota_target_version"] == "0.2.0"
+        reloaded = _fresh_docker_store(tmp_path)
+        assert reloaded.get(MAC)["ota_requested"] is True
+        assert reloaded.get(MAC)["ota_target_version"] == "0.2.0"
+
+    def test_request_ota_unknown_returns_none(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        assert store.request_ota(MAC, "0.2.0") is None
+
+    def test_register_clears_ota_on_version_match(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC, "0.1.0")
+        store.approve(MAC)
+        store.request_ota(MAC, "0.2.0")
+        device = store.register_or_update(MAC, "0.2.0")
+        assert device["ota_requested"] is False
+        assert device["ota_target_version"] == ""
 
     def test_revoke_flags_not_deletes(self, tmp_path):
         store = _fresh_docker_store(tmp_path)
@@ -256,6 +282,19 @@ class TestHADeviceStore:
         await store.register_or_update(MAC)
         with pytest.raises(ValueError):
             await store.update_field(MAC, "last_seen", "tomorrow")
+        with pytest.raises(ValueError):
+            await store.update_field(MAC, "ota_requested", True)
+
+    @pytest.mark.asyncio
+    async def test_request_ota_and_clear_on_match(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "0.1.0")
+        await store.approve(MAC)
+        device = await store.request_ota(MAC, "v0.2.0")
+        assert device["ota_requested"] is True
+        assert device["ota_target_version"] == "0.2.0"
+        cleared = await store.register_or_update(MAC, "0.2.0")
+        assert cleared["ota_requested"] is False
 
     @pytest.mark.asyncio
     async def test_revoke_flags_not_deletes(self):

@@ -224,6 +224,160 @@ class TestDevicesManage:
         )
         assert resp.status_code == 404
 
+    def test_ota_sets_flags(self, dev_client, monkeypatch, tmp_path):
+        from firmware import CachedFirmware
+
+        import intercom_server
+
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
+        cached = CachedFirmware(version="0.2.0", sha256="ab", bin_path=str(tmp_path / "fw.bin"))
+        monkeypatch.setattr(intercom_server, "ensure_latest_firmware", lambda _dir: cached)
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json["target_version"] == "0.2.0"
+        device = store.get("AA:BB:CC:DD:EE:FF")
+        assert device["ota_requested"] is True
+        assert device["ota_target_version"] == "0.2.0"
+
+    def test_ota_pending_rejected(self, dev_client, monkeypatch):
+        from firmware import CachedFirmware
+
+        import intercom_server
+
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        monkeypatch.setattr(
+            intercom_server,
+            "ensure_latest_firmware",
+            lambda _dir: CachedFirmware(version="0.2.0", sha256="ab", bin_path="x"),
+        )
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert resp.json["error"] == "device pending"
+
+    def test_ota_unknown_404(self, dev_client):
+        client, _store = dev_client
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 404
+
+    def test_ota_502_when_fetch_fails(self, dev_client, monkeypatch):
+        from firmware import FirmwareError
+
+        import intercom_server
+
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
+
+        def _fail(_dir):
+            raise FirmwareError("github down")
+
+        monkeypatch.setattr(intercom_server, "ensure_latest_firmware", _fail)
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 502
+
+    def test_ota_revoked_rejected(self, dev_client, monkeypatch):
+        from firmware import CachedFirmware
+
+        import intercom_server
+
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
+        store.revoke("AA:BB:CC:DD:EE:FF")
+        monkeypatch.setattr(
+            intercom_server,
+            "ensure_latest_firmware",
+            lambda _dir: CachedFirmware(version="0.2.0", sha256="ab", bin_path="x"),
+        )
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 400
+        assert resp.json["error"] == "device revoked"
+
+
+class TestFirmwareRoute:
+    def test_get_404_when_empty(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(tmp_path / "firmware"))
+        resp = client.get("/api/home_intercom/firmware")
+        assert resp.status_code == 404
+
+    def test_get_200_with_checksum(self, client, monkeypatch, tmp_path):
+        import hashlib
+        import json
+
+        import intercom_server
+
+        cache = tmp_path / "firmware"
+        cache.mkdir()
+        blob = b"esp32-bin"
+        sha = hashlib.sha256(blob).hexdigest()
+        (cache / "firmware.bin").write_bytes(blob)
+        (cache / "firmware.json").write_text(json.dumps({"version": "0.2.0", "sha256": sha}))
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(cache))
+        resp = client.get("/api/home_intercom/firmware")
+        assert resp.status_code == 200
+        assert resp.data == blob
+        assert resp.headers["X-Checksum-SHA256"] == sha
+
+    def test_sig_404_until_published(self, client, monkeypatch, tmp_path):
+        import hashlib
+        import json
+
+        import intercom_server
+
+        cache = tmp_path / "firmware"
+        cache.mkdir()
+        blob = b"esp32-bin"
+        sha = hashlib.sha256(blob).hexdigest()
+        (cache / "firmware.bin").write_bytes(blob)
+        (cache / "firmware.json").write_text(json.dumps({"version": "0.2.0", "sha256": sha}))
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(cache))
+        resp = client.get("/api/home_intercom/firmware.sig")
+        assert resp.status_code == 404
+
+    def test_sig_200_when_cached(self, client, monkeypatch, tmp_path):
+        import hashlib
+        import json
+
+        import intercom_server
+
+        cache = tmp_path / "firmware"
+        cache.mkdir()
+        blob = b"esp32-bin"
+        sig = b"s" * 64
+        sha = hashlib.sha256(blob).hexdigest()
+        (cache / "firmware.bin").write_bytes(blob)
+        (cache / "firmware.sig").write_bytes(sig)
+        (cache / "firmware.json").write_text(json.dumps({"version": "0.2.0", "sha256": sha}))
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(cache))
+        resp = client.get("/api/home_intercom/firmware.sig")
+        assert resp.status_code == 200
+        assert resp.data == sig
+
 
 class TestVersionRoute:
     def test_returns_version_json(self, client):

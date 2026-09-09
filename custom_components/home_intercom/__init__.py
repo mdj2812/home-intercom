@@ -33,6 +33,7 @@ from .const import (
     CONF_PAUSE_BUFFER,
     CONF_ROOMS,
     DOMAIN,
+    FIRMWARE_CACHE_SUBDIR,
     KEY_BUTTON_ENTRY_ID,
     MAC_PATTERN,
     PLATFORMS,
@@ -237,15 +238,18 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
         all_rooms.update(rooms)
 
     audio_dir = hass.config.path(WWW_DIR, AUDIO_SUBDIR)
+    firmware_dir = os.path.join(audio_dir, FIRMWARE_CACHE_SUBDIR)
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].update(
         {
             "rooms": all_rooms,
             "audio_dir": audio_dir,
+            "firmware_dir": firmware_dir,
         }
     )
 
     await hass.async_add_executor_job(lambda: os.makedirs(audio_dir, exist_ok=True))
+    await hass.async_add_executor_job(lambda: os.makedirs(firmware_dir, exist_ok=True))
     hass.data[DOMAIN]["pwa_token"] = await _async_load_pwa_token(hass)
 
     # Device registry for ESP32 intercom buttons (issue #40)

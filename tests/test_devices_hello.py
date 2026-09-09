@@ -69,6 +69,41 @@ class TestDockerDevicesHello:
         # firmware refreshed
         assert client.store.get(MAC)["firmware_version"] == "2.0.0"
 
+    def test_hello_includes_ota_when_requested(self, client):
+        client.store.register_or_update(MAC, "0.1.0")
+        client.store.approve(MAC)
+        client.store.request_ota(MAC, "v0.2.0")
+        resp = client.post(
+            "/devices/hello", headers={"X-Device-ID": MAC}, json={"firmware_version": "0.1.0"}
+        )
+        body = resp.get_json()
+        assert body["status"] == "ok"
+        assert body["ota"] is True
+        assert client.store.get(MAC)["ota_requested"] is True
+
+    def test_hello_omits_ota_when_pending(self, client):
+        client.store.register_or_update(MAC)
+        client.store.request_ota(MAC, "0.2.0")
+        resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        body = resp.get_json()
+        assert body["status"] == "pending"
+        assert "ota" not in body
+
+    def test_hello_clears_ota_when_version_matches(self, client):
+        client.store.register_or_update(MAC, "0.1.0")
+        client.store.approve(MAC)
+        client.store.request_ota(MAC, "v0.2.0")
+        resp = client.post(
+            "/devices/hello", headers={"X-Device-ID": MAC}, json={"firmware_version": "0.2.0"}
+        )
+        body = resp.get_json()
+        assert body["status"] == "ok"
+        assert "ota" not in body
+        stored = client.store.get(MAC)
+        assert stored["ota_requested"] is False
+        assert stored["ota_target_version"] == ""
+        assert stored["firmware_version"] == "0.2.0"
+
     def test_pending_hello_stays_pending(self, client):
         client.store.register_or_update(MAC)
         resp = client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
@@ -217,6 +252,29 @@ class TestHADevicesHelloView:
         assert body["device_name"] == "Study Button"
         assert body["room"] == "study"
         assert store.get(MAC)["firmware_version"] == "2.0.0"
+
+    @pytest.mark.asyncio
+    async def test_hello_includes_ota_when_requested(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "0.1.0")
+        await store.approve(MAC)
+        await store.request_ota(MAC, "0.2.0")
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={"firmware_version": "0.1.0"}, hass=hass)
+        assert body["status"] == "ok"
+        assert body["ota"] is True
+
+    @pytest.mark.asyncio
+    async def test_hello_clears_ota_when_version_matches(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "0.1.0")
+        await store.approve(MAC)
+        await store.request_ota(MAC, "v0.2.0")
+        hass = _make_hass_with_store(store)
+        resp, body, _ = await self._post(body={"firmware_version": "0.2.0"}, hass=hass)
+        assert body["status"] == "ok"
+        assert "ota" not in body
+        assert store.get(MAC)["ota_requested"] is False
 
     @pytest.mark.asyncio
     async def test_revoked_device_rejected(self):

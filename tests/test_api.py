@@ -5,8 +5,10 @@ Uses mocked web.Request, patched homeassistant module, and pytest-asyncio.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -547,6 +549,72 @@ class TestDevicesManageView:
         resp = await DevicesManageView().post(req)
         assert resp.status == 400
 
+    @pytest.mark.asyncio
+    async def test_ota_sets_flags(self):
+        from custom_components.home_intercom.api import DevicesManageView
+        from custom_components.home_intercom.firmware import CachedFirmware
+
+        store = MagicMock()
+        store.get = MagicMock(return_value={"pending": False, "revoked": False})
+        store.request_ota = AsyncMock(return_value={"ota_requested": True})
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"})
+        cached = CachedFirmware(version="0.2.0", sha256="ab", bin_path="/tmp/fw.bin")
+        with patch(
+            "custom_components.home_intercom.api.ensure_latest_firmware", return_value=cached
+        ):
+            resp = await DevicesManageView().post(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["ok"] is True
+        assert body["target_version"] == "0.2.0"
+        store.request_ota.assert_awaited_once_with("AA:BB:CC:DD:EE:FF", "0.2.0")
+
+    @pytest.mark.asyncio
+    async def test_ota_unknown_mac_404(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        store.get = MagicMock(return_value=None)
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"})
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 404
+
+    @pytest.mark.asyncio
+    async def test_ota_pending_400(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        store.get = MagicMock(return_value={"pending": True, "revoked": False})
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"})
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 400
+        assert json.loads(resp.text)["error"] == "device pending"
+
+    @pytest.mark.asyncio
+    async def test_ota_revoked_400(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        store.get = MagicMock(return_value={"pending": False, "revoked": True})
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"})
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 400
+
+    @pytest.mark.asyncio
+    async def test_ota_github_failure_502(self):
+        from custom_components.home_intercom.api import DevicesManageView
+        from custom_components.home_intercom.firmware import FirmwareError
+
+        store = MagicMock()
+        store.get = MagicMock(return_value={"pending": False, "revoked": False})
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"})
+        with patch(
+            "custom_components.home_intercom.api.ensure_latest_firmware",
+            side_effect=FirmwareError("github down"),
+        ):
+            resp = await DevicesManageView().post(req)
+        assert resp.status == 502
+
 
 # ——— register_api_views tests ———
 
@@ -558,6 +626,8 @@ class TestRegisterApiViews:
             DeviceRecordView,
             DevicesApproveView,
             DevicesManageView,
+            FirmwareSigView,
+            FirmwareView,
             PanelAliasView,
             PanelView,
             RecordView,
@@ -575,6 +645,8 @@ class TestRegisterApiViews:
         assert DeviceRecordView in calls
         assert DevicesApproveView in calls
         assert DevicesManageView in calls
+        assert FirmwareView in calls
+        assert FirmwareSigView in calls
         assert PanelView in calls
         assert PanelAliasView in calls
         assert StaticView in calls
@@ -722,3 +794,69 @@ class TestChimeView:
         resp = await ChimeView().delete(del_req)
         assert resp.status == 200
         assert json.loads(resp.text)["custom"] is False
+
+
+# ——— FirmwareView tests ———
+
+
+def _seed_firmware_cache(cache_dir: Path, blob: bytes, *, sig: bytes | None = None) -> str:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    sha = hashlib.sha256(blob).hexdigest()
+    (cache_dir / "firmware.bin").write_bytes(blob)
+    (cache_dir / "firmware.json").write_text(
+        json.dumps({"version": "0.2.0", "sha256": sha}), encoding="utf-8"
+    )
+    if sig is not None:
+        (cache_dir / "firmware.sig").write_bytes(sig)
+    return sha
+
+
+class TestFirmwareView:
+    @pytest.mark.asyncio
+    async def test_get_404_when_empty(self):
+        from custom_components.home_intercom.api import FirmwareView
+
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+        resp = await FirmwareView().get(req)
+        assert resp.status == 404
+
+    @pytest.mark.asyncio
+    async def test_get_200_with_checksum(self):
+        from custom_components.home_intercom.api import FirmwareView
+
+        hass = _make_hass()
+        blob = b"esp32-bin"
+        sha = _seed_firmware_cache(Path(hass.data["home_intercom"]["audio_dir"]) / "firmware", blob)
+        req = _make_request()
+        req.app = {"hass": hass}
+        resp = await FirmwareView().get(req)
+        assert resp.status == 200
+        assert resp.body == blob
+        assert resp.headers["X-Checksum-SHA256"] == sha
+
+    @pytest.mark.asyncio
+    async def test_sig_404_until_published(self):
+        from custom_components.home_intercom.api import FirmwareSigView
+
+        hass = _make_hass()
+        _seed_firmware_cache(Path(hass.data["home_intercom"]["audio_dir"]) / "firmware", b"bin")
+        req = _make_request()
+        req.app = {"hass": hass}
+        resp = await FirmwareSigView().get(req)
+        assert resp.status == 404
+
+    @pytest.mark.asyncio
+    async def test_sig_200_when_cached(self):
+        from custom_components.home_intercom.api import FirmwareSigView
+
+        hass = _make_hass()
+        sig = b"s" * 64
+        _seed_firmware_cache(
+            Path(hass.data["home_intercom"]["audio_dir"]) / "firmware", b"bin", sig=sig
+        )
+        req = _make_request()
+        req.app = {"hass": hass}
+        resp = await FirmwareSigView().get(req)
+        assert resp.status == 200
+        assert resp.body == sig

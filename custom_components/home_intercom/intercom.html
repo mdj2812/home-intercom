@@ -418,6 +418,12 @@ window.renderDevices = function () {
       revoked ? 'primary' : '',
       () => manageDevice(mac, revoked ? 'unrevoke' : 'revoke', card)
     ));
+    if (!pending && !revoked) {
+      actions.appendChild(deviceActionButton(I18N.t('deviceUpdate'), '', () => {
+        if (!confirm(I18N.t('deviceUpdateConfirm'))) return;
+        manageDevice(mac, 'ota', card);
+      }));
+    }
     actions.appendChild(deviceActionButton(I18N.t('deviceDelete'), 'danger', () => {
       if (!confirm(I18N.t('deviceDeleteConfirm'))) return;
       manageDevice(mac, 'delete', card);
