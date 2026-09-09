@@ -455,7 +455,7 @@ function deviceActionButton(label, extraClass, onClick) {
 
 function deviceIsOnline(lastSeen) {
   const t = Date.parse(lastSeen || '');
-  return !Number.isNaN(t) && (Date.now() - t) <= 5 * 60 * 1000;
+  return !Number.isNaN(t) && (Date.now() - t) <= 30 * 1000;
 }
 
 function formatDeviceSeen(lastSeen) {
@@ -1056,6 +1056,7 @@ window.updateChimeStatusUI = updateChimeStatusUI;
 
 loadRooms().then(() => { pollSpeakerStatus(); loadDevices(); });
 setInterval(pollSpeakerStatus, 30000);
+setInterval(() => { if (window._DEVICES) window.renderDevices(); }, 10000);
 initDevicesToggle();
 initChimeSettings();
 
