@@ -45,6 +45,10 @@ const I18N = (() => {
       chimeUploadTooLong: "音频过长（最多 10 秒）",
       chimePreviewFail: "无法播放",
       chimeResetOk: "已恢复默认提示音",
+      themeTitle: "主题",
+      themeAuto: "自动",
+      themeLight: "浅色",
+      themeDark: "深色",
     },
     en: {
       appTitle: "Home Intercom",
@@ -80,6 +84,10 @@ const I18N = (() => {
       chimeUploadTooLong: "Audio too long (max 10 s)",
       chimePreviewFail: "Cannot play",
       chimeResetOk: "Default chime restored",
+      themeTitle: "Theme",
+      themeAuto: "Auto",
+      themeLight: "Light",
+      themeDark: "Dark",
     },
   };
 
@@ -131,6 +139,7 @@ const I18N = (() => {
 
     trigger.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (typeof THEME !== "undefined" && typeof THEME.closeDropdown === "function") THEME.closeDropdown();
       const open = !root.classList.contains("open");
       root.classList.toggle("open", open);
       trigger.setAttribute("aria-expanded", open ? "true" : "false");
@@ -211,6 +220,7 @@ const I18N = (() => {
     const settingsClose = document.getElementById("settings-close");
     if (settingsToggle) settingsToggle.setAttribute("aria-label", t("settingsTitle"));
     if (settingsClose) settingsClose.setAttribute("aria-label", t("settingsClose"));
+    if (typeof THEME !== "undefined" && typeof THEME.updateDropdown === "function") THEME.updateDropdown();
   }
 
   function init() {
@@ -229,3 +239,115 @@ const I18N = (() => {
 })();
 
 I18N.init();
+
+const THEME = (() => {
+  const STORAGE_KEY = "intercom-theme";
+  const OPTIONS = ["auto", "light", "dark"];
+  const COLORS = { dark: "#0f0f0f", light: "#f3f3f4" };
+  const LABEL_KEYS = { auto: "themeAuto", light: "themeLight", dark: "themeDark" };
+
+  let pref = localStorage.getItem(STORAGE_KEY) || "auto";
+  if (!OPTIONS.includes(pref)) pref = "auto";
+
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function resolved() {
+    if (pref === "light" || pref === "dark") return pref;
+    return media.matches ? "dark" : "light";
+  }
+
+  function apply() {
+    const theme = resolved();
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-theme-pref", pref);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", COLORS[theme]);
+    updateDropdown();
+    if (typeof window.updateChimeStatusUI === "function") window.updateChimeStatusUI();
+  }
+
+  function setPref(next) {
+    if (!OPTIONS.includes(next)) return;
+    pref = next;
+    localStorage.setItem(STORAGE_KEY, pref);
+    apply();
+  }
+
+  function closeDropdown() {
+    const root = document.getElementById("theme-dropdown");
+    if (!root) return;
+    root.classList.remove("open");
+    const trigger = document.getElementById("theme-toggle");
+    const menu = root.querySelector(".lang-dropdown-menu");
+    if (trigger) trigger.setAttribute("aria-expanded", "false");
+    if (menu) menu.hidden = true;
+  }
+
+  function updateDropdown() {
+    const trigger = document.getElementById("theme-toggle");
+    if (trigger && typeof I18N !== "undefined") {
+      trigger.setAttribute("aria-label", I18N.t("themeTitle") + " — " + I18N.t(LABEL_KEYS[pref]));
+    }
+
+    document.querySelectorAll("#theme-dropdown [data-theme-pref]").forEach((btn) => {
+      const active = btn.dataset.themePref === pref;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+
+  function initDropdown() {
+    const root = document.getElementById("theme-dropdown");
+    if (!root || root.dataset.bound) return;
+    root.dataset.bound = "1";
+
+    const trigger = document.getElementById("theme-toggle");
+    const menu = root.querySelector(".lang-dropdown-menu");
+    if (!trigger || !menu) return;
+
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (typeof I18N.closeLangDropdown === "function") I18N.closeLangDropdown();
+      const open = !root.classList.contains("open");
+      root.classList.toggle("open", open);
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      menu.hidden = !open;
+    });
+
+    menu.querySelectorAll("[data-theme-pref]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setPref(btn.dataset.themePref);
+        closeDropdown();
+      });
+    });
+
+    document.addEventListener("click", closeDropdown);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeDropdown();
+    });
+  }
+
+  function onMediaChange() {
+    if (pref === "auto") apply();
+  }
+
+  function init() {
+    const run = () => {
+      initDropdown();
+      apply();
+    };
+    if (media.addEventListener) media.addEventListener("change", onMediaChange);
+    else if (media.addListener) media.addListener(onMediaChange);
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", run);
+    } else {
+      run();
+    }
+  }
+
+  return { init, setPref, apply, closeDropdown, updateDropdown, get pref() { return pref; } };
+})();
+
+THEME.init();
+
