@@ -15,6 +15,8 @@ from firmware import (
     FirmwareError,
     ensure_latest_firmware,
     load_cached_firmware,
+    refresh_cached_firmware,
+    start_firmware_poller,
 )
 from shared import devices_payload, firmware_update_available, normalize_firmware_version
 
@@ -199,6 +201,46 @@ def test_ensure_latest_caches_optional_sig(tmp_path):
     assert (tmp_path / "firmware" / "firmware.sig").read_bytes() == sig
 
 
+def test_new_release_drops_stale_sig_and_temps(tmp_path):
+    """A newer unsigned image must not keep the previous version's .sig."""
+    cache = tmp_path / "firmware"
+    sig = b"s" * 64
+    mapping = {
+        API_URL: _latest_json(sig=True),
+        BIN_URL: BLOB,
+        BIN_URL + ".sig": sig,
+    }
+    with patch("firmware.urllib.request.urlopen", side_effect=_urlopen_map(mapping)):
+        ensure_latest_firmware(str(cache))
+    (cache / "firmware.bin.tmp").write_bytes(b"orphan")
+
+    blob2 = b"esp32-firmware-image-v021"
+    sha2 = hashlib.sha256(blob2).hexdigest()
+    bin2 = "https://github.example/intercom-button-v0.2.1.bin"
+    payload = json.dumps(
+        {
+            "tag_name": "v0.2.1",
+            "assets": [
+                {
+                    "name": "intercom-button-v0.2.1.bin",
+                    "browser_download_url": bin2,
+                    "digest": f"sha256:{sha2}",
+                }
+            ],
+        }
+    ).encode()
+    with patch(
+        "firmware.urllib.request.urlopen",
+        side_effect=_urlopen_map({API_URL: payload, bin2: blob2}),
+    ):
+        cached = ensure_latest_firmware(str(cache))
+    assert cached.version == "0.2.1"
+    assert cached.sig_path is None
+    assert (cache / "firmware.bin").read_bytes() == blob2
+    assert not (cache / "firmware.sig").exists()
+    assert not (cache / "firmware.bin.tmp").exists()
+
+
 def test_api_403_falls_back_to_release_page(tmp_path):
     from const import FIRMWARE_GITHUB_DOWNLOAD_URL, FIRMWARE_GITHUB_LATEST_PAGE
 
@@ -228,3 +270,47 @@ def test_cached_firmware_is_frozen():
     item = CachedFirmware(version="0.2.0", sha256=SHA, bin_path="/tmp/x")
     with pytest.raises(FrozenInstanceError):
         item.version = "9.9.9"  # type: ignore[misc]
+
+
+def test_refresh_cached_firmware_returns_image(tmp_path):
+    cached = CachedFirmware("0.2.0", SHA, str(tmp_path / "firmware.bin"))
+    with patch("firmware.ensure_latest_firmware", return_value=cached):
+        assert refresh_cached_firmware(str(tmp_path)) is cached
+
+
+def test_refresh_cached_firmware_swallows_errors(tmp_path):
+    with patch("firmware.ensure_latest_firmware", side_effect=FirmwareError("offline")):
+        assert refresh_cached_firmware(str(tmp_path)) is None
+
+
+def test_start_firmware_poller_refreshes_until_stopped(tmp_path):
+    import threading
+
+    stop = threading.Event()
+    calls: list[str] = []
+
+    def _refresh(cache_dir: str):
+        calls.append(cache_dir)
+        if len(calls) >= 2:
+            stop.set()
+
+    with patch("firmware.refresh_cached_firmware", side_effect=_refresh):
+        start_firmware_poller(str(tmp_path), interval_secs=0.01, stop=stop)
+        assert stop.wait(2)
+    assert calls[0] == str(tmp_path)
+    assert len(calls) >= 2
+
+
+def test_start_firmware_poller_skips_without_devices(tmp_path):
+    import threading
+
+    stop = threading.Event()
+    calls: list[str] = []
+
+    with patch("firmware.refresh_cached_firmware", side_effect=lambda d: calls.append(d)):
+        start_firmware_poller(
+            str(tmp_path), interval_secs=0.02, stop=stop, should_run=lambda: False
+        )
+        assert not stop.wait(0.08)
+        stop.set()
+    assert calls == []

@@ -12,6 +12,8 @@ from firmware import (
     ensure_latest_firmware,
     firmware_checksum_headers,
     load_cached_firmware,
+    schedule_firmware_refresh,
+    start_firmware_poller,
 )
 from flask import Flask, jsonify, request, send_from_directory
 from shared import (
@@ -356,10 +358,13 @@ def devices_hello():
         app.logger.warning(f"[intercom] hello from revoked device {mac} — rejected")
         return jsonify({"status": "error", "error": "device revoked"}), 403
 
+    was_empty = not device_store.devices
     try:
         device = device_store.register_or_update(mac, firmware_version)
     except ValueError:
         return jsonify({"status": "error", "error": "invalid X-Device-ID (MAC)"}), 400
+    if was_empty:
+        schedule_firmware_refresh(FIRMWARE_DIR)
 
     device = wait_for_pending_hello(device_store.get, mac)
     if device is None:
@@ -436,8 +441,10 @@ if __name__ == "__main__":
 
     print(f"[intercom] HA URL: {HA_URL}", flush=True)
     print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
+    print(f"[intercom] Firmware dir: {FIRMWARE_DIR}", flush=True)
     print(f"[intercom] Trusted proxy: {trusted_proxy}", flush=True)
     print("[intercom] Starting on http://0.0.0.0:8764", flush=True)
+    start_firmware_poller(FIRMWARE_DIR, should_run=lambda: bool(device_store.devices))
     serve(
         app,
         host="0.0.0.0",

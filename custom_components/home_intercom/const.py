@@ -59,6 +59,8 @@ FIRMWARE_CACHE_BIN = "firmware.bin"
 FIRMWARE_CACHE_SIG = "firmware.sig"
 FIRMWARE_CACHE_META = "firmware.json"
 FIRMWARE_DIR_DEFAULT = "/data/firmware"  # Docker default
+# Background GitHub poll: metadata every hour; .bin download only when newer.
+FIRMWARE_POLL_INTERVAL_SECS = 60 * 60
 
 # ——— HA panel URLs ———
 # Legacy underscore path still works; hyphen path satisfies HA sidebar/dashboard rules.

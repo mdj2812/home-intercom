@@ -433,7 +433,7 @@ window.renderDevices = function () {
         if (!confirm(I18N.t('deviceUpdateConfirm'))) return;
         manageDevice(mac, 'ota', card);
       },
-      !online || upToDate
+      !online || !needsUpdate
     );
     if (upToDate && online) updateBtn.title = I18N.t('deviceUpToDate');
     actions.appendChild(updateBtn);
@@ -478,6 +478,11 @@ function deviceActionButton(label, extraClass, onClick, disabled) {
 function deviceIsOnline(lastSeen) {
   const t = Date.parse(lastSeen || '');
   return !Number.isNaN(t) && (Date.now() - t) <= 30 * 1000;
+}
+
+function refreshDevicesIfVisible() {
+  if (document.visibilityState === 'hidden') return;
+  loadDevices();
 }
 
 function formatDeviceSeen(lastSeen) {
@@ -1078,7 +1083,12 @@ window.updateChimeStatusUI = updateChimeStatusUI;
 
 loadRooms().then(() => { pollSpeakerStatus(); loadDevices(); });
 setInterval(pollSpeakerStatus, 30000);
-setInterval(() => { if (window._DEVICES) window.renderDevices(); }, 10000);
+setInterval(refreshDevicesIfVisible, 10000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  loadDevices();
+  pollSpeakerStatus();
+});
 initDevicesToggle();
 initChimeSettings();
 

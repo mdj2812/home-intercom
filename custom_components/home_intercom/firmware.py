@@ -12,9 +12,11 @@ import json
 import logging
 import os
 import re
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,7 @@ try:
         FIRMWARE_GITHUB_DOWNLOAD_URL,
         FIRMWARE_GITHUB_LATEST_PAGE,
         FIRMWARE_GITHUB_LATEST_URL,
+        FIRMWARE_POLL_INTERVAL_SECS,
     )
     from .shared import normalize_firmware_version
 except ImportError:
@@ -39,6 +42,7 @@ except ImportError:
         FIRMWARE_GITHUB_DOWNLOAD_URL,
         FIRMWARE_GITHUB_LATEST_PAGE,
         FIRMWARE_GITHUB_LATEST_URL,
+        FIRMWARE_POLL_INTERVAL_SECS,
     )
     from shared import normalize_firmware_version
 
@@ -127,6 +131,55 @@ def ensure_latest_firmware(cache_dir: str) -> CachedFirmware:
         raise
 
 
+def refresh_cached_firmware(cache_dir: str) -> CachedFirmware | None:
+    """Best-effort GitHub poll for the background cache refresher.
+
+    Never raises — a failed poll must not take down Flask or the HA loop.
+    """
+    try:
+        return ensure_latest_firmware(cache_dir)
+    except FirmwareError as exc:
+        _LOGGER.warning("firmware cache refresh failed: %s", exc)
+        return None
+
+
+def start_firmware_poller(
+    cache_dir: str,
+    interval_secs: int = FIRMWARE_POLL_INTERVAL_SECS,
+    stop: threading.Event | None = None,
+    should_run: Callable[[], bool] | None = None,
+) -> threading.Event:
+    """Daemon thread: refresh immediately, then every ``interval_secs``.
+
+    ``should_run`` gates GitHub traffic — Docker passes “has registered
+    devices”. Returns the stop event (caller may pass one in). Home
+    Assistant uses ``async_track_time_interval`` instead.
+    """
+    halt = stop if stop is not None else threading.Event()
+
+    def _loop() -> None:
+        while not halt.is_set():
+            if should_run is None or should_run():
+                refresh_cached_firmware(cache_dir)
+            halt.wait(interval_secs)
+
+    threading.Thread(target=_loop, name="home-intercom-firmware-poll", daemon=True).start()
+    _LOGGER.info("firmware cache poller every %ss (%s)", interval_secs, cache_dir)
+    return halt
+
+
+def schedule_firmware_refresh(cache_dir: str) -> None:
+    """Background GitHub fetch when the first device registers."""
+    if not cache_dir:
+        return
+    threading.Thread(
+        target=refresh_cached_firmware,
+        args=(cache_dir,),
+        name="home-intercom-firmware-refresh",
+        daemon=True,
+    ).start()
+
+
 def _fetch_and_cache(cache_dir: str) -> CachedFirmware:
     cache = Path(cache_dir)
     cache.mkdir(parents=True, exist_ok=True)
@@ -138,6 +191,7 @@ def _fetch_and_cache(cache_dir: str) -> CachedFirmware:
         and Path(cached.bin_path).is_file()
         and (not release.sha256 or cached.sha256 == release.sha256)
     ):
+        _remove_cache_temps(cache)
         return cached
 
     data = _http_get(release.download_url)
@@ -157,6 +211,8 @@ def _fetch_and_cache(cache_dir: str) -> CachedFirmware:
             sig_path = str(sig_file)
         except FirmwareError as exc:
             _LOGGER.info("firmware signature not cached: %s", exc)
+    if sig_path is None:
+        _unlink_quiet(cache / FIRMWARE_CACHE_SIG)
 
     meta = {
         "version": release.version,
@@ -165,6 +221,7 @@ def _fetch_and_cache(cache_dir: str) -> CachedFirmware:
         "asset": release.asset_name,
     }
     _atomic_write(cache / FIRMWARE_CACHE_META, json.dumps(meta, indent=2).encode("utf-8"))
+    _remove_cache_temps(cache)
     _LOGGER.info("cached firmware %s (%dB, sha256=%s)", release.version, len(data), sha256)
     return CachedFirmware(
         version=release.version,
@@ -300,4 +357,25 @@ def _http_open(url: str, *, json_api: bool = False):
 def _atomic_write(path: Path, data: bytes) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_bytes(data)
-    os.replace(tmp, path)
+    try:
+        os.replace(tmp, path)
+    except OSError:
+        _unlink_quiet(tmp)
+        raise
+
+
+def _unlink_quiet(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        _LOGGER.debug("could not remove %s: %s", path, exc)
+
+
+def _remove_cache_temps(cache: Path) -> None:
+    """Drop leftover atomic-write temps after a cache update."""
+    if not cache.is_dir():
+        return
+    for path in cache.glob("*.tmp"):
+        _unlink_quiet(path)

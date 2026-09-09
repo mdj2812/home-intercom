@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import secrets
+from datetime import timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -21,6 +22,7 @@ from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
@@ -34,6 +36,7 @@ from .const import (
     CONF_ROOMS,
     DOMAIN,
     FIRMWARE_CACHE_SUBDIR,
+    FIRMWARE_POLL_INTERVAL_SECS,
     KEY_BUTTON_ENTRY_ID,
     MAC_PATTERN,
     PLATFORMS,
@@ -43,6 +46,7 @@ from .const import (
     WWW_DIR,
 )
 from .device_store import DeviceStore
+from .firmware import refresh_cached_firmware
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -171,6 +175,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN].setdefault("entry_rooms", {}).pop(entry.entry_id, None)
         remaining = hass.data[DOMAIN].get("entry_rooms", {})
         if not remaining:
+            unsub = hass.data[DOMAIN].get("firmware_poll_unsub")
+            if unsub:
+                unsub()
             hass.services.async_remove(DOMAIN, SERVICE_ANNOUNCE)
             hass.data.pop(DOMAIN, None)
         else:
@@ -198,6 +205,40 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the integration when Options flow saves changes."""
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+def _schedule_firmware_poll(hass: HomeAssistant) -> None:
+    """Refresh GitHub firmware cache shortly after setup, then hourly.
+
+    Skips if a poller is already registered (multiple room entries share one).
+    GitHub is contacted only while at least one button is registered.
+    """
+    if hass.data[DOMAIN].get("firmware_poll_unsub") is not None:
+        return
+
+    async def _interval(_now=None) -> None:
+        data = hass.data.get(DOMAIN, {})
+        directory = data.get("firmware_dir")
+        store = data.get("device_store")
+        if not directory or not store or not store.devices:
+            return
+        await hass.async_add_executor_job(refresh_cached_firmware, directory)
+
+    unsubs = [
+        async_call_later(hass, 0, _interval),
+        async_track_time_interval(hass, _interval, timedelta(seconds=FIRMWARE_POLL_INTERVAL_SECS)),
+    ]
+
+    def _unsub() -> None:
+        for unsub in unsubs:
+            unsub()
+
+    hass.data[DOMAIN]["firmware_poll_unsub"] = _unsub
+    _LOGGER.info(
+        "firmware cache poller every %ss (%s)",
+        FIRMWARE_POLL_INTERVAL_SECS,
+        hass.data[DOMAIN]["firmware_dir"],
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -256,6 +297,8 @@ async def _full_setup(hass: HomeAssistant, entry: ConfigEntry) -> None:
     device_store = DeviceStore(hass)
     await device_store.async_load()
     hass.data[DOMAIN]["device_store"] = device_store
+
+    _schedule_firmware_poll(hass)
 
     # Ensure a dedicated config entry for button devices (issue #48)
     button_entry_id = await _ensure_button_entry(hass, device_store)

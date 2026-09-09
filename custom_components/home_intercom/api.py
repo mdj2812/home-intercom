@@ -40,6 +40,7 @@ from .firmware import (
     ensure_latest_firmware,
     firmware_checksum_headers,
     load_cached_firmware,
+    schedule_firmware_refresh,
 )
 from .player import play_announcement
 from .shared import (
@@ -85,6 +86,11 @@ def _firmware_dir(hass: HomeAssistant) -> str:
         return str(explicit)
     audio_dir = data.get("audio_dir", "")
     return os.path.join(audio_dir, FIRMWARE_CACHE_SUBDIR) if audio_dir else ""
+
+
+def _kick_firmware_cache(hass: HomeAssistant) -> None:
+    """Start a GitHub cache refresh after the first button registers."""
+    schedule_firmware_refresh(_firmware_dir(hass))
 
 
 def _get_hass_data(hass: HomeAssistant) -> dict:
@@ -429,6 +435,7 @@ class DevicesHelloView(HomeAssistantView):
             _LOGGER.warning("hello from revoked device %s — rejected", mac)
             return web.json_response({"status": "error", "error": "device revoked"}, status=403)
 
+        was_empty = not store.devices
         is_new = existing is None  # before register_or_update
         try:
             device = await store.register_or_update(mac, firmware_version)
@@ -436,6 +443,9 @@ class DevicesHelloView(HomeAssistantView):
             return web.json_response(
                 {"status": "error", "error": "invalid X-Device-ID (MAC)"}, status=400
             )
+
+        if was_empty:
+            _kick_firmware_cache(hass)
 
         # New device → reload to register HA device + entities (issue #48)
         if is_new:
@@ -518,14 +528,10 @@ class DevicesView(HomeAssistantView):
             return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
         store = _get_hass_data(hass).get("device_store")
         latest = ""
-        cached = await hass.async_add_executor_job(
-            load_cached_firmware, _firmware_dir(hass)
-        )
+        cached = await hass.async_add_executor_job(load_cached_firmware, _firmware_dir(hass))
         if cached is not None:
             latest = cached.version
-        return web.json_response(
-            devices_payload(store, latest) if store is not None else {}
-        )
+        return web.json_response(devices_payload(store, latest) if store is not None else {})
 
 
 class DevicesApproveView(HomeAssistantView):

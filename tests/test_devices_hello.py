@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from shared import pending_hello_hub
@@ -37,6 +37,7 @@ def client(tmp_path, monkeypatch):
     """Flask test client with an isolated device registry."""
     store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
     monkeypatch.setattr(intercom_server, "device_store", store)
+    monkeypatch.setattr(intercom_server, "schedule_firmware_refresh", lambda *_a, **_k: None)
     intercom_server.app.config["TESTING"] = True
     with intercom_server.app.test_client() as c:
         c.store = store  # convenience handle for seeding/assertions
@@ -53,6 +54,17 @@ class TestDockerDevicesHello:
         assert "device_name" not in body
         assert client.store.get(MAC)["firmware_version"] == "1.0.0"
         assert client.store.get(MAC)["pending"] is True
+
+    def test_first_hello_kicks_firmware_refresh(self, tmp_path, monkeypatch):
+        store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
+        monkeypatch.setattr(intercom_server, "device_store", store)
+        kicked: list[str] = []
+        monkeypatch.setattr(intercom_server, "schedule_firmware_refresh", kicked.append)
+        intercom_server.app.config["TESTING"] = True
+        with intercom_server.app.test_client() as c:
+            c.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+            c.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        assert kicked == [intercom_server.FIRMWARE_DIR]
 
     def test_known_device_returns_binding(self, client):
         client.store.register_or_update(MAC, "1.0.0")
@@ -239,6 +251,25 @@ class TestHADevicesHelloView:
         assert "device_name" not in body
         assert store.get(MAC)["firmware_version"] == "1.0.0"
         assert store.get(MAC)["pending"] is True
+
+    @pytest.mark.asyncio
+    async def test_first_hello_kicks_firmware_cache(self):
+        store = await _fresh_ha_store()
+        hass = _make_hass_with_store(store)
+        hass.data["home_intercom"]["firmware_dir"] = "/tmp/hi-firmware"
+        with patch("custom_components.home_intercom.api.schedule_firmware_refresh") as kick:
+            await self._post(body={"firmware_version": "1.0.0"}, hass=hass)
+        kick.assert_called_once_with("/tmp/hi-firmware")
+
+    @pytest.mark.asyncio
+    async def test_known_hello_does_not_kick_firmware_cache(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        hass = _make_hass_with_store(store)
+        hass.data["home_intercom"]["firmware_dir"] = "/tmp/hi-firmware"
+        with patch("custom_components.home_intercom.api.schedule_firmware_refresh") as kick:
+            await self._post(body={"firmware_version": "1.0.0"}, hass=hass)
+        kick.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_known_device_returns_binding(self):

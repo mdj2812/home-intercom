@@ -66,6 +66,19 @@ async def test_ui_entry_unload_tears_down_platforms(hass):
 
 
 @pytest.mark.asyncio
+async def test_last_entry_unload_stops_firmware_poller(hass):
+    unsub = MagicMock()
+    hass.data[DOMAIN]["firmware_poll_unsub"] = unsub
+    entry = _make_entry(UI_UNIQUE_ID, "ui-entry")
+
+    ok = await async_unload_entry(hass, entry)
+
+    assert ok is True
+    unsub.assert_called_once()
+    assert DOMAIN not in hass.data
+
+
+@pytest.mark.asyncio
 async def test_ui_entry_unload_keeps_shared_data_when_other_entries_remain(hass):
     """Unloading one entry while another remains must not wipe hass.data."""
     hass.data[DOMAIN]["entry_rooms"]["yaml-entry"] = {
@@ -151,6 +164,17 @@ async def test_reload_cycle_unloads_before_forward(hass):
 
     hass.config_entries.async_unload_platforms.assert_awaited_once()
     hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(entry, PLATFORMS)
+    from datetime import timedelta
+
+    from homeassistant.helpers.event import async_call_later, async_track_time_interval
+
+    from custom_components.home_intercom.const import FIRMWARE_POLL_INTERVAL_SECS
+
+    async_track_time_interval.assert_called()
+    async_call_later.assert_called()
+    _hass, _cb, interval = async_track_time_interval.call_args[0]
+    assert interval == timedelta(seconds=FIRMWARE_POLL_INTERVAL_SECS)
+    assert callable(hass.data[DOMAIN]["firmware_poll_unsub"])
 
 
 @pytest.mark.asyncio
