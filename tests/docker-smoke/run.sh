@@ -301,6 +301,33 @@ assert_http "POST /record after restart (no re-hello) — registry reloaded from
     "$(fetch_code -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
         --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test")" "200"
 
+# 13b. POST /devices/manage delete — store-only (no HA device registry)
+MANAGE_DEL=$(fetch -X POST -H "Content-Type: application/json" \
+    -d '{"mac": "AA:BB:CC:DD:EE:FF", "action": "delete"}' \
+    "${URL}/api/home_intercom/devices/manage" || echo "")
+assert_json "POST /api/home_intercom/devices/manage delete" "${MANAGE_DEL}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True and d.get('deleted') is True, f'bad delete: {d}'
+print(f'ok: delete={d}')
+"
+DEVICES_AFTER=$(fetch "${URL}/devices" || echo "")
+assert_json "GET /devices — MAC gone after delete" "${DEVICES_AFTER}" "
+import sys, json
+d = json.load(sys.stdin)
+assert 'AA:BB:CC:DD:EE:FF' not in d, f'MAC still listed: {d}'
+print('ok: store empty of deleted MAC')
+"
+if docker exec "${CONTAINER_NAME}" grep -q "AA:BB:CC:DD:EE:FF" /data/device_registry.json 2>/dev/null; then
+    echo "  ❌ /data/device_registry.json still has deleted MAC"
+    docker exec "${CONTAINER_NAME}" cat /data/device_registry.json 2>&1 || true
+    exit 1
+fi
+echo "  ✅ device registry file no longer contains deleted MAC"
+assert_http "POST /record after delete — unknown MAC → 403" \
+    "$(fetch_code -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+        --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test")" "403"
+
 # 14–16. /chime — custom pre-announce (issue #66)
 CHIME=$(fetch "${URL}/chime" || echo "")
 assert_json "GET /chime — default" "${CHIME}" "

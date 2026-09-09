@@ -194,6 +194,17 @@ class TestDevicesManage:
         assert resp.json["deleted"] is True
         assert store.get("AA:BB:CC:DD:EE:FF") is None
 
+    def test_delete_does_not_touch_ha_device_registry(self, dev_client):
+        """Docker delete is store-only — HA registry cleanup lives in api.py."""
+        import inspect
+
+        import intercom_server
+
+        src = inspect.getsource(intercom_server.devices_manage)
+        assert "device_registry" not in src
+        assert "_remove_button_ha_device" not in src
+        assert "async_remove_device" not in src
+
     def test_invalid_action_400(self, dev_client):
         client, store = dev_client
         store.register_or_update("AA:BB:CC:DD:EE:FF")

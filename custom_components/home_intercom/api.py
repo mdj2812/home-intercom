@@ -36,6 +36,7 @@ from .shared import (
     device_record_auth_error,
     devices_payload,
     is_wav,
+    normalize_mac,
     parse_device_manage_body,
     resolve_chime_wav,
     wait_for_pending_hello,
@@ -167,6 +168,20 @@ def _verify_pwa_token(request: web.Request, *, view: str) -> web.Response | None
         _LOGGER.warning("%s: invalid or missing X-PWA-Token", view)
         return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
     return None
+
+
+def _remove_button_ha_device(hass: HomeAssistant, mac: str) -> None:
+    """Remove the HA device registry entry for a button MAC (PWA delete).
+
+    Home Assistant only — Docker has no device registry and never calls this.
+    """
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+    device = registry.async_get_device(identifiers={(DOMAIN, normalize_mac(mac))})
+    if device is not None:
+        _LOGGER.info("Removing HA device for button %s", normalize_mac(mac))
+        registry.async_remove_device(device.id)
 
 
 class RecordView(HomeAssistantView):
@@ -545,6 +560,7 @@ class DevicesManageView(HomeAssistantView):
             if store.get(mac) is None:
                 return web.json_response({"ok": False, "error": "unknown device"}, status=404)
             await store.remove(mac)
+            _remove_button_ha_device(hass, mac)
             from homeassistant.helpers.dispatcher import async_dispatcher_send
 
             async_dispatcher_send(hass, f"{DOMAIN}_device_store_changed")

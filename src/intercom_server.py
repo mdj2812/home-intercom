@@ -193,6 +193,8 @@ def devices_manage():
     mac, action = parsed
 
     if action == "delete":
+        # Store-only: Docker has no HA device registry. HA delete also
+        # removes the native device card (DevicesManageView).
         if device_store.get(mac) is None:
             return jsonify({"ok": False, "error": "unknown device"}), 404
         device_store.remove(mac)

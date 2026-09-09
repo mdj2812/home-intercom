@@ -522,10 +522,12 @@ class TestDevicesManageView:
         store.get = MagicMock(return_value={"name": "Device EE:FF"})
         store.remove = AsyncMock()
         req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "delete"})
-        resp = await DevicesManageView().post(req)
+        with patch("custom_components.home_intercom.api._remove_button_ha_device") as remove_ha:
+            resp = await DevicesManageView().post(req)
         assert resp.status == 200
         assert json.loads(resp.text)["deleted"] is True
         store.remove.assert_awaited_once_with("AA:BB:CC:DD:EE:FF")
+        remove_ha.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_rejects_missing_token(self):
