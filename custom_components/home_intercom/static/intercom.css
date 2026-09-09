@@ -1166,3 +1166,24 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   opacity: 0.45;
   text-decoration: line-through;
 }
+
+.device-row.pending {
+  border-color: var(--accent);
+}
+
+.device-approve {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.7rem;
+  cursor: pointer;
+  appearance: none;
+}
+
+.device-approve:hover {
+  background: var(--surface-hover);
+}

@@ -74,7 +74,11 @@ class DeviceStore(DeviceStoreBase):
         with self._lock:
             device, created = self._register_or_update(mac, firmware_version)
             if created:
-                _LOGGER.info("Auto-registered new device %s (%s)", mac, device["name"])
+                _LOGGER.info(
+                    "Auto-registered new device %s (%s) — pending approval",
+                    mac,
+                    device["name"],
+                )
             self._save_locked()
             return device
 
@@ -102,6 +106,19 @@ class DeviceStore(DeviceStoreBase):
                 return None
             self._save_locked()
             _LOGGER.warning("Device revoked: %s (%s)", mac, device["name"])
+            return device
+
+    def approve(self, mac: str) -> dict[str, Any] | None:
+        """Mark a pending device as active (issue #51).
+
+        Returns the updated device, or None if the MAC is unknown.
+        """
+        with self._lock:
+            device = self._approve(mac)
+            if device is None:
+                return None
+            self._save_locked()
+            _LOGGER.info("Device approved: %s (%s)", mac, device["name"])
             return device
 
     def remove(self, mac: str) -> None:

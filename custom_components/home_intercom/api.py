@@ -7,6 +7,7 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /rooms/status  → StatusView  (GET speaker online status)
   /version       → VersionView (GET version only)
   /rooms         → RoomsView   (GET room config)
+  /devices       → DevicesView (GET registry; POST /devices/approve)
   /audio/<path>  → AudioView   (GET recorded WAV files)
   /home_intercom  → PanelView        (GET PWA frontend HTML, legacy path)
   /home-intercom  → PanelAliasView   (GET PWA frontend HTML, sidebar-friendly)
@@ -34,6 +35,7 @@ from .shared import (
     devices_payload,
     is_wav,
     resolve_chime_wav,
+    wait_for_pending_hello,
     write_custom_chime_wav,
 )
 from .shared import concat_wavs as _concat_wavs
@@ -349,9 +351,9 @@ class RoomsView(HomeAssistantView):
 class DevicesHelloView(HomeAssistantView):
     """POST /api/home_intercom/devices/hello — ESP32 boot registration (issue #37).
 
-    Trust-on-first-use: unknown MACs auto-register with a default name.
-    Revoked devices are rejected. No secrets on the device — it identifies
-    by MAC address only.
+    Trust-on-first-use: unknown MACs auto-register as pending (issue #51)
+    until an admin approves. Revoked devices are rejected. No secrets on
+    the device — it identifies by MAC address only.
     """
 
     url = "/api/home_intercom/devices/hello"
@@ -396,6 +398,16 @@ class DevicesHelloView(HomeAssistantView):
             from homeassistant.helpers.dispatcher import async_dispatcher_send
 
             async_dispatcher_send(hass, f"{DOMAIN}_device_store_changed")
+
+        # Hold this hello until approve so the ESP32 gets status=ok without
+        # waiting for its next heartbeat (issue #51).
+        device = await hass.async_add_executor_job(wait_for_pending_hello, store.get, mac)
+        if device is None:
+            return web.json_response(
+                {"status": "error", "error": "device registry unavailable"}, status=500
+            )
+        if device.get("revoked"):
+            return web.json_response({"status": "error", "error": "device revoked"}, status=403)
 
         return web.json_response(device_hello_payload(device))
 
@@ -464,6 +476,39 @@ class DevicesView(HomeAssistantView):
             return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
         store = _get_hass_data(hass).get("device_store")
         return web.json_response(devices_payload(store) if store is not None else {})
+
+
+class DevicesApproveView(HomeAssistantView):
+    """POST /api/home_intercom/devices/approve — pending → active (issue #51).
+
+    Same PWA token as GET /devices. Body: ``{"mac": "AA:BB:..."}``.
+    """
+
+    url = "/api/home_intercom/devices/approve"
+    name = "api:home_intercom:devices-approve"
+    requires_auth = False  # auth via X-PWA-Token header
+
+    async def post(self, request: web.Request) -> web.Response:
+        denied = _verify_pwa_token(request, view="DevicesApproveView")
+        if denied is not None:
+            return denied
+        hass = request.app["hass"]
+        store = _get_hass_data(hass).get("device_store")
+        if store is None:
+            return web.json_response(
+                {"ok": False, "error": "device registry unavailable"}, status=500
+            )
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        mac = body.get("mac", "") if isinstance(body, dict) else ""
+        if not mac:
+            return web.json_response({"ok": False, "error": "missing mac"}, status=400)
+        device = await store.approve(mac)
+        if device is None:
+            return web.json_response({"ok": False, "error": "unknown device"}, status=404)
+        return web.json_response({"ok": True, "pending": False})
 
 
 class PanelView(HomeAssistantView):
@@ -551,6 +596,7 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(ConfigView)
     hass.http.register_view(RoomsView)
     hass.http.register_view(DevicesHelloView)
+    hass.http.register_view(DevicesApproveView)
     hass.http.register_view(DevicesView)
     hass.http.register_view(PanelView)
     hass.http.register_view(PanelAliasView)

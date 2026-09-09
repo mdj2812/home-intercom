@@ -89,6 +89,56 @@ class TestDevicesRoute:
         assert "AA:BB:CC:DD:EE:FF" in resp.json
 
 
+class TestDevicesApprove:
+    """POST /devices/approve — pending → active (issue #51)."""
+
+    @pytest.fixture
+    def dev_client(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
+        monkeypatch.setattr(intercom_server, "device_store", store)
+        return client, store
+
+    def test_approve_then_listed_not_pending(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        assert store.get("AA:BB:CC:DD:EE:FF")["pending"] is True
+        resp = client.post(
+            "/devices/approve",
+            json={"mac": "AA:BB:CC:DD:EE:FF"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json["ok"] is True
+        assert store.get("AA:BB:CC:DD:EE:FF")["pending"] is False
+
+    def test_approve_ha_alias(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        resp = client.post(
+            "/api/home_intercom/devices/approve",
+            json={"mac": "aa:bb:cc:dd:ee:ff"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert store.get("AA:BB:CC:DD:EE:FF")["pending"] is False
+
+    def test_approve_unknown_404(self, dev_client):
+        client, _store = dev_client
+        resp = client.post(
+            "/devices/approve",
+            json={"mac": "AA:BB:CC:DD:EE:FF"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 404
+
+    def test_approve_missing_mac_400(self, dev_client):
+        client, _store = dev_client
+        resp = client.post("/devices/approve", json={}, content_type="application/json")
+        assert resp.status_code == 400
+
+
 class TestVersionRoute:
     def test_returns_version_json(self, client):
         resp = client.get("/version")
@@ -412,9 +462,17 @@ class TestDeviceRecordAuth:
     def test_registered_mac_allowed(self, mac_client):
         client, store = mac_client
         store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
         resp = self._post(client, "AA:BB:CC:DD:EE:FF")
         assert resp.status_code == 200
         assert resp.json["ok"] is True
+
+    def test_pending_mac_403(self, mac_client):
+        client, store = mac_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        resp = self._post(client, "AA:BB:CC:DD:EE:FF")
+        assert resp.status_code == 403
+        assert resp.json["error"] == "device pending"
 
     def test_unknown_mac_403(self, mac_client):
         client, _store = mac_client
@@ -444,6 +502,7 @@ class TestDeviceRecordAuth:
         """Firmware path aliases share /record auth (issue #70)."""
         client, store = mac_client
         store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
         resp = self._post(client, "AA:BB:CC:DD:EE:FF", path)
         assert resp.status_code == 200
         assert resp.json["ok"] is True

@@ -149,15 +149,15 @@ for PANEL_PATH in home_intercom home-intercom; do
     fi
 done
 
-# 5. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37)
+# 5. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37, #51)
 HELLO=$(docker exec "${CONTAINER_NAME}" \
     curl -sS -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
     -d '{"firmware_version": "smoke-1.0"}' \
     "http://localhost:${HA_PORT}/api/home_intercom/devices/hello" 2>/dev/null || echo "")
-if echo "${HELLO}" | grep -q '"status": *"ok"'; then
-    echo "  ✅ POST /api/home_intercom/devices/hello — ${HELLO}"
+if echo "${HELLO}" | grep -q '"status": *"pending"'; then
+    echo "  ✅ POST /api/home_intercom/devices/hello — pending: ${HELLO}"
 else
-    echo "  ❌ POST /api/home_intercom/devices/hello — unexpected: ${HELLO}"
+    echo "  ❌ POST /api/home_intercom/devices/hello — expected pending, got: ${HELLO}"
     exit 1
 fi
 
@@ -185,6 +185,18 @@ if [ "${DEV_NOAUTH}" = "401" ] && echo "${DEVICES}" | grep -q "AA:BB:CC:DD:EE:FF
     echo "  ✅ GET /api/home_intercom/devices — no token → 401, valid token lists registered MAC"
 else
     echo "  ❌ GET /api/home_intercom/devices — noauth=${DEV_NOAUTH} (want 401), with token: ${DEVICES}"
+    exit 1
+fi
+
+# 6c. POST /api/home_intercom/devices/approve — then record is allowed (issue #51)
+APPROVE=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS -X POST -H "X-PWA-Token: ${PWA_TOKEN}" -H "Content-Type: application/json" \
+    -d '{"mac": "AA:BB:CC:DD:EE:FF"}' \
+    "http://localhost:${HA_PORT}/api/home_intercom/devices/approve" 2>/dev/null || echo "")
+if echo "${APPROVE}" | grep -q '"ok": *true'; then
+    echo "  ✅ POST /api/home_intercom/devices/approve — ${APPROVE}"
+else
+    echo "  ❌ POST /api/home_intercom/devices/approve — unexpected: ${APPROVE}"
     exit 1
 fi
 

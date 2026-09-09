@@ -353,7 +353,7 @@ function setCardState(card, state, msg) {
   card.querySelector('.status').textContent = msg;
 }
 
-// ——— Read-only device list (issue #52) ———
+// ——— Device list + pending approval (issues #52, #51) ———
 // window._DEVICES caches the last fetch so language switches re-render instantly.
 window._DEVICES = null;
 
@@ -365,13 +365,22 @@ window.renderDevices = function () {
     section.hidden = true;
     return;
   }
-  const macs = Object.keys(devices).sort((a, b) =>
-    (devices[a].name || a).localeCompare(devices[b].name || b));
+  const macs = Object.keys(devices).sort((a, b) => {
+    const pa = devices[a].pending ? 0 : 1;
+    const pb = devices[b].pending ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return (devices[a].name || a).localeCompare(devices[b].name || b);
+  });
   list.innerHTML = '';
+  let anyPending = false;
   for (const mac of macs) {
     const d = devices[mac];
+    const pending = !!d.pending;
+    if (pending) anyPending = true;
     const row = document.createElement('div');
-    row.className = 'device-row' + (d.revoked ? ' revoked' : '');
+    row.className = 'device-row'
+      + (d.revoked ? ' revoked' : '')
+      + (pending ? ' pending' : '');
 
     const name = document.createElement('span');
     name.className = 'device-name';
@@ -379,7 +388,9 @@ window.renderDevices = function () {
 
     const room = document.createElement('span');
     room.className = 'device-room';
-    room.textContent = (d.room && ROOM_NAMES[d.room]) || '—';
+    room.textContent = pending
+      ? I18N.t('devicePending')
+      : ((d.room && ROOM_NAMES[d.room]) || '—');
 
     const meta = document.createElement('span');
     meta.className = 'device-meta';
@@ -389,11 +400,40 @@ window.renderDevices = function () {
     row.appendChild(name);
     row.appendChild(room);
     row.appendChild(meta);
+    if (pending && !d.revoked) {
+      const approve = document.createElement('button');
+      approve.type = 'button';
+      approve.className = 'device-approve';
+      approve.textContent = I18N.t('deviceApprove');
+      approve.addEventListener('click', (e) => {
+        e.stopPropagation();
+        approveDevice(mac);
+      });
+      row.appendChild(approve);
+    }
     row.title = mac;
     list.appendChild(row);
   }
   section.hidden = false;
+  if (anyPending) {
+    const toggle = document.getElementById('devices-toggle');
+    if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    list.hidden = false;
+  }
 };
+
+async function approveDevice(mac) {
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/devices/approve', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ mac }),
+    });
+    if (!resp.ok) return;
+    await loadDevices();
+  } catch (e) { /* ignore */ }
+}
 
 function initDevicesToggle() {
   const toggle = document.getElementById('devices-toggle');

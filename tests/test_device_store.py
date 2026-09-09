@@ -43,6 +43,7 @@ class TestDockerDeviceStore:
         assert device["room"] == ""
         assert device["firmware_version"] == "1.0.0"
         assert device["revoked"] is False
+        assert device["pending"] is True
         assert device["created_at"]
         assert device["last_seen"]
 
@@ -106,6 +107,24 @@ class TestDockerDeviceStore:
     def test_revoke_unknown_returns_none(self, tmp_path):
         store = _fresh_docker_store(tmp_path)
         assert store.revoke(MAC) is None
+
+    def test_approve_clears_pending(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC)
+        device = store.approve(MAC)
+        assert device["pending"] is False
+        assert store.get(MAC)["pending"] is False
+
+    def test_approve_unknown_returns_none(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        assert store.approve(MAC) is None
+
+    def test_legacy_record_without_pending_is_approved(self, tmp_path):
+        """Devices stored before #51 have no pending key — treat as approved."""
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC)
+        store._devices[MAC].pop("pending")
+        assert store.get(MAC).get("pending") is None
 
     def test_persistence_round_trip(self, tmp_path):
         store = _fresh_docker_store(tmp_path)
@@ -186,6 +205,7 @@ class TestHADeviceStore:
         assert device["room"] == ""
         assert device["firmware_version"] == "1.0.0"
         assert device["revoked"] is False
+        assert device["pending"] is True
         assert device["created_at"]
         assert device["last_seen"]
 
@@ -249,6 +269,19 @@ class TestHADeviceStore:
     async def test_revoke_unknown_returns_none(self):
         store = await _fresh_ha_store()
         assert await store.revoke(MAC) is None
+
+    @pytest.mark.asyncio
+    async def test_approve_clears_pending(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        device = await store.approve(MAC)
+        assert device["pending"] is False
+        assert store.get(MAC)["pending"] is False
+
+    @pytest.mark.asyncio
+    async def test_approve_unknown_returns_none(self):
+        store = await _fresh_ha_store()
+        assert await store.approve(MAC) is None
 
     @pytest.mark.asyncio
     async def test_remove_deletes_permanently(self):

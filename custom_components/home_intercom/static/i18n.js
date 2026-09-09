@@ -49,6 +49,8 @@ const I18N = (() => {
       themeAuto: "自动",
       themeLight: "浅色",
       themeDark: "深色",
+      devicePending: "待批准",
+      deviceApprove: "批准",
     },
     en: {
       appTitle: "Home Intercom",
@@ -88,6 +90,8 @@ const I18N = (() => {
       themeAuto: "Auto",
       themeLight: "Light",
       themeDark: "Dark",
+      devicePending: "Pending",
+      deviceApprove: "Approve",
     },
   };
 

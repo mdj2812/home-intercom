@@ -44,6 +44,8 @@ I18N_REQUIRED_KEYS = [
     "themeAuto",
     "themeLight",
     "themeDark",
+    "devicePending",
+    "deviceApprove",
 ]
 
 CHINESE_STATUS_STRINGS = [

@@ -18,7 +18,9 @@ import logging
 import os
 import re
 import shutil
+import threading
 import wave
+from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -257,10 +259,13 @@ class DeviceStoreBase:
     protected _-prefixed implementation here, then save.
 
     Note on revoke(): devices are flagged "revoked", not deleted. Deleting
-    would be pointless — /devices/hello auto-registers unknown MACs
-    (trust-on-first-use), so a deleted device would simply re-register on
-    its next boot. The flag is what actually blocks future hellos (#37)
-    and record calls (#47).
+    would be pointless — /devices/hello auto-registers unknown MACs, so a
+    deleted device would simply re-register on its next boot. The flag is
+    what actually blocks future hellos (#37) and record calls (#47).
+
+    Note on pending (issue #51): unknown MACs still auto-register, but new
+    devices start pending until an admin approves them. Existing records
+    without a ``pending`` key are treated as approved (grandfathered).
     """
 
     def __init__(self) -> None:
@@ -295,6 +300,7 @@ class DeviceStoreBase:
                 "last_seen": now,
                 "firmware_version": firmware_version,
                 "revoked": False,
+                "pending": True,
             }
             self._devices[mac] = device
         else:
@@ -311,6 +317,8 @@ class DeviceStoreBase:
         if device is None:
             return None
         device[key] = value
+        if key == "pending" and not value:
+            pending_hello_hub.notify(normalize_mac(mac))
         return dict(device)
 
     def _revoke(self, mac: str) -> dict[str, Any] | None:
@@ -319,6 +327,16 @@ class DeviceStoreBase:
         if device is None:
             return None
         device["revoked"] = True
+        pending_hello_hub.notify(mac)
+        return dict(device)
+
+    def _approve(self, mac: str) -> dict[str, Any] | None:
+        """Clear the pending flag so hello delivers config and record is allowed."""
+        device = self._devices.get(normalize_mac(mac))
+        if device is None:
+            return None
+        device["pending"] = False
+        pending_hello_hub.notify(mac)
         return dict(device)
 
     def _remove(self, mac: str) -> None:
@@ -327,12 +345,93 @@ class DeviceStoreBase:
         self._devices.pop(key, None)
 
 
-def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
-    """Build the POST /devices/hello response payload (issue #37).
+class PendingHelloHub:
+    """Wake a held /devices/hello when the device is approved (issue #51).
 
-    Delivers everything an ESP32 needs at boot: its name/room binding
-    plus the global audio parameters.
+    ESP32 is the HTTP client, so the server cannot push. Pending hello
+    waits here until notify() or timeout, then returns the ok payload.
     """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._events: dict[str, threading.Event] = {}
+
+    def wait(
+        self,
+        mac: str,
+        timeout: float,
+        still_waiting: Callable[[], bool] | None = None,
+    ) -> bool:
+        """Block until notify() or timeout. True if notify won or already done.
+
+        ``still_waiting`` is re-checked after this hello is registered so an
+        approve that landed between the pending read and wait() is not missed.
+        """
+        if timeout <= 0:
+            return False
+        key = normalize_mac(mac)
+        event = threading.Event()
+        with self._lock:
+            prev = self._events.get(key)
+            self._events[key] = event
+        if prev is not None:
+            prev.set()
+        if still_waiting is not None and not still_waiting():
+            with self._lock:
+                if self._events.get(key) is event:
+                    del self._events[key]
+            return True
+        notified = event.wait(timeout=timeout)
+        with self._lock:
+            if self._events.get(key) is event:
+                del self._events[key]
+        return notified
+
+    def notify(self, mac: str) -> None:
+        key = normalize_mac(mac)
+        with self._lock:
+            event = self._events.get(key)
+        if event is not None:
+            event.set()
+
+
+pending_hello_hub = PendingHelloHub()
+
+# Default stays below current ESP32 hello HTTP timeout (10s). After firmware
+# HELLO_HTTP_TIMEOUT_MS=30000 this can be raised (e.g. 22s) for a longer hold.
+_DEFAULT_PENDING_HELLO_WAIT_SECS = 8.0
+
+
+def pending_hello_wait_secs() -> float:
+    raw = os.environ.get("HOME_INTERCOM_PENDING_HELLO_WAIT", str(_DEFAULT_PENDING_HELLO_WAIT_SECS))
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return _DEFAULT_PENDING_HELLO_WAIT_SECS
+
+
+def wait_for_pending_hello(get_device: Any, mac: str) -> dict[str, Any] | None:
+    """If the device is pending, block until approve/revoke or timeout."""
+
+    def still_pending() -> bool:
+        current = get_device(mac)
+        return bool(current and current.get("pending") and not current.get("revoked"))
+
+    device = get_device(mac)
+    if device is None or not still_pending():
+        return device
+    pending_hello_hub.wait(mac, pending_hello_wait_secs(), still_pending)
+    return get_device(mac)
+
+
+def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
+    """Build the POST /devices/hello response payload (issue #37, #51).
+
+    Pending devices get ``{"status": "pending"}`` with no room/config so
+    the ESP32 can retry. Approved devices get name/room plus audio params.
+    """
+    if device.get("pending"):
+        return {"status": "pending"}
     return {
         "status": "ok",
         "device_name": device["name"],
@@ -359,14 +458,17 @@ class DeviceRecordFault(StrEnum):
 
     UNKNOWN_DEVICE = "unknown device"
     DEVICE_REVOKED = "device revoked"
+    DEVICE_PENDING = "device pending"
 
 
 def device_record_auth_error(device: dict[str, Any] | None) -> DeviceRecordFault | None:
-    """Return why a device may not record, or None if it may (issue #47)."""
+    """Return why a device may not record, or None if it may (issue #47, #51)."""
     if device is None:
         return DeviceRecordFault.UNKNOWN_DEVICE
     if device.get("revoked"):
         return DeviceRecordFault.DEVICE_REVOKED
+    if device.get("pending"):
+        return DeviceRecordFault.DEVICE_PENDING
     return None
 
 
