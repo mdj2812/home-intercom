@@ -8,6 +8,7 @@ with homeassistant.helpers.storage.Store.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -72,10 +73,8 @@ class DeviceStore(DeviceStoreBase):
                     self._path,
                     exc,
                 )
-                try:
+                with contextlib.suppress(OSError):
                     os.remove(tmp_path)
-                except OSError:
-                    pass
         with open(self._path, "w", encoding="utf-8") as f:
             f.write(payload)
             f.flush()
