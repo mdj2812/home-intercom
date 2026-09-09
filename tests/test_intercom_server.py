@@ -55,6 +55,40 @@ class TestStaticRoutes:
         assert resp.status_code == 404
 
 
+class TestDevicesRoute:
+    """GET /devices + HA alias — read-only registry listing (issue #52)."""
+
+    @pytest.fixture
+    def dev_client(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
+        monkeypatch.setattr(intercom_server, "device_store", store)
+        return client, store
+
+    def test_devices_empty(self, dev_client):
+        client, _ = dev_client
+        resp = client.get("/devices")
+        assert resp.status_code == 200
+        assert resp.json == {}
+
+    def test_devices_lists_registered(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF", "1.0.0")
+        resp = client.get("/devices")
+        assert resp.status_code == 200
+        dev = resp.json["AA:BB:CC:DD:EE:FF"]
+        assert dev["name"] == "Device EE:FF"
+        assert dev["firmware_version"] == "1.0.0"
+
+    def test_devices_ha_alias(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF", "1.0.0")
+        resp = client.get("/api/home_intercom/devices")
+        assert resp.status_code == 200
+        assert "AA:BB:CC:DD:EE:FF" in resp.json
+
+
 class TestVersionRoute:
     def test_returns_version_json(self, client):
         resp = client.get("/version")

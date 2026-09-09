@@ -228,6 +228,19 @@ print(f'ok: hello={d}')
 assert_http "POST /api/home_intercom/devices/hello — invalid MAC → 400" \
     "$(fetch_code -X POST -H "X-Device-ID: not-a-mac" "${URL}/api/home_intercom/devices/hello")" "400"
 
+# 9b. GET /devices — read-only registry listing includes the hello-registered MAC (issue #52)
+DEVICES=$(fetch "${URL}/devices" || echo "")
+assert_json "GET /devices — registered MAC listed" "${DEVICES}" "
+import sys, json
+d = json.load(sys.stdin)
+dev = d.get('AA:BB:CC:DD:EE:FF')
+assert dev, f'registered MAC missing: {d}'
+assert dev.get('name') == 'Device EE:FF', f'bad name: {dev}'
+assert dev.get('firmware_version') == 'smoke-1.0', f'bad firmware: {dev}'
+print(f'ok: devices={list(d)}')
+"
+assert_ha_alias "GET /api/home_intercom/devices — matches /devices" "${DEVICES}" "/api/home_intercom/devices"
+
 # 10–11. POST /record — MAC allow/deny (issue #47)
 assert_http "POST /record — registered MAC → 200" \
     "$(fetch_code -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \

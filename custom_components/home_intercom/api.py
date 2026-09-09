@@ -31,6 +31,7 @@ from .shared import (
     delete_custom_chime,
     device_hello_payload,
     device_record_auth_error,
+    devices_payload,
     is_wav,
     resolve_chime_wav,
     write_custom_chime_wav,
@@ -444,6 +445,27 @@ async def _serve_panel(request: web.Request) -> web.Response:
     )
 
 
+class DevicesView(HomeAssistantView):
+    """GET /api/home_intercom/devices — read-only registry listing (issue #52).
+
+    Gated by the PWA shared token (same as RecordView): device names and
+    MACs are the registry's only auth material, so this isn't public.
+    Management actions live in the options flow (#48).
+    """
+
+    url = "/api/home_intercom/devices"
+    name = "api:home_intercom:devices"
+    requires_auth = False  # auth via X-PWA-Token header
+
+    async def get(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        pwa_token = hass.data.get(DOMAIN, {}).get("pwa_token", "")
+        if pwa_token and request.headers.get("X-PWA-Token") != pwa_token:
+            return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
+        store = _get_hass_data(hass).get("device_store")
+        return web.json_response(devices_payload(store) if store is not None else {})
+
+
 class PanelView(HomeAssistantView):
     """GET /home_intercom — PWA frontend HTML (legacy underscore path)."""
 
@@ -529,6 +551,7 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(ConfigView)
     hass.http.register_view(RoomsView)
     hass.http.register_view(DevicesHelloView)
+    hass.http.register_view(DevicesView)
     hass.http.register_view(PanelView)
     hass.http.register_view(PanelAliasView)
     hass.http.register_view(StaticView)
