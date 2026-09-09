@@ -511,11 +511,21 @@ body {
 }
 
 .lang-dropdown {
-  width: 64px;
+  width: 36px;
 }
 
 .theme-dropdown .lang-dropdown-menu {
   min-width: 96px;
+}
+
+.lang-dropdown .lang-dropdown-menu {
+  min-width: 36px;
+  width: 36px;
+}
+
+.lang-dropdown .lang-option {
+  padding: 8px 7px;
+  text-align: left;
 }
 
 #lang-toggle {
@@ -527,13 +537,12 @@ body {
   appearance: none;
   color: var(--text-secondary);
   font-size: 0.65rem;
-  width: 64px;
-  min-width: 64px;
+  width: 36px;
+  min-width: 36px;
   height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 4px;
   cursor: pointer;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -553,26 +562,11 @@ body {
   color: var(--text-primary);
 }
 
-.lang-chevron {
-  width: 6px;
-  height: 6px;
-  border-right: 1px solid currentcolor;
-  border-bottom: 1px solid currentcolor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.2s;
-  flex-shrink: 0;
-}
-
-.lang-dropdown.open .lang-chevron,
-.theme-dropdown.open .lang-chevron {
-  transform: rotate(-135deg) translateY(1px);
-}
-
 .lang-dropdown-menu {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  min-width: 64px;
+  min-width: 36px;
   background: var(--surface);
   border: 1px solid var(--border);
   z-index: 10;
