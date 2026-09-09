@@ -7,7 +7,9 @@ Covers both implementations:
 
 from __future__ import annotations
 
+import errno
 import json
+import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -178,6 +180,21 @@ class TestDockerDeviceStore:
         on_disk = json.loads(path.read_text(encoding="utf-8"))
         assert on_disk["version"] == 1
         assert MAC in on_disk["devices"]
+
+    def test_save_falls_back_when_replace_busy(self, tmp_path, monkeypatch):
+        """QNAP file bind-mounts reject os.replace with EBUSY."""
+        path = tmp_path / "device_registry.json"
+        store = DockerDeviceStore(str(path))
+
+        def _busy(_src, _dst):
+            raise OSError(errno.EBUSY, "Device or resource busy")
+
+        monkeypatch.setattr(os, "replace", _busy)
+        store.register_or_update(MAC, "1.0.0")
+        store.register_or_update(MAC, "1.0.1")
+        assert not (tmp_path / "device_registry.json.tmp").exists()
+        reloaded = DockerDeviceStore(str(path))
+        assert reloaded.get(MAC)["firmware_version"] == "1.0.1"
 
     def test_two_devices_independent(self, tmp_path):
         store = _fresh_docker_store(tmp_path)

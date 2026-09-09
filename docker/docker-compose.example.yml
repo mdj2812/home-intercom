@@ -4,6 +4,9 @@ services:
     container_name: home-intercom
     restart: unless-stopped
     volumes:
+      # Persist device registry + firmware cache. Mount a *directory*, not
+      # the JSON file — file bind-mounts cannot be atomically replaced (EBUSY).
+      - ./data:/data
       # Audio files served by Flask (no SCP)
       - ./audio:/data/audio
       # rooms.json editable without rebuild
