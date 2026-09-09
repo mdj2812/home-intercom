@@ -249,6 +249,14 @@ assert_http "POST /record — unknown MAC → 403" \
     "$(fetch_code -X POST -H "X-Device-ID: 11:22:33:44:55:66" \
         --data-binary @"${TMPDIR}/test.wav" "${URL}/record?target=test")" "403"
 
+# 11b. POST /api/home_intercom/device/record — firmware path alias (issue #70)
+assert_http "POST /api/home_intercom/device/record — registered MAC → 200" \
+    "$(fetch_code -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" \
+        --data-binary @"${TMPDIR}/test.wav" "${URL}/api/home_intercom/device/record?target=test")" "200"
+assert_http "POST /api/home_intercom/device/record — unknown MAC → 403" \
+    "$(fetch_code -X POST -H "X-Device-ID: 11:22:33:44:55:66" \
+        --data-binary @"${TMPDIR}/test.wav" "${URL}/api/home_intercom/device/record?target=test")" "403"
+
 # 12. Device registry persisted to disk
 if docker exec "${CONTAINER_NAME}" grep -q "AA:BB:CC:DD:EE:FF" /data/device_registry.json 2>/dev/null; then
     echo "  ✅ device registry persisted to /data/device_registry.json"
