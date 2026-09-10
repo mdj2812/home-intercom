@@ -138,22 +138,34 @@ async def _import_yaml_rooms(hass: HomeAssistant, config_rooms: dict[str, Any]) 
         return
 
     if ui_entry is None:
-        await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": SOURCE_IMPORT},
-            data={CONF_ROOMS: incoming},
-        )
-        ui_entry = _find_ui_entry(list(hass.config_entries.async_entries(DOMAIN)))
+        # Do not await the flow here: async_setup still holds the setup lock,
+        # so creating the entry would deadlock and never call async_setup_entry.
+        yaml_entry_id = yaml_entry.entry_id if yaml_entry is not None else None
 
-    if ui_entry is not None and incoming:
-        merged, added = merge_incoming_rooms(_entry_room_map(ui_entry), incoming)
-        if added:
-            options = dict(ui_entry.options)
-            options[CONF_ROOMS] = merged
-            hass.config_entries.async_update_entry(ui_entry, options=options)
-            _LOGGER.info("Imported YAML rooms into the UI entry: %s", ", ".join(added))
+        async def _finish_import() -> None:
+            await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": SOURCE_IMPORT},
+                data={CONF_ROOMS: incoming},
+            )
+            ui = _find_ui_entry(list(hass.config_entries.async_entries(DOMAIN)))
+            if yaml_entry_id is None or ui is None:
+                return
+            _move_room_devices(hass, yaml_entry_id, ui.entry_id)
+            await hass.config_entries.async_remove(yaml_entry_id)
+            _LOGGER.info("Removed YAML config entry after importing rooms into the PWA catalog")
 
-    if yaml_entry is not None and ui_entry is not None:
+        hass.async_create_task(_finish_import())
+        return
+
+    merged, added = merge_incoming_rooms(_entry_room_map(ui_entry), incoming)
+    if added:
+        options = dict(ui_entry.options)
+        options[CONF_ROOMS] = merged
+        hass.config_entries.async_update_entry(ui_entry, options=options)
+        _LOGGER.info("Imported YAML rooms into the UI entry: %s", ", ".join(added))
+
+    if yaml_entry is not None:
         _move_room_devices(hass, yaml_entry.entry_id, ui_entry.entry_id)
         await hass.config_entries.async_remove(yaml_entry.entry_id)
         _LOGGER.info("Removed YAML config entry after importing rooms into the PWA catalog")

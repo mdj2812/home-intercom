@@ -114,6 +114,7 @@ async def test_import_creates_ui_entry_when_missing():
     ui = _entry(UI_UNIQUE_ID, "ui-entry", {"living": dict(LIVING)})
     hass = MagicMock()
     entries = [yaml_entry]
+    scheduled: list = []
 
     def _entries(_domain=None):
         return list(entries)
@@ -121,15 +122,40 @@ async def test_import_creates_ui_entry_when_missing():
     async def _init(*_args, **_kwargs):
         entries.append(ui)
 
+    def _create_task(coro, *_args, **_kwargs):
+        scheduled.append(coro)
+        return coro
+
     hass.config_entries.async_entries.side_effect = _entries
     hass.config_entries.flow.async_init = AsyncMock(side_effect=_init)
     hass.config_entries.async_update_entry = MagicMock()
     hass.config_entries.async_remove = AsyncMock()
+    hass.async_create_task = _create_task
 
     with patch("custom_components.home_intercom.__init__._move_room_devices") as move:
         await _import_yaml_rooms(hass, {})
+        assert len(scheduled) == 1
+        await scheduled[0]
 
     hass.config_entries.flow.async_init.assert_awaited_once()
     hass.config_entries.async_update_entry.assert_not_called()
     move.assert_called_once_with(hass, "yaml-entry", "ui-entry")
     hass.config_entries.async_remove.assert_awaited_once_with("yaml-entry")
+
+
+@pytest.mark.asyncio
+async def test_yaml_config_schedules_ui_entry_when_none_exist():
+    """Fresh HA with YAML only — smoke test path. Must not await the import flow."""
+    hass = MagicMock()
+    scheduled: list = []
+    hass.config_entries.async_entries.return_value = []
+    hass.config_entries.flow.async_init = AsyncMock()
+    hass.async_create_task = lambda coro, *_a, **_k: scheduled.append(coro) or coro
+
+    await _import_yaml_rooms(hass, {"test": dict(LIVING)})
+    assert len(scheduled) == 1
+    hass.config_entries.flow.async_init.assert_not_awaited()
+    await scheduled[0]
+    hass.config_entries.flow.async_init.assert_awaited_once()
+    data = hass.config_entries.flow.async_init.await_args.kwargs["data"]
+    assert "test" in data[CONF_ROOMS]
