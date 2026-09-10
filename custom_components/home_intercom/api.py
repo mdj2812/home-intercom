@@ -6,7 +6,8 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /chime         → ChimeView         (GET status; POST/DELETE custom chime via PWA token)
   /rooms/status  → StatusView  (GET speaker online status)
   /version       → VersionView (GET version only)
-  /rooms         → RoomsView   (GET room config)
+  /rooms         → RoomsView       (GET room config)
+  /rooms/{id}    → RoomsItemView   (PUT/PATCH/DELETE via PWA token)
   /devices       → DevicesView        (GET registry)
   /devices/approve → DevicesApproveView
   /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete/ota)
@@ -28,11 +29,13 @@ from homeassistant.components.http import KEY_HASS_USER, HomeAssistantView
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_ROOMS,
     DOMAIN,
     FIRMWARE_CACHE_SUBDIR,
     PANEL_PATH,
     PANEL_PATH_LEGACY,
     PCM_RATE,
+    UI_UNIQUE_ID,
     WAV_HEADER_SIZE,
 )
 from .firmware import (
@@ -43,6 +46,7 @@ from .firmware import (
     schedule_firmware_refresh,
 )
 from .player import play_announcement
+from .rooms import RoomValidationError, patch_room, put_room, validate_room_key
 from .shared import (
     chime_public_url,
     chime_status_payload,
@@ -200,6 +204,40 @@ def _verify_pwa_token(request: web.Request, *, view: str) -> web.Response | None
         _LOGGER.warning("%s: invalid or missing X-PWA-Token", view)
         return web.json_response({"ok": False, "error": "unauthorized"}, status=401)
     return None
+
+
+def _find_ui_entry(hass: HomeAssistant):
+    """Writable UI config entry (Options Flow store). YAML/buttons are not writable."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        if getattr(entry, "unique_id", None) == UI_UNIQUE_ID:
+            return entry
+    return None
+
+
+def _entry_rooms(entry) -> dict:
+    """Combined data + options rooms for one config entry (options win)."""
+    data_rooms = dict(entry.data.get(CONF_ROOMS, {}) or {})
+    options_rooms = dict(entry.options.get(CONF_ROOMS, {}) or {})
+    return {**data_rooms, **options_rooms}
+
+
+def _persist_ui_rooms(hass: HomeAssistant, entry, rooms: dict) -> dict:
+    """Save rooms on the UI entry and refresh the merged in-memory map.
+
+    ``async_update_entry`` triggers the options update listener → reload,
+    which rebuilds room devices. In-memory state is updated immediately so
+    GET /rooms matches the write response without waiting for reload.
+    """
+    options = dict(entry.options)
+    options[CONF_ROOMS] = rooms
+    hass.config_entries.async_update_entry(entry, options=options)
+    data = _get_hass_data(hass)
+    data.setdefault("entry_rooms", {})[entry.entry_id] = rooms
+    merged: dict = {}
+    for room_map in data.get("entry_rooms", {}).values():
+        merged.update(room_map)
+    data["rooms"] = merged
+    return merged
 
 
 def _remove_button_ha_device(hass: HomeAssistant, mac: str) -> None:
@@ -396,6 +434,71 @@ class RoomsView(HomeAssistantView):
 
     async def get(self, request: web.Request) -> web.Response:
         return web.json_response(_get_hass_data(request.app["hass"]).get("rooms", {}))
+
+
+class RoomsItemView(HomeAssistantView):
+    """PUT/PATCH/DELETE /api/home_intercom/rooms/{id} — PWA room writes (#72)."""
+
+    url = "/api/home_intercom/rooms/{room_id}"
+    name = "api:home_intercom:rooms-item"
+    requires_auth = False  # auth via X-PWA-Token header
+
+    async def put(self, request: web.Request, room_id: str) -> web.Response:
+        return await _rooms_write(request, room_id, method="PUT")
+
+    async def patch(self, request: web.Request, room_id: str) -> web.Response:
+        return await _rooms_write(request, room_id, method="PATCH")
+
+    async def delete(self, request: web.Request, room_id: str) -> web.Response:
+        return await _rooms_write(request, room_id, method="DELETE")
+
+
+async def _rooms_write(request: web.Request, room_id: str, *, method: str) -> web.Response:
+    """Mutate one room on the UI config entry and persist immediately."""
+    denied = _verify_pwa_token(request, view="RoomsItemView")
+    if denied is not None:
+        return denied
+    try:
+        key = validate_room_key(room_id)
+    except RoomValidationError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    hass = request.app["hass"]
+    entry = _find_ui_entry(hass)
+    if entry is None:
+        return web.json_response({"ok": False, "error": "no writable config entry"}, status=409)
+
+    ui_rooms = _entry_rooms(entry)
+    merged = _get_hass_data(hass).get("rooms", {})
+
+    if method == "DELETE":
+        if key not in ui_rooms:
+            if key in merged:
+                return web.json_response({"ok": False, "error": "yaml_read_only"}, status=409)
+            return web.json_response({"ok": False, "error": "unknown room"}, status=404)
+        ui_rooms.pop(key)
+        rooms = _persist_ui_rooms(hass, entry, ui_rooms)
+        return web.json_response({"ok": True, "rooms": rooms})
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+    try:
+        if method == "PUT":
+            room = put_room(body, entity_key="entity_id")
+        elif key not in ui_rooms:
+            if key in merged:
+                return web.json_response({"ok": False, "error": "yaml_read_only"}, status=409)
+            return web.json_response({"ok": False, "error": "unknown room"}, status=404)
+        else:
+            room = patch_room(ui_rooms[key], body, entity_key="entity_id")
+    except RoomValidationError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    ui_rooms[key] = room
+    rooms = _persist_ui_rooms(hass, entry, ui_rooms)
+    return web.json_response({"ok": True, "rooms": rooms})
 
 
 class DevicesHelloView(HomeAssistantView):
@@ -764,6 +867,7 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(VersionView)
     hass.http.register_view(ConfigView)
     hass.http.register_view(RoomsView)
+    hass.http.register_view(RoomsItemView)
     hass.http.register_view(DevicesHelloView)
     hass.http.register_view(DevicesApproveView)
     hass.http.register_view(DevicesManageView)

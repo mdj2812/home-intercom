@@ -18,6 +18,8 @@ from .ha_fakes import install_fake_homeassistant
 # ——— Fake homeassistant package before any custom_components imports ———
 install_fake_homeassistant()
 
+from custom_components.home_intercom.const import CONF_ROOMS, UI_UNIQUE_ID  # noqa: E402
+
 # ——— Test data ———
 
 WAV_DATA = (
@@ -54,21 +56,38 @@ def _make_hass(rooms: dict | None = None) -> MagicMock:
 
     audio_dir = tempfile.mkdtemp(prefix="hi_test_audio_")
 
+    room_map = (
+        rooms
+        if rooms is not None
+        else {
+            "living_room": {
+                "name": "Living Room",
+                "entity_id": "media_player.living_speaker",
+                "announce_volume": 50,
+            },
+            "bedroom": {
+                "name": "Bedroom",
+                "entity_id": "media_player.bedroom_speaker",
+            },
+        }
+    )
+    rooms_copy = {key: dict(value) for key, value in room_map.items()}
+    ui_entry = MagicMock()
+    ui_entry.unique_id = UI_UNIQUE_ID
+    ui_entry.entry_id = "ui-entry"
+    ui_entry.data = {CONF_ROOMS: {key: dict(value) for key, value in rooms_copy.items()}}
+    ui_entry.options = {}
+
+    def _update_entry(entry, **kwargs):
+        if "options" in kwargs:
+            entry.options = kwargs["options"]
+
+    hass.config_entries.async_entries.return_value = [ui_entry]
+    hass.config_entries.async_update_entry.side_effect = _update_entry
     hass.data = {
         "home_intercom": {
-            "rooms": rooms
-            if rooms is not None
-            else {
-                "living_room": {
-                    "name": "Living Room",
-                    "entity_id": "media_player.living_speaker",
-                    "announce_volume": 50,
-                },
-                "bedroom": {
-                    "name": "Bedroom",
-                    "entity_id": "media_player.bedroom_speaker",
-                },
-            },
+            "rooms": rooms_copy,
+            "entry_rooms": {"ui-entry": {key: dict(value) for key, value in rooms_copy.items()}},
             "audio_dir": audio_dir,
             "pwa_token": PWA_TOKEN,
         },
@@ -648,6 +667,7 @@ class TestRegisterApiViews:
             PanelAliasView,
             PanelView,
             RecordView,
+            RoomsItemView,
             StaticAliasView,
             StaticView,
             register_api_views,
@@ -658,6 +678,7 @@ class TestRegisterApiViews:
         register_api_views(hass)
         calls = [c.args[0] for c in hass.http.register_view.call_args_list]
         assert RecordView in calls
+        assert RoomsItemView in calls
         assert ChimeView in calls
         assert DeviceRecordView in calls
         assert DevicesApproveView in calls
@@ -753,6 +774,116 @@ class TestRoomsView:
         resp = await RoomsView().get(req)
         assert resp.status == 200
         assert json.loads(resp.text) == {}
+
+
+class TestRoomsItemView:
+    """PUT/PATCH/DELETE /api/home_intercom/rooms/{id} (issue #72)."""
+
+    def _req(
+        self,
+        token: str | None,
+        body: dict | None = None,
+        *,
+        hass: MagicMock | None = None,
+    ) -> MagicMock:
+        req = _make_request()
+        req.app = {"hass": hass or _make_hass()}
+        req.headers = {"X-PWA-Token": token} if token else {}
+        req.json = AsyncMock(return_value=body if body is not None else {})
+        return req
+
+    @pytest.mark.asyncio
+    async def test_put_creates_room(self):
+        from custom_components.home_intercom.api import RoomsItemView, RoomsView
+
+        hass = _make_hass()
+        req = self._req(
+            PWA_TOKEN,
+            {"name": "Study", "entity_id": "media_player.study"},
+            hass=hass,
+        )
+        resp = await RoomsItemView().put(req, "study")
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["ok"] is True
+        assert body["rooms"]["study"]["entity_id"] == "media_player.study"
+        get_req = _make_request()
+        get_req.app = {"hass": hass}
+        got = json.loads((await RoomsView().get(get_req)).text)
+        assert "study" in got
+
+    @pytest.mark.asyncio
+    async def test_patch_updates_name(self):
+        from custom_components.home_intercom.api import RoomsItemView
+
+        hass = _make_hass()
+        req = self._req(PWA_TOKEN, {"name": "Lounge"}, hass=hass)
+        resp = await RoomsItemView().patch(req, "living_room")
+        assert resp.status == 200
+        room = json.loads(resp.text)["rooms"]["living_room"]
+        assert room["name"] == "Lounge"
+        assert room["entity_id"] == "media_player.living_speaker"
+
+    @pytest.mark.asyncio
+    async def test_delete_removes_room(self):
+        from custom_components.home_intercom.api import RoomsItemView
+
+        hass = _make_hass()
+        req = self._req(PWA_TOKEN, hass=hass)
+        resp = await RoomsItemView().delete(req, "bedroom")
+        assert resp.status == 200
+        assert "bedroom" not in json.loads(resp.text)["rooms"]
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_token(self):
+        from custom_components.home_intercom.api import RoomsItemView
+
+        req = self._req(None, {"name": "Study", "entity": "media_player.study"})
+        resp = await RoomsItemView().put(req, "study")
+        assert resp.status == 401
+
+    @pytest.mark.asyncio
+    async def test_invalid_room_id(self):
+        from custom_components.home_intercom.api import RoomsItemView
+
+        req = self._req(PWA_TOKEN, {"name": "X", "entity_id": "media_player.x"})
+        resp = await RoomsItemView().put(req, "all")
+        assert resp.status == 400
+
+    @pytest.mark.asyncio
+    async def test_no_ui_entry_conflict(self):
+        from custom_components.home_intercom.api import RoomsItemView
+        from custom_components.home_intercom.const import YAML_UNIQUE_ID
+
+        hass = _make_hass()
+        yaml_entry = MagicMock()
+        yaml_entry.unique_id = YAML_UNIQUE_ID
+        yaml_entry.entry_id = "yaml-entry"
+        hass.config_entries.async_entries.return_value = [yaml_entry]
+        req = self._req(PWA_TOKEN, {"name": "Study", "entity_id": "media_player.study"}, hass=hass)
+        resp = await RoomsItemView().put(req, "study")
+        assert resp.status == 409
+        assert json.loads(resp.text)["error"] == "no writable config entry"
+
+    @pytest.mark.asyncio
+    async def test_yaml_only_room_delete_conflict(self):
+        from custom_components.home_intercom.api import RoomsItemView
+
+        hass = _make_hass(rooms={})
+        ui_entry = hass.config_entries.async_entries.return_value[0]
+        assert ui_entry.unique_id == UI_UNIQUE_ID
+        hass.data["home_intercom"]["entry_rooms"] = {
+            "ui-entry": {},
+            "yaml-entry": {"study": {"name": "Study", "entity_id": "media_player.study_speaker"}},
+        }
+        hass.data["home_intercom"]["rooms"] = {
+            "study": {"name": "Study", "entity_id": "media_player.study_speaker"}
+        }
+        ui_entry.data = {CONF_ROOMS: {}}
+        req = self._req(PWA_TOKEN, hass=hass)
+        resp = await RoomsItemView().delete(req, "study")
+        assert resp.status == 409
+        assert json.loads(resp.text)["error"] == "yaml_read_only"
 
 
 # ——— ChimeView tests (issue #66) ———

@@ -371,6 +371,7 @@ class HAClient:
         audio_url_with_chime: str | None = None,
         duration_with_chime: float | None = None,
         chime_url: str | None = None,
+        pause_buffer: float | None = None,
     ) -> dict:
         """Play audio — tiers: MA announcement > modern announce > basic + timer.
 
@@ -408,7 +409,13 @@ class HAClient:
         url = audio_url_with_chime or audio_url
         dur = duration_with_chime or duration
         return self._play_standard(
-            entity_id, url, dur, info, announce_volume=announce_volume, info_ok=info_ok
+            entity_id,
+            url,
+            dur,
+            info,
+            announce_volume=announce_volume,
+            info_ok=info_ok,
+            pause_buffer=pause_buffer,
         )
 
     def _play_ma_announcement(
@@ -459,6 +466,7 @@ class HAClient:
         info: dict,
         announce_volume: int | None = None,
         info_ok: bool = True,
+        pause_buffer: float | None = None,
     ) -> dict:
         """Tier 2/3: standard media_player — guard, optional volume boost, play."""
         if not self._has_play_media(info):
@@ -477,6 +485,7 @@ class HAClient:
         _logger.info(
             f"[intercom] {entity_id} modern={modern} (features=0x{info['supported_features']:x})"
         )
+        buf = self._pause_buffer if pause_buffer is None else float(pause_buffer)
 
         # Volume boost: save current → set announce volume → restore after playback
         saved_volume: float | None = None
@@ -500,7 +509,7 @@ class HAClient:
             if saved_volume is not None:
                 threading.Thread(
                     target=self._volume_restore_bg,
-                    args=(entity_id, saved_volume, duration),
+                    args=(entity_id, saved_volume, duration, buf),
                     daemon=True,
                 ).start()
             return {"ok": True}
@@ -508,7 +517,7 @@ class HAClient:
         # Basic player: pause timer + volume restore
         threading.Thread(
             target=self._auto_pause_bg,
-            args=(entity_id, duration, saved_volume),
+            args=(entity_id, duration, saved_volume, buf),
             daemon=True,
         ).start()
         return {"ok": True}
@@ -542,12 +551,25 @@ class HAClient:
             _logger.info(f"[intercom] {entity_id} restoring volume to {saved_volume:.2f}")
             self._set_volume_level(entity_id, saved_volume)
 
-    def _volume_restore_bg(self, entity_id: str, saved_volume: float, wait_sec: float):
+    def _volume_restore_bg(
+        self,
+        entity_id: str,
+        saved_volume: float,
+        wait_sec: float,
+        pause_buffer: float | None = None,
+    ):
         """Background thread: wait for modern player to finish, then restore volume."""
-        time.sleep(wait_sec + self._pause_buffer)
+        buf = self._pause_buffer if pause_buffer is None else pause_buffer
+        time.sleep(wait_sec + buf)
         self._restore_volume(entity_id, saved_volume)
 
-    def _auto_pause_bg(self, entity_id: str, wait_sec: float, saved_volume: float | None = None):
+    def _auto_pause_bg(
+        self,
+        entity_id: str,
+        wait_sec: float,
+        saved_volume: float | None = None,
+        pause_buffer: float | None = None,
+    ):
         """Background thread: confirm playback → wait → pause + verify, then restore volume."""
         ws = self._ws
         use_ws = ws is not None and ws.ready
@@ -582,7 +604,12 @@ class HAClient:
                 return ws.wait_for_state(eid, None, timeout)
 
         try:
-            run_auto_pause(entity_id, wait_sec, self._pause_buffer, _RestBackend())
+            run_auto_pause(
+                entity_id,
+                wait_sec,
+                self._pause_buffer if pause_buffer is None else pause_buffer,
+                _RestBackend(),
+            )
         finally:
             self._restore_volume(entity_id, saved_volume)
 
@@ -597,7 +624,7 @@ class HAClient:
         """
         status = {}
         for key, room in room_map.items():
-            entity = room.get("entity", "")
+            entity = room.get("entity") or room.get("entity_id") or ""
             if not entity:
                 status[key] = {"status": EntityStatus.ONLINE, "friendly_name": ""}
                 continue

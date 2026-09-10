@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Home Intercom — PWA-based family broadcast system backend."""
 
-import json
 import os
 import sys
 from pathlib import Path
 
-from const import DEVICE_REGISTRY_DEFAULT_PATH, FIRMWARE_DIR_DEFAULT, PCM_RATE, WAV_HEADER_SIZE
+from const import (
+    DEVICE_REGISTRY_DEFAULT_PATH,
+    FIRMWARE_DIR_DEFAULT,
+    PCM_RATE,
+    ROOMS_STORE_DEFAULT,
+    WAV_HEADER_SIZE,
+)
 from firmware import (
     FirmwareError,
     ensure_latest_firmware,
@@ -16,6 +21,15 @@ from firmware import (
     start_firmware_poller,
 )
 from flask import Flask, jsonify, request, send_from_directory
+from rooms import (
+    RoomValidationError,
+    load_rooms,
+    patch_room,
+    put_room,
+    room_entity,
+    save_rooms,
+    validate_room_key,
+)
 from shared import (
     chime_public_url,
     chime_status_payload,
@@ -87,10 +101,10 @@ try:
 except Exception:
     VERSION = os.environ.get("VERSION", "dev")
 
-# Load room config from rooms.json
-ROOMS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
-with open(ROOMS_FILE) as f:
-    ROOM_MAP = json.load(f)
+# Writable room catalog (#72). Bundled rooms.json is seed only.
+ROOMS_STORE = os.environ.get("ROOMS_FILE", ROOMS_STORE_DEFAULT)
+ROOMS_SEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
+ROOM_MAP = load_rooms(ROOMS_STORE, ROOMS_SEED)
 
 # Device registry for ESP32 intercom buttons (issue #40)
 DEVICE_REGISTRY_FILE = os.environ.get("DEVICE_REGISTRY_FILE", DEVICE_REGISTRY_DEFAULT_PATH)
@@ -104,13 +118,57 @@ def index():
 
 
 @app.route("/rooms.json")
-def rooms_json():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
-
-
 @app.route("/rooms")
 def rooms_alias():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
+    """Public room map (issue #38). Live catalog, not the image-baked seed file."""
+    return jsonify(ROOM_MAP)
+
+
+def _persist_room_map():
+    """Write ROOM_MAP to the Docker store. Raises OSError if the path is not writable."""
+    save_rooms(ROOMS_STORE, ROOM_MAP)
+
+
+@app.route("/rooms/<room_id>", methods=["PUT", "PATCH", "DELETE"])
+def rooms_item(room_id):
+    """Create, update, or delete one room. LAN trust, same as /chime POST (#72)."""
+    try:
+        key = validate_room_key(room_id)
+    except RoomValidationError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+    if request.method == "DELETE":
+        if key not in ROOM_MAP:
+            return jsonify({"ok": False, "error": "unknown room"}), 404
+        removed = ROOM_MAP.pop(key)
+        try:
+            _persist_room_map()
+        except OSError:
+            ROOM_MAP[key] = removed
+            return jsonify({"ok": False, "error": "cannot persist rooms"}), 500
+        return jsonify({"ok": True, "rooms": ROOM_MAP})
+
+    body = request.get_json(silent=True)
+    try:
+        if request.method == "PUT":
+            room = put_room(body, entity_key="entity")
+        elif key not in ROOM_MAP:
+            return jsonify({"ok": False, "error": "unknown room"}), 404
+        else:
+            room = patch_room(ROOM_MAP[key], body, entity_key="entity")
+    except RoomValidationError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    previous = ROOM_MAP.get(key)
+    ROOM_MAP[key] = room
+    try:
+        _persist_room_map()
+    except OSError:
+        if previous is None:
+            ROOM_MAP.pop(key, None)
+        else:
+            ROOM_MAP[key] = previous
+        return jsonify({"ok": False, "error": "cannot persist rooms"}), 500
+    return jsonify({"ok": True, "rooms": ROOM_MAP})
 
 
 @app.route("/static/<path:filename>")
@@ -272,12 +330,12 @@ def record():
         return jsonify({"ok": False, "error": "missing target"}), 400
 
     if target == "all":
-        targets = [(k, v) for k, v in ROOM_MAP.items() if v.get("entity")]
+        targets = [(k, v) for k, v in ROOM_MAP.items() if room_entity(v)]
         if not targets:
             return jsonify({"ok": False, "error": "no rooms configured"}), 500
     else:
         room = ROOM_MAP.get(target)
-        if not room or not room.get("entity"):
+        if not room or not room_entity(room):
             return jsonify({"ok": False, "error": f"unknown target: {target}"}), 400
         targets = [(target, room)]
 
@@ -309,20 +367,22 @@ def record():
     ok_count = 0
     errors = []
     for _tgt_key, tgt_room in targets:
+        entity = room_entity(tgt_room)
         announce_volume = tgt_room.get("announce_volume")
         result = haclient.play_announcement(
-            tgt_room["entity"],
+            entity,
             audio_url,
             duration,
             announce_volume=announce_volume,
             audio_url_with_chime=audio_url_with_chime,
             duration_with_chime=duration_with_chime,
             chime_url=chime_url,
+            pause_buffer=tgt_room.get("pause_buffer"),
         )
         if result["ok"]:
             ok_count += 1
         else:
-            errors.append({"entity": tgt_room["entity"], "error": result.get("error", "unknown")})
+            errors.append({"entity": entity, "error": result.get("error", "unknown")})
 
     name = ROOM_MAP[target]["name"] if target != "all" else "全部"
     app.logger.info(f"[intercom] played on {ok_count}/{len(targets)} rooms for {name}")
@@ -417,6 +477,12 @@ app.add_url_rule(
 )
 app.add_url_rule(f"{_HA_PREFIX}/devices", "ha_devices", devices_list)
 app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
+app.add_url_rule(
+    f"{_HA_PREFIX}/rooms/<room_id>",
+    "ha_rooms_item",
+    rooms_item,
+    methods=["PUT", "PATCH", "DELETE"],
+)
 app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
 app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)
 app.add_url_rule(f"{_HA_PREFIX}/config", "ha_config", config)
@@ -442,6 +508,7 @@ if __name__ == "__main__":
     print(f"[intercom] HA URL: {HA_URL}", flush=True)
     print(f"[intercom] Audio dir: {AUDIO_DIR}", flush=True)
     print(f"[intercom] Firmware dir: {FIRMWARE_DIR}", flush=True)
+    print(f"[intercom] Rooms store: {ROOMS_STORE} ({len(ROOM_MAP)} rooms)", flush=True)
     print(f"[intercom] Trusted proxy: {trusted_proxy}", flush=True)
     print("[intercom] Starting on http://0.0.0.0:8764", flush=True)
     start_firmware_poller(FIRMWARE_DIR, should_run=lambda: bool(device_store.devices))
