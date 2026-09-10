@@ -503,6 +503,7 @@ window.renderDevices = function () {
 
     card.appendChild(top);
     card.appendChild(el('div', 'device-card-meta', meta.join(' · ')));
+    card.appendChild(devicePinsBlock(mac, d));
     card.appendChild(actions);
     list.appendChild(card);
   }
@@ -534,6 +535,68 @@ function deviceActionButton(label, extraClass, onClick, disabled) {
   return btn;
 }
 
+function deviceGpioList(device) {
+  const pins = Array.isArray(device.pins) ? device.pins : [];
+  const buttons = (device.buttons && typeof device.buttons === 'object') ? device.buttons : {};
+  const set = new Set();
+  pins.forEach((p) => set.add(String(p)));
+  Object.keys(buttons).forEach((k) => set.add(String(k)));
+  return [...set].sort((a, b) => Number(a) - Number(b));
+}
+
+function devicePinsBlock(mac, device) {
+  const wrap = el('div', 'device-pins');
+  wrap.appendChild(el('div', 'device-pins-title', I18N.t('devicePinsTitle')));
+  const gpios = deviceGpioList(device);
+  if (!gpios.length) {
+    wrap.appendChild(el('div', 'device-pins-pending', I18N.t('devicePinsPending')));
+    return wrap;
+  }
+  const rooms = catalogRooms();
+  const assigned = (device.buttons && typeof device.buttons === 'object') ? device.buttons : {};
+  gpios.forEach((gpio) => {
+    const row = el('div', 'device-pin-row');
+    row.appendChild(el('span', 'device-pin-gpio', I18N.t('devicePinGpio').replace('%s', gpio)));
+    const select = document.createElement('select');
+    select.dataset.gpio = gpio;
+    const unset = document.createElement('option');
+    unset.value = '';
+    unset.textContent = I18N.t('devicePinUnassigned');
+    select.appendChild(unset);
+    const current = assigned[gpio] || '';
+    Object.keys(rooms).forEach((key) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = rooms[key].name || key;
+      select.appendChild(opt);
+    });
+    if (current && !rooms[current]) {
+      const missing = document.createElement('option');
+      missing.value = current;
+      missing.disabled = true;
+      missing.selected = true;
+      missing.textContent = playerMissingLabel(current);
+      select.appendChild(missing);
+    } else {
+      select.value = current;
+    }
+    select.addEventListener('change', () => saveDeviceButtons(mac, wrap.closest('.device-card')));
+    row.appendChild(select);
+    wrap.appendChild(row);
+  });
+  return wrap;
+}
+
+function saveDeviceButtons(mac, card) {
+  if (!card) return;
+  const buttons = {};
+  card.querySelectorAll('select[data-gpio]').forEach((sel) => {
+    const room = sel.value.trim();
+    if (room) buttons[sel.dataset.gpio] = room;
+  });
+  manageDevice(mac, 'buttons', card, { buttons });
+}
+
 function deviceIsOnline(lastSeen) {
   const t = Date.parse(lastSeen || '');
   return !Number.isNaN(t) && (Date.now() - t) <= 30 * 1000;
@@ -554,17 +617,16 @@ function formatDeviceSeen(lastSeen) {
   return String(lastSeen).replace('T', ' ').slice(0, 16);
 }
 
-async function manageDevice(mac, action, card) {
+async function manageDevice(mac, action, card, extra) {
   if (card) card.classList.add('busy');
   try {
     const resp = await fetch((window.API_BASE || '') + '/devices/manage', {
       method: 'POST',
       credentials: 'same-origin',
       headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ mac, action }),
+      body: JSON.stringify({ mac, action, ...(extra || {}) }),
     });
-    if (!resp.ok) return;
-    await loadDevices();
+    if (resp.ok) await loadDevices();
   } catch (e) { /* ignore */ }
   if (card) card.classList.remove('busy');
 }

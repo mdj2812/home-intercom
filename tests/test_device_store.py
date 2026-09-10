@@ -46,6 +46,8 @@ class TestDockerDeviceStore:
         assert device["firmware_version"] == "1.0.0"
         assert device["revoked"] is False
         assert device["pending"] is True
+        assert device["buttons"] == {}
+        assert device["pins"] == []
         assert device["created_at"]
         assert device["last_seen"]
 
@@ -88,6 +90,23 @@ class TestDockerDeviceStore:
         assert device["name"] == "Study Button"
         device = store.update_field(MAC, "room", "study")
         assert device["room"] == "study"
+
+    def test_update_field_buttons(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC)
+        device = store.update_field(MAC, "buttons", {"4": "living", "5": "bedroom"})
+        assert device["buttons"] == {"4": "living", "5": "bedroom"}
+        reloaded = _fresh_docker_store(tmp_path)
+        assert reloaded.get(MAC)["buttons"] == {"4": "living", "5": "bedroom"}
+
+    def test_register_stores_pins(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC, "1.0.0", pins=[13, 4, 4, 5])
+        assert store.get(MAC)["pins"] == [4, 5, 13]
+        store.register_or_update(MAC, pins=[12, 13])
+        assert store.get(MAC)["pins"] == [12, 13]
+        store.register_or_update(MAC)
+        assert store.get(MAC)["pins"] == [12, 13]
 
     def test_update_field_unknown_mac_returns_none(self, tmp_path):
         store = _fresh_docker_store(tmp_path)
@@ -249,6 +268,8 @@ class TestHADeviceStore:
         assert device["firmware_version"] == "1.0.0"
         assert device["revoked"] is False
         assert device["pending"] is True
+        assert device["buttons"] == {}
+        assert device["pins"] == []
         assert device["created_at"]
         assert device["last_seen"]
 
@@ -287,6 +308,23 @@ class TestHADeviceStore:
         assert device["name"] == "Study Button"
         device = await store.update_field(MAC, "room", "study")
         assert device["room"] == "study"
+
+    @pytest.mark.asyncio
+    async def test_update_field_buttons(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        device = await store.update_field(MAC, "buttons", {"4": "living", "5": "bedroom"})
+        assert device["buttons"] == {"4": "living", "5": "bedroom"}
+
+    @pytest.mark.asyncio
+    async def test_register_stores_pins(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "1.0.0", pins=[13, 4, 4, 5])
+        assert store.get(MAC)["pins"] == [4, 5, 13]
+        await store.register_or_update(MAC, pins=[12, 13])
+        assert store.get(MAC)["pins"] == [12, 13]
+        await store.register_or_update(MAC)
+        assert store.get(MAC)["pins"] == [12, 13]
 
     @pytest.mark.asyncio
     async def test_update_field_unknown_mac_returns_none(self):

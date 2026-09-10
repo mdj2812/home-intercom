@@ -157,6 +157,8 @@ class TestDevicesRoute:
         dev = resp.json["AA:BB:CC:DD:EE:FF"]
         assert dev["name"] == "Device EE:FF"
         assert dev["firmware_version"] == "1.0.0"
+        assert dev["buttons"] == {}
+        assert dev["pins"] == []
 
     def test_devices_ha_alias(self, dev_client):
         client, store = dev_client
@@ -311,6 +313,22 @@ class TestDevicesManage:
             content_type="application/json",
         )
         assert resp.status_code == 400
+
+    def test_buttons_updates_map(self, dev_client):
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        resp = client.post(
+            "/devices/manage",
+            json={
+                "mac": "AA:BB:CC:DD:EE:FF",
+                "action": "buttons",
+                "buttons": {"4": "living", "5": "mars"},
+            },
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json["buttons"] == {"4": "living"}
+        assert store.get("AA:BB:CC:DD:EE:FF")["buttons"] == {"4": "living"}
 
     def test_unknown_mac_404(self, dev_client):
         client, _store = dev_client

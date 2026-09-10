@@ -31,6 +31,7 @@ from rooms import (
     validate_room_key,
 )
 from shared import (
+    buttons_from_manage_body,
     chime_public_url,
     chime_status_payload,
     concat_wavs,
@@ -44,6 +45,7 @@ from shared import (
     handle_wav_passthrough,
     is_wav,
     parse_device_manage_body,
+    pins_from_hello_body,
     resolve_chime_wav,
     wait_for_pending_hello,
     write_custom_chime_wav,
@@ -262,8 +264,9 @@ def devices_approve():
 
 @app.route("/devices/manage", methods=["POST"])
 def devices_manage():
-    """Approve, deapprove, revoke, unrevoke, delete, or OTA a button. LAN trust."""
-    parsed = parse_device_manage_body(request.get_json(silent=True) or {})
+    """Approve, deapprove, revoke, unrevoke, delete, OTA, or GPIO map a button. LAN trust."""
+    body = request.get_json(silent=True) or {}
+    parsed = parse_device_manage_body(body)
     if isinstance(parsed, str):
         return jsonify({"ok": False, "error": parsed}), 400
     mac, action = parsed
@@ -291,6 +294,15 @@ def devices_manage():
         if updated is None:
             return jsonify({"ok": False, "error": "unknown device"}), 404
         return jsonify({"ok": True, "target_version": cached.version})
+
+    if action == "buttons":
+        mapping = buttons_from_manage_body(body, set(ROOM_MAP))
+        if isinstance(mapping, str):
+            return jsonify({"ok": False, "error": mapping}), 400
+        device = device_store.update_field(mac, "buttons", mapping)
+        if device is None:
+            return jsonify({"ok": False, "error": "unknown device"}), 404
+        return jsonify({"ok": True, "buttons": device.get("buttons") or {}})
 
     if action == "approve":
         device = device_store.approve(mac)
@@ -418,6 +430,7 @@ def devices_hello():
 
     body = request.get_json(silent=True) or {}
     firmware_version = body.get("firmware_version", "") if isinstance(body, dict) else ""
+    pins = pins_from_hello_body(body)
 
     existing = device_store.get(mac)
     if existing and existing.get("revoked"):
@@ -426,7 +439,7 @@ def devices_hello():
 
     was_empty = not device_store.devices
     try:
-        device = device_store.register_or_update(mac, firmware_version)
+        device = device_store.register_or_update(mac, firmware_version, pins=pins)
     except ValueError:
         return jsonify({"status": "error", "error": "invalid X-Device-ID (MAC)"}), 400
     if was_empty:
@@ -438,7 +451,7 @@ def devices_hello():
     if device.get("revoked"):
         return jsonify({"status": "error", "error": "device revoked"}), 403
 
-    return jsonify(device_hello_payload(device))
+    return jsonify(device_hello_payload(device, valid_rooms=set(ROOM_MAP)))
 
 
 @app.route("/api/home_intercom/firmware")

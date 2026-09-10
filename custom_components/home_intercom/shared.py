@@ -32,26 +32,36 @@ try:
         DEFAULT_CHIME_STATIC_URL,
         DEVICE_NAME_PREFIX,
         DEVICE_UPDATEABLE_FIELDS,
+        GPIO_MAX,
+        GPIO_MIN,
         MAC_PATTERN,
+        MAX_BUTTON_ROOM_KEY_LEN,
         MAX_CHIME_BYTES,
+        MAX_DEVICE_BUTTONS,
         MAX_RECORD_SECS,
         PCM_BPS,
         PCM_RATE,
         WAV_MAGIC,
     )
+    from .rooms import RoomValidationError, validate_room_key
 except ImportError:
     from const import (  # Docker standalone (absolute)
         CUSTOM_CHIME_FILENAME,
         DEFAULT_CHIME_STATIC_URL,
         DEVICE_NAME_PREFIX,
         DEVICE_UPDATEABLE_FIELDS,
+        GPIO_MAX,
+        GPIO_MIN,
         MAC_PATTERN,
+        MAX_BUTTON_ROOM_KEY_LEN,
         MAX_CHIME_BYTES,
+        MAX_DEVICE_BUTTONS,
         MAX_RECORD_SECS,
         PCM_BPS,
         PCM_RATE,
         WAV_MAGIC,
     )
+    from rooms import RoomValidationError, validate_room_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -270,6 +280,91 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def normalize_gpio(raw: Any) -> int:
+    """Return a hardware GPIO number or raise ValueError."""
+    if isinstance(raw, bool) or not isinstance(raw, int | float | str):
+        raise ValueError("invalid gpio")
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text.isdigit():
+            raise ValueError("invalid gpio")
+        gpio = int(text)
+    else:
+        if int(raw) != raw:
+            raise ValueError("invalid gpio")
+        gpio = int(raw)
+    if gpio < GPIO_MIN or gpio > GPIO_MAX:
+        raise ValueError("invalid gpio")
+    return gpio
+
+
+def normalize_pins(raw: Any) -> list[int]:
+    """Unique sorted GPIOs from a hello ``pins`` array. Caps at MAX_DEVICE_BUTTONS."""
+    if not isinstance(raw, list):
+        raise ValueError("invalid pins")
+    seen: set[int] = set()
+    pins: list[int] = []
+    for item in raw:
+        gpio = normalize_gpio(item)
+        if gpio in seen:
+            continue
+        seen.add(gpio)
+        pins.append(gpio)
+    pins.sort()
+    return pins[:MAX_DEVICE_BUTTONS]
+
+
+def pins_from_hello_body(body: Any) -> list[int] | None:
+    """Pins advertised on hello, or None to leave the stored list unchanged."""
+    if not isinstance(body, dict) or "pins" not in body:
+        return None
+    try:
+        return normalize_pins(body.get("pins"))
+    except ValueError:
+        return None
+
+
+def normalize_buttons_map(
+    raw: Any, *, valid_rooms: set[str] | None = None
+) -> dict[str, str]:
+    """GPIO string → room key. Drops bad GPIOs, empty rooms, and unknown catalog keys."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError("invalid buttons")
+    mapping: dict[int, str] = {}
+    for key, value in raw.items():
+        try:
+            gpio = normalize_gpio(key)
+        except ValueError:
+            continue
+        if not isinstance(value, str):
+            continue
+        room = value.strip()
+        if not room:
+            continue
+        try:
+            room = validate_room_key(room)
+        except RoomValidationError:
+            continue
+        if len(room) > MAX_BUTTON_ROOM_KEY_LEN:
+            continue
+        if valid_rooms is not None and room not in valid_rooms:
+            continue
+        mapping[gpio] = room
+    return {str(gpio): mapping[gpio] for gpio in sorted(mapping)[:MAX_DEVICE_BUTTONS]}
+
+
+def buttons_from_manage_body(body: Any, valid_rooms: set[str]) -> dict[str, str] | str:
+    """Parse manage action ``buttons``. Returns the map or an error string."""
+    if not isinstance(body, dict):
+        return "invalid buttons"
+    try:
+        return normalize_buttons_map(body.get("buttons"), valid_rooms=valid_rooms)
+    except ValueError:
+        return "invalid buttons"
+
+
 class DeviceStoreBase:
     """MAC → device-config CRUD, shared by the HA and Docker device stores.
 
@@ -301,7 +396,7 @@ class DeviceStoreBase:
         return {mac: dict(d) for mac, d in self._devices.items()}
 
     def _register_or_update(
-        self, mac: str, firmware_version: str = ""
+        self, mac: str, firmware_version: str = "", pins: list[int] | None = None
     ) -> tuple[dict[str, Any], bool]:
         """Shared register/update logic. Returns (device_copy, created)."""
         mac = normalize_mac(mac)
@@ -311,6 +406,8 @@ class DeviceStoreBase:
         now = _now_iso()
         device = self._devices.get(mac)
         created = device is None
+        if pins is not None:
+            pins = normalize_pins(pins)
         if created:
             device = {
                 "name": default_device_name(mac),
@@ -320,6 +417,8 @@ class DeviceStoreBase:
                 "firmware_version": firmware_version,
                 "revoked": False,
                 "pending": True,
+                "buttons": {},
+                "pins": list(pins) if pins is not None else [],
             }
             self._devices[mac] = device
         else:
@@ -327,6 +426,8 @@ class DeviceStoreBase:
             if firmware_version:
                 device["firmware_version"] = firmware_version
                 self._clear_ota_if_matched(device, firmware_version)
+            if pins is not None:
+                device["pins"] = list(pins)
         return dict(device), created
 
     def _update_field(self, mac: str, key: str, value: Any) -> dict[str, Any] | None:
@@ -336,6 +437,8 @@ class DeviceStoreBase:
         device = self._devices.get(normalize_mac(mac))
         if device is None:
             return None
+        if key == "buttons":
+            value = normalize_buttons_map(value)
         device[key] = value
         if key == "pending" and not value:
             pending_hello_hub.notify(normalize_mac(mac))
@@ -465,20 +568,29 @@ def wait_for_pending_hello(get_device: Any, mac: str) -> dict[str, Any] | None:
     return get_device(mac)
 
 
-def device_hello_payload(device: dict[str, Any]) -> dict[str, Any]:
-    """Build the POST /devices/hello response payload (issue #37, #51).
+def device_hello_payload(
+    device: dict[str, Any], valid_rooms: set[str] | None = None
+) -> dict[str, Any]:
+    """Build the POST /devices/hello response payload (issue #37, #51, #78).
 
     Pending devices get ``{"status": "pending"}`` with no room/config so
-    the ESP32 can retry. Approved devices get name/room plus audio params.
+    the ESP32 can retry. Approved devices get name/room plus audio params
+    and the GPIO → room map. An empty ``buttons`` object means unconfigured
+    — firmware keeps last NVS values.
     """
     if device.get("pending"):
         return {"status": "pending"}
+    try:
+        buttons = normalize_buttons_map(device.get("buttons") or {}, valid_rooms=valid_rooms)
+    except ValueError:
+        buttons = {}
     payload: dict[str, Any] = {
         "status": "ok",
         "device_name": device["name"],
         "room": device.get("room", ""),
         "sample_rate": PCM_RATE,
         "max_record_secs": MAX_RECORD_SECS,
+        "buttons": buttons,
     }
     if device.get("ota_requested"):
         payload["ota"] = True
@@ -548,7 +660,9 @@ def devices_payload(store: DeviceStoreBase, latest_firmware: str = "") -> dict[s
     return out
 
 
-DEVICE_MANAGE_ACTIONS = frozenset({"approve", "deapprove", "revoke", "unrevoke", "delete", "ota"})
+DEVICE_MANAGE_ACTIONS = frozenset(
+    {"approve", "deapprove", "revoke", "unrevoke", "delete", "ota", "buttons"}
+)
 
 
 def parse_device_manage_body(body: Any) -> tuple[str, str] | str:
