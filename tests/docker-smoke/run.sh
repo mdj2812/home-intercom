@@ -187,6 +187,16 @@ print(f'ok: config={d}')
 "
 assert_ha_alias "GET /api/home_intercom/config — matches /config" "${CFG}" "/api/home_intercom/config"
 
+# 1d. GET /media_players — catalog is a JSON array (empty when HA is unreachable)
+PLAYERS=$(fetch "${URL}/media_players" || echo "")
+assert_json "GET /media_players — JSON array" "${PLAYERS}" "
+import sys, json
+d = json.load(sys.stdin)
+assert isinstance(d, list), f'expected list, got: {d}'
+print(f'ok: n={len(d)}')
+"
+assert_ha_alias "GET /api/home_intercom/media_players — matches /media_players" "${PLAYERS}" "/api/home_intercom/media_players"
+
 # 2. /rooms — verify matches input rooms.json
 ROOMS=$(fetch "${URL}/rooms" || echo "")
 assert_json "GET /rooms — matches input" "${ROOMS}" "

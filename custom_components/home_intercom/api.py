@@ -8,6 +8,7 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /version       → VersionView (GET version only)
   /rooms         → RoomsView       (GET room config)
   /rooms/{id}    → RoomsItemView   (PUT/PATCH/DELETE via PWA token)
+  /media_players  → MediaPlayersView (GET play_media speakers)
   /devices       → DevicesView        (GET registry)
   /devices/approve → DevicesApproveView
   /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete/ota)
@@ -45,6 +46,7 @@ from .firmware import (
     load_cached_firmware,
     schedule_firmware_refresh,
 )
+from .media_players import media_player_catalog
 from .player import play_announcement
 from .rooms import RoomValidationError, patch_room, put_room, validate_room_key
 from .shared import (
@@ -501,6 +503,17 @@ async def _rooms_write(request: web.Request, room_id: str, *, method: str) -> we
     return web.json_response({"ok": True, "rooms": rooms})
 
 
+class MediaPlayersView(HomeAssistantView):
+    """GET /api/home_intercom/media_players — play_media speakers for the PWA picker (#73)."""
+
+    url = "/api/home_intercom/media_players"
+    name = "api:home_intercom:media-players"
+    requires_auth = False  # public like GET /rooms; names only, no secrets
+
+    async def get(self, request: web.Request) -> web.Response:
+        return web.json_response(media_player_catalog(request.app["hass"]))
+
+
 class DevicesHelloView(HomeAssistantView):
     """POST /api/home_intercom/devices/hello — ESP32 boot registration (issue #37).
 
@@ -868,6 +881,7 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(ConfigView)
     hass.http.register_view(RoomsView)
     hass.http.register_view(RoomsItemView)
+    hass.http.register_view(MediaPlayersView)
     hass.http.register_view(DevicesHelloView)
     hass.http.register_view(DevicesApproveView)
     hass.http.register_view(DevicesManageView)

@@ -7,12 +7,15 @@ from pathlib import Path
 
 import pytest
 from rooms import (
+    PLAY_MEDIA,
     RoomValidationError,
+    catalog_from_ha_states,
     load_rooms,
     patch_room,
     put_room,
     room_entity,
     save_rooms,
+    sort_media_player_catalog,
     validate_room_key,
 )
 
@@ -104,3 +107,44 @@ class TestLoadSave:
         save_rooms(str(store), {"new": {"name": "New", "entity": "media_player.b"}})
         rooms = load_rooms(str(store), str(seed))
         assert list(rooms) == ["new"]
+
+
+class TestMediaPlayerCatalog:
+    def test_filters_and_sorts(self) -> None:
+        states = [
+            {
+                "entity_id": "media_player.zebra",
+                "attributes": {"friendly_name": "Zebra", "supported_features": PLAY_MEDIA},
+            },
+            {
+                "entity_id": "light.lamp",
+                "attributes": {"friendly_name": "Lamp", "supported_features": PLAY_MEDIA},
+            },
+            {
+                "entity_id": "media_player.nope",
+                "attributes": {"friendly_name": "Nope", "supported_features": 0},
+            },
+            {
+                "entity_id": "media_player.alpha",
+                "attributes": {"friendly_name": "Alpha", "supported_features": PLAY_MEDIA},
+            },
+        ]
+        catalog = catalog_from_ha_states(states)
+        assert [e["entity_id"] for e in catalog] == [
+            "media_player.alpha",
+            "media_player.zebra",
+        ]
+        assert catalog[0]["area"] == ""
+
+    def test_area_sorts_before_unassigned(self) -> None:
+        catalog = sort_media_player_catalog(
+            [
+                {"entity_id": "media_player.z", "name": "Zebra", "area": ""},
+                {"entity_id": "media_player.a", "name": "Alpha", "area": "Kitchen"},
+            ]
+        )
+        assert [e["entity_id"] for e in catalog] == ["media_player.a", "media_player.z"]
+
+    def test_bad_payload(self) -> None:
+        assert catalog_from_ha_states(None) == []
+        assert catalog_from_ha_states("nope") == []
