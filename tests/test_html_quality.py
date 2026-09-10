@@ -81,6 +81,7 @@ I18N_REQUIRED_KEYS = [
     "roomsDeleted",
     "roomsSaveFail",
     "roomsNoPlayers",
+    "roomsPlayerRemoved",
     "roomsErrorYaml",
     "roomsErrorNoEntry",
     "roomsErrorUnknown",
@@ -258,6 +259,10 @@ class TestHtmlStructure:
         assert "/media_players" in html_content
         assert "GRID.innerHTML = ''" in js or 'GRID.innerHTML = ""' in js
         assert "rebuildRoomGrid" in js
+        assert "resetRoomFormState" in js
+        assert "playerMissingLabel" in js
+        assert "opt.disabled = true" in js
+        assert "rooms-player-missing" in js
         assert "method: editId ? 'PATCH' : 'PUT'" in js
         assert "method: 'DELETE'" in js
         assert "renderRoomsSettings" in js
@@ -274,6 +279,8 @@ class TestHtmlStructure:
         assert "4 * var(--rooms-row-height)" in css
         assert ".rooms-list" in css
         assert "overflow: hidden auto" in css
+        assert ".rooms-player-missing" in css
+        assert ".rooms-row-entity-missing" in css
 
 
 class TestJsSyntax:

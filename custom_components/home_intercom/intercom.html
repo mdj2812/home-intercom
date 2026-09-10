@@ -808,12 +808,18 @@ function optionalNumber(input, { integer } = {}) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function playerMissingLabel(entityId) {
+  return I18N.t('roomsPlayerRemoved').replace('%s', entityId || '');
+}
+
 function fillPlayerSelect(selected) {
   const select = document.getElementById('room-player');
   if (!select) return;
   const players = window._MEDIA_PLAYERS || [];
+  const missing = !!(selected && !players.some((p) => p.entity_id === selected));
   select.innerHTML = '';
-  if (!players.length) {
+  select.classList.toggle('rooms-player-missing', missing);
+  if (!players.length && !missing) {
     const opt = document.createElement('option');
     opt.value = '';
     opt.textContent = I18N.t('roomsNoPlayers');
@@ -821,7 +827,7 @@ function fillPlayerSelect(selected) {
     select.disabled = true;
     return;
   }
-  select.disabled = false;
+  select.disabled = !players.length;
   const groups = new Map();
   const ungrouped = [];
   for (const player of players) {
@@ -846,13 +852,16 @@ function fillPlayerSelect(selected) {
     select.appendChild(group);
   }
   ungrouped.forEach((p) => addOption(select, p));
-  if (selected && !players.some((p) => p.entity_id === selected)) {
+  if (missing) {
     const opt = document.createElement('option');
     opt.value = selected;
-    opt.textContent = selected;
+    opt.disabled = true;
+    opt.selected = true;
+    opt.textContent = playerMissingLabel(selected);
     select.appendChild(opt);
+  } else if (selected) {
+    select.value = selected;
   }
-  if (selected) select.value = selected;
 }
 
 async function loadMediaPlayers() {
@@ -911,7 +920,8 @@ window.renderRoomsSettings = function () {
     const row = el('div', 'rooms-row');
     const info = el('div', 'rooms-row-info');
     info.appendChild(el('div', 'rooms-row-name', room.name || key));
-    info.appendChild(el('div', 'rooms-row-entity', player ? playerLabel(player) : entityId));
+    const entityClass = player || !entityId ? 'rooms-row-entity' : 'rooms-row-entity rooms-row-entity-missing';
+    info.appendChild(el('div', entityClass, player ? playerLabel(player) : (entityId ? playerMissingLabel(entityId) : '')));
     const actions = el('div', 'rooms-row-actions');
     actions.appendChild(deviceActionButton(I18N.t('roomsEdit'), '', () => openRoomForm(key)));
     actions.appendChild(deviceActionButton(I18N.t('roomsDelete'), 'danger', () => deleteRoom(key)));
@@ -921,13 +931,26 @@ window.renderRoomsSettings = function () {
   }
 };
 
-function closeRoomForm() {
+function resetRoomFormState() {
   const form = document.getElementById('rooms-form');
   const editId = document.getElementById('room-edit-id');
   const nameEl = document.getElementById('room-name');
+  const volumeEl = document.getElementById('room-volume');
+  const pauseEl = document.getElementById('room-pause');
+  const playerEl = document.getElementById('room-player');
   if (form) form.hidden = true;
   if (editId) editId.value = '';
-  if (nameEl) nameEl.dataset.fromPlayer = '0';
+  if (nameEl) {
+    nameEl.value = '';
+    nameEl.dataset.fromPlayer = '0';
+  }
+  if (volumeEl) volumeEl.value = '';
+  if (pauseEl) pauseEl.value = '';
+  if (playerEl) playerEl.classList.remove('rooms-player-missing');
+}
+
+function closeRoomForm() {
+  resetRoomFormState();
   window.renderRoomsSettings();
 }
 

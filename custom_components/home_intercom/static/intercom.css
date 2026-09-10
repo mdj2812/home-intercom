@@ -345,6 +345,11 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   white-space: nowrap;
 }
 
+.rooms-row-entity-missing,
+.rooms-field select.rooms-player-missing {
+  color: var(--danger);
+}
+
 .rooms-row-actions {
   display: flex;
   gap: 6px;
