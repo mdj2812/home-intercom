@@ -3,7 +3,7 @@
 GET /rooms stays a public map. Writes persist in the native store:
 
 - HA: writable UI config entry (PWA)
-- Docker: ``/data/rooms.json`` (bundled ``rooms.json`` is seed only)
+- Docker: ``/data/rooms.json`` (empty until rooms are added in the PWA)
 """
 
 from __future__ import annotations
@@ -183,18 +183,18 @@ def catalog_from_ha_states(states: Any) -> list[dict[str, str]]:
     return sort_media_player_catalog(entries)
 
 
-def load_rooms(store_path: str, seed_path: str) -> dict[str, Any]:
-    """Load the writable store, seeding from the bundled file when missing."""
+def load_rooms(store_path: str) -> dict[str, Any]:
+    """Load the writable store, or start empty if the file is missing."""
     if os.path.isfile(store_path):
         rooms = _read_rooms_file(store_path)
         _LOGGER.info("rooms loaded from %s (%d)", store_path, len(rooms))
         return rooms
-    rooms = _read_rooms_file(seed_path) if os.path.isfile(seed_path) else {}
+    rooms: dict[str, Any] = {}
     try:
         save_rooms(store_path, rooms)
-        _LOGGER.info("rooms seeded %s → %s (%d)", seed_path, store_path, len(rooms))
+        _LOGGER.info("rooms store created %s (empty)", store_path)
     except OSError as exc:
-        _LOGGER.warning("could not seed rooms store %s: %s", store_path, exc)
+        _LOGGER.warning("could not create rooms store %s: %s", store_path, exc)
     return rooms
 
 

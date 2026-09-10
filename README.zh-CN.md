@@ -127,7 +127,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 #### 房间（PWA）
 
-在 PWA **⚙ → 房间** 中添加、编辑、删除房间。运行时配置在 `/data/rooms.json`（首次启动从镜像种子复制）。不要再单独挂载或手改 `rooms.json`，compose 的 `./data` 卷即可。
+在 PWA **⚙ → 房间** 中添加、编辑、删除房间。运行时配置在 `/data/rooms.json`（compose 的 `./data` 卷，新卷为空）。不要再单独挂载 `rooms.json`。
 
 每个房间有 `name`、音箱 `entity`（HA `media_player` entity_id），以及可选的 `announce_volume`（0–100，仅 MA）和 `pause_buffer`。
 

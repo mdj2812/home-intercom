@@ -91,21 +91,16 @@ class TestPutPatch:
 
 
 class TestLoadSave:
-    def test_seeds_when_store_missing(self, tmp_path: Path) -> None:
-        seed = tmp_path / "seed.json"
-        seed.write_text(json.dumps({"living": {"name": "Living", "entity": "media_player.x"}}))
+    def test_empty_when_store_missing(self, tmp_path: Path) -> None:
         store = tmp_path / "data" / "rooms.json"
-        rooms = load_rooms(str(store), str(seed))
-        assert "living" in rooms
-        saved = json.loads(store.read_text())
-        assert saved["living"]["name"] == "Living"
+        rooms = load_rooms(str(store))
+        assert rooms == {}
+        assert json.loads(store.read_text()) == {}
 
-    def test_store_wins_over_seed(self, tmp_path: Path) -> None:
-        seed = tmp_path / "seed.json"
-        seed.write_text(json.dumps({"old": {"name": "Old", "entity": "media_player.a"}}))
+    def test_loads_existing_store(self, tmp_path: Path) -> None:
         store = tmp_path / "rooms.json"
         save_rooms(str(store), {"new": {"name": "New", "entity": "media_player.b"}})
-        rooms = load_rooms(str(store), str(seed))
+        rooms = load_rooms(str(store))
         assert list(rooms) == ["new"]
 
 

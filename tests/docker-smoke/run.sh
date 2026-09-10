@@ -131,13 +131,12 @@ else
     IMAGE="home-intercom"
 fi
 
-# ── Seed runtime rooms store (issue #75) ─────────────────────
-# Note: Docker room entries use "entity" (not HA's "entity_id") — /record reads it.
-# Live catalog is /data/rooms.json. Bundled /app/rooms.json is seed only.
+# ── Runtime data volume (issue #75) ──────────────────────────
+# Live catalog is /data/rooms.json. A fresh volume starts empty; rooms
+# are added via PUT /rooms/<id> (PWA). Docker entries use "entity".
 TMPDIR=$(mktemp -d)
 EXPECTED_ROOMS='{"test":{"name":"Test Room","entity":"media_player.test_speaker"}}'
 mkdir -p "${TMPDIR}/data"
-echo "${EXPECTED_ROOMS}" > "${TMPDIR}/data/rooms.json"
 
 # ── Start container ─────────────────────────────────────────
 echo "==> Starting intercom container..."
@@ -197,14 +196,25 @@ print(f'ok: n={len(d)}')
 "
 assert_ha_alias "GET /api/home_intercom/media_players — matches /media_players" "${PLAYERS}" "/api/home_intercom/media_players"
 
-# 2. /rooms — live catalog from /data/rooms.json (issue #75)
+# 2. /rooms — empty until the PWA (or PUT) writes /data/rooms.json
 ROOMS=$(fetch "${URL}/rooms" || echo "")
-assert_json "GET /rooms — matches input" "${ROOMS}" "
+assert_json "GET /rooms — empty on first start" "${ROOMS}" "
 import sys, json
 got = json.load(sys.stdin)
-expected = json.loads('${EXPECTED_ROOMS}')
-assert got == expected, f'mismatch\\n  got:      {json.dumps(got)}\\n  expected: {json.dumps(expected)}'
-print('ok: rooms match input')
+assert got == {}, f'expected empty catalog, got: {json.dumps(got)}'
+print('ok: empty catalog')
+"
+assert_http "GET /rooms.json — leftover alias removed" \
+    "$(fetch_code "${URL}/rooms.json")" "404"
+PUT_TEST=$(fetch -X PUT -H "Content-Type: application/json" \
+    -d '{"name":"Test Room","entity":"media_player.test_speaker"}' \
+    "${URL}/rooms/test" || echo "")
+assert_json "PUT /rooms/test" "${PUT_TEST}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'not ok: {d}'
+assert d['rooms']['test']['entity'] == 'media_player.test_speaker'
+print('ok: test room created')
 "
 
 # 2b. PUT/PATCH/DELETE /rooms/<id> — writable catalog (issue #72)
@@ -236,12 +246,12 @@ assert 'office' not in d.get('rooms', {}), d
 print('ok: office removed')
 "
 ROOMS=$(fetch "${URL}/rooms" || echo "")
-assert_json "GET /rooms — seed rooms remain after delete" "${ROOMS}" "
+assert_json "GET /rooms — test room remains after delete" "${ROOMS}" "
 import sys, json
 got = json.load(sys.stdin)
 expected = json.loads('${EXPECTED_ROOMS}')
 assert got == expected, f'mismatch\\n  got:      {json.dumps(got)}\\n  expected: {json.dumps(expected)}'
-print('ok: rooms restored to seed')
+print('ok: test room remains')
 "
 
 # 3. / — PWA frontend

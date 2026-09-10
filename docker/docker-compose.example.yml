@@ -4,13 +4,8 @@ services:
     container_name: home-intercom
     restart: unless-stopped
     volumes:
-      # Persist device registry, firmware cache, and the PWA room catalog.
-      # Mount a *directory*, not a JSON file — file bind-mounts cannot be
-      # atomically replaced (EBUSY). Live rooms live at /data/rooms.json
-      # (seeded from the image on first start). Manage rooms in the PWA.
+      # Rooms, devices, firmware, and audio. Manage rooms in the PWA.
       - ./data:/data
-      # Audio files served by Flask (no SCP)
-      - ./audio:/data/audio
     environment:
       - HA_URL=http://<YOUR_HA_IP>:8123
       - HA_TOKEN=<YOUR_HA_LONG_LIVED_TOKEN>

@@ -22,19 +22,42 @@ def client():
         yield c
 
 
+@pytest.fixture(autouse=True)
+def _default_docker_rooms(monkeypatch):
+    """Flask tests used to inherit rooms from the bundled seed file."""
+    import intercom_server
+
+    monkeypatch.setattr(
+        intercom_server,
+        "ROOM_MAP",
+        {
+            "living": {
+                "name": "Living Room",
+                "entity": "media_player.living_room_speaker",
+                "announce_volume": 50,
+            },
+            "bedroom": {"name": "Bedroom", "entity": "media_player.bedroom_speaker"},
+        },
+    )
+
+
 class TestStaticRoutes:
     def test_index_returns_html(self, client):
         resp = client.get("/")
         assert resp.status_code == 200
         assert b"<html" in resp.data
 
-    def test_rooms_json(self, client):
-        resp = client.get("/rooms.json")
+    def test_rooms(self, client):
+        resp = client.get("/rooms")
         assert resp.status_code == 200
         data = resp.json
         assert data is not None
         assert "living" in data
         assert data["living"]["name"] == "Living Room"
+
+    def test_rooms_json_removed(self, client):
+        resp = client.get("/rooms.json")
+        assert resp.status_code == 404
 
     def test_rooms_ha_alias(self, client):
         """HA-style alias used by ESP32 after /devices/hello (issue #38)."""

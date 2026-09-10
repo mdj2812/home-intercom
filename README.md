@@ -127,7 +127,7 @@ docker compose -f docker/docker-compose.example.yml up -d
 
 #### Rooms (PWA)
 
-Add, edit, and delete rooms from **⚙ → Rooms** in the PWA. Live config is stored at `/data/rooms.json` (seeded from the image on first start). Do not mount or edit a `rooms.json` file by hand — the compose `./data` volume is enough.
+Add, edit, and delete rooms from **⚙ → Rooms** in the PWA. Live config is stored at `/data/rooms.json` on the compose `./data` volume (empty until you add rooms). Do not mount a `rooms.json` file.
 
 Each room has a `name`, speaker `entity` (HA `media_player` entity_id), and optional `announce_volume` (0–100, Music Assistant only) and `pause_buffer`.
 

@@ -103,10 +103,9 @@ try:
 except Exception:
     VERSION = os.environ.get("VERSION", "dev")
 
-# Writable room catalog (#72). Bundled rooms.json is seed only.
+# Writable room catalog (#72). Empty until rooms are added in the PWA.
 ROOMS_STORE = os.environ.get("ROOMS_FILE", ROOMS_STORE_DEFAULT)
-ROOMS_SEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rooms.json")
-ROOM_MAP = load_rooms(ROOMS_STORE, ROOMS_SEED)
+ROOM_MAP = load_rooms(ROOMS_STORE)
 
 # Device registry for ESP32 intercom buttons (issue #40)
 DEVICE_REGISTRY_FILE = os.environ.get("DEVICE_REGISTRY_FILE", DEVICE_REGISTRY_DEFAULT_PATH)
@@ -119,10 +118,9 @@ def index():
     return send_from_directory(here, "intercom.html")
 
 
-@app.route("/rooms.json")
 @app.route("/rooms")
-def rooms_alias():
-    """Public room map (issue #38). Live catalog, not the image-baked seed file."""
+def rooms():
+    """Public room map (issue #38). PWA-managed catalog on /data/rooms.json."""
     return jsonify(ROOM_MAP)
 
 
@@ -495,7 +493,7 @@ app.add_url_rule(
     f"{_HA_PREFIX}/devices/manage", "ha_devices_manage", devices_manage, methods=["POST"]
 )
 app.add_url_rule(f"{_HA_PREFIX}/devices", "ha_devices", devices_list)
-app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms_alias)
+app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms)
 app.add_url_rule(
     f"{_HA_PREFIX}/rooms/<room_id>",
     "ha_rooms_item",
