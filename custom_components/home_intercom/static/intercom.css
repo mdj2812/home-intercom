@@ -239,6 +239,8 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
 
 .settings-panel {
   width: min(100%, 360px);
+  max-height: min(90vh, 720px);
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -273,6 +275,140 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
 
 .settings-close:hover {
   color: var(--text-primary);
+}
+
+.rooms-section {
+  margin-top: 4px;
+  margin-bottom: 18px;
+}
+
+.rooms-empty {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.rooms-empty[hidden],
+.rooms-form[hidden],
+.rooms-add-btn[hidden] {
+  display: none;
+}
+
+.rooms-list {
+  --rooms-row-gap: 8px;
+  --rooms-row-height: 52px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--rooms-row-gap);
+  margin-bottom: 10px;
+  max-height: calc(4 * var(--rooms-row-height) + 3 * var(--rooms-row-gap));
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+
+.rooms-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--rooms-row-height);
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.rooms-row-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.rooms-row-name {
+  font-size: 0.78rem;
+  line-height: 1.2;
+  font-weight: 500;
+  color: var(--text-heading);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rooms-row-entity {
+  margin-top: 2px;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rooms-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.rooms-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.rooms-field > span {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.rooms-field input,
+.rooms-field select {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  color: var(--fg);
+  font-size: 0.8rem;
+  padding: 8px 10px;
+  appearance: none;
+  user-select: text;
+  /* stylelint-disable-next-line property-no-vendor-prefix */
+  -webkit-user-select: text;
+}
+
+.rooms-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rooms-form-actions .device-action {
+  flex: 1;
+}
+
+.rooms-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-2);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: left;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.rooms-add-btn:hover {
+  border-color: var(--border-3);
+  background: var(--surface-replace-hover);
 }
 
 .chime-section {

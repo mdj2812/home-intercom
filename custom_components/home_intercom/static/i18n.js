@@ -67,6 +67,28 @@ const I18N = (() => {
       deviceMinutesAgo: "%s 分钟前",
       deviceHoursAgo: "%s 小时前",
       deviceNeverSeen: "未见过",
+      roomsTitle: "房间",
+      roomsDesc: "对讲网格上的扬声器",
+      roomsEmpty: "还没有房间。添加一个扬声器开始使用。",
+      roomsAdd: "添加房间",
+      roomsName: "名称",
+      roomsPlayer: "扬声器",
+      roomsVolume: "播报音量",
+      roomsPause: "暂停缓冲（秒）",
+      roomsVolumeHint: "1–100，留空为默认",
+      roomsPauseHint: "0–10，留空为默认",
+      roomsSave: "保存",
+      roomsCancel: "取消",
+      roomsEdit: "编辑",
+      roomsDelete: "删除",
+      roomsDeleteConfirm: "删除这个房间？",
+      roomsSaved: "房间已保存",
+      roomsDeleted: "房间已删除",
+      roomsSaveFail: "保存失败",
+      roomsNoPlayers: "没有可用的扬声器",
+      roomsErrorYaml: "此房间由 YAML 配置，无法在网页修改",
+      roomsErrorNoEntry: "没有可写入的配置项",
+      roomsErrorUnknown: "找不到这个房间",
     },
     en: {
       appTitle: "Home Intercom",
@@ -124,6 +146,28 @@ const I18N = (() => {
       deviceMinutesAgo: "%s min ago",
       deviceHoursAgo: "%s h ago",
       deviceNeverSeen: "Never seen",
+      roomsTitle: "Rooms",
+      roomsDesc: "Speakers on the intercom grid",
+      roomsEmpty: "No rooms yet. Add a speaker to get started.",
+      roomsAdd: "Add room",
+      roomsName: "Name",
+      roomsPlayer: "Speaker",
+      roomsVolume: "Announce volume",
+      roomsPause: "Pause buffer (s)",
+      roomsVolumeHint: "1–100, empty = default",
+      roomsPauseHint: "0–10, empty = default",
+      roomsSave: "Save",
+      roomsCancel: "Cancel",
+      roomsEdit: "Edit",
+      roomsDelete: "Delete",
+      roomsDeleteConfirm: "Delete this room?",
+      roomsSaved: "Room saved",
+      roomsDeleted: "Room deleted",
+      roomsSaveFail: "Save failed",
+      roomsNoPlayers: "No speakers available",
+      roomsErrorYaml: "This room is YAML-configured and cannot be edited here",
+      roomsErrorNoEntry: "No writable config entry",
+      roomsErrorUnknown: "Unknown room",
     },
   };
 
@@ -232,6 +276,7 @@ const I18N = (() => {
 
     // Re-render the device list with the new language (room names change)
     if (typeof window.renderDevices === "function") window.renderDevices();
+    if (typeof window.renderRoomsSettings === "function") window.renderRoomsSettings();
 
     document.title = t("appTitle");
 

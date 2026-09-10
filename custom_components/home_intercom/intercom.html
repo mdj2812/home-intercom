@@ -102,6 +102,42 @@
       <h2 id="settings-title" data-i18n="settingsTitle">Settings</h2>
       <button type="button" id="settings-close" class="settings-close" aria-label="Close">×</button>
     </div>
+    <section class="rooms-section" aria-labelledby="rooms-heading">
+      <div class="chime-heading">
+        <h3 id="rooms-heading" data-i18n="roomsTitle">房间</h3>
+        <p class="chime-desc" data-i18n="roomsDesc">对讲网格上的扬声器</p>
+      </div>
+      <p class="rooms-empty" id="rooms-empty" hidden data-i18n="roomsEmpty">还没有房间。添加一个扬声器开始使用。</p>
+      <div class="rooms-list" id="rooms-list"></div>
+      <form class="rooms-form" id="rooms-form" hidden>
+        <input type="hidden" id="room-edit-id" value="">
+        <label class="rooms-field">
+          <span data-i18n="roomsName">名称</span>
+          <input type="text" id="room-name" maxlength="64" required autocomplete="off">
+        </label>
+        <label class="rooms-field">
+          <span data-i18n="roomsPlayer">扬声器</span>
+          <select id="room-player" required></select>
+        </label>
+        <label class="rooms-field">
+          <span data-i18n="roomsVolume">播报音量</span>
+          <input type="number" id="room-volume" min="0" max="100" step="1" inputmode="numeric">
+        </label>
+        <label class="rooms-field">
+          <span data-i18n="roomsPause">暂停缓冲（秒）</span>
+          <input type="number" id="room-pause" min="0" max="10" step="0.1" inputmode="decimal">
+        </label>
+        <div class="rooms-form-actions">
+          <button type="submit" id="rooms-save" class="device-action primary" data-i18n="roomsSave">保存</button>
+          <button type="button" id="rooms-cancel" class="device-action" data-i18n="roomsCancel">取消</button>
+        </div>
+      </form>
+      <button type="button" id="rooms-add" class="rooms-add-btn">
+        <span class="chime-replace-icon" aria-hidden="true">＋</span>
+        <span data-i18n="roomsAdd">添加房间</span>
+      </button>
+      <p class="settings-msg" id="rooms-msg" aria-live="polite"></p>
+    </section>
     <section class="chime-section" aria-labelledby="chime-heading">
       <div class="chime-heading">
         <h3 id="chime-heading" data-i18n="chimeTitle">Custom chime</h3>
@@ -326,22 +362,45 @@ function applyRoomStatus(status) {
   }
 }
 
-async function loadRooms() {
-  // Expose room data for i18n language switching
+function roomEntity(room) {
+  return (room && (room.entity_id || room.entity)) || '';
+}
+
+function catalogRooms() {
+  const rooms = {};
+  for (const [key, room] of Object.entries(window._ROOM_DATA || {})) {
+    if (key === 'all') continue;
+    rooms[key] = room;
+  }
+  return rooms;
+}
+
+function rebuildRoomGrid(rooms) {
   window._ROOM_DATA = {};
-  window._ROOM_DATA['all'] = { name: I18N.t('broadcastAll'), name_en: 'All' };
-  ROOM_NAMES['all'] = I18N.t('broadcastAll');
+  ROOM_NAMES = {};
+  GRID.innerHTML = '';
+  window._ROOM_DATA.all = { name: I18N.t('broadcastAll'), name_en: 'All' };
+  ROOM_NAMES.all = I18N.t('broadcastAll');
   GRID.appendChild(makeCard('all', I18N.t('broadcastAll'), true));
 
-  try {
-    const resp = await fetch((window.API_BASE || '') + '/rooms', { credentials: 'same-origin', headers: authHeaders() });
-    const rooms = await resp.json();
+  if (rooms && typeof rooms === 'object' && !Array.isArray(rooms)) {
     for (const [key, room] of Object.entries(rooms)) {
       window._ROOM_DATA[key] = room;
       ROOM_NAMES[key] = room.name;
       GRID.appendChild(makeCard(key, room.name, false));
     }
+  }
+  if (typeof window.renderRoomsSettings === 'function') window.renderRoomsSettings();
+  if (typeof window.renderDevices === 'function' && window._DEVICES) window.renderDevices();
+}
+
+async function loadRooms() {
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/rooms', { credentials: 'same-origin', headers: authHeaders() });
+    const rooms = await resp.json();
+    rebuildRoomGrid(rooms);
   } catch (e) {
+    rebuildRoomGrid({});
     const firstStatus = GRID.querySelector('.status');
     if (firstStatus) firstStatus.textContent = I18N.t('statusLoadFailed');
   }
@@ -651,7 +710,8 @@ async function processAndSend() {
         // Map entity → room key for card lookup
         const entityToKey = {};
         for (const [key, room] of Object.entries(window._ROOM_DATA || {})) {
-          if (room.entity_id) entityToKey[room.entity_id] = key;
+          const entityId = roomEntity(room);
+          if (entityId) entityToKey[entityId] = key;
         }
         // Show error on each skipped room's card
         for (const e of errors) {
@@ -703,6 +763,321 @@ async function pollSpeakerStatus() {
   } catch (e) {
     if (!haStatusLoaded) applyPreviewFallback();
   }
+}
+
+// --- Room catalog settings (issue #74) ---
+const ROOMS_URL = (window.API_BASE || '') + '/rooms';
+const MEDIA_PLAYERS_URL = (window.API_BASE || '') + '/media_players';
+window._MEDIA_PLAYERS = [];
+
+function setRoomsMsg(text) {
+  const node = document.getElementById('rooms-msg');
+  if (node) node.textContent = text || '';
+}
+
+function playerLabel(player) {
+  if (!player) return '';
+  const area = (player.area || '').trim();
+  const name = player.name || player.entity_id;
+  return area ? area + ' · ' + name : name;
+}
+
+function playerById(entityId) {
+  return (window._MEDIA_PLAYERS || []).find((p) => p.entity_id === entityId) || null;
+}
+
+function slugRoomId(entityId, existingKeys) {
+  let base = String(entityId || '').replace(/^media_player\./, '');
+  base = base.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/^[^a-zA-Z0-9]+/, '').slice(0, 64);
+  if (!base) base = 'room';
+  let id = base;
+  let n = 2;
+  const taken = existingKeys || new Set();
+  while (taken.has(id) || id.toLowerCase() === 'all' || id.toLowerCase() === 'status') {
+    const suffix = '_' + n;
+    id = (base.slice(0, Math.max(1, 64 - suffix.length)) + suffix);
+    n += 1;
+  }
+  return id;
+}
+
+function optionalNumber(input, { integer } = {}) {
+  const raw = (input && input.value != null) ? String(input.value).trim() : '';
+  if (raw === '') return 0;
+  const n = integer ? parseInt(raw, 10) : parseFloat(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fillPlayerSelect(selected) {
+  const select = document.getElementById('room-player');
+  if (!select) return;
+  const players = window._MEDIA_PLAYERS || [];
+  select.innerHTML = '';
+  if (!players.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = I18N.t('roomsNoPlayers');
+    select.appendChild(opt);
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  const groups = new Map();
+  const ungrouped = [];
+  for (const player of players) {
+    const area = (player.area || '').trim();
+    if (area) {
+      if (!groups.has(area)) groups.set(area, []);
+      groups.get(area).push(player);
+    } else {
+      ungrouped.push(player);
+    }
+  }
+  const addOption = (parent, player) => {
+    const opt = document.createElement('option');
+    opt.value = player.entity_id;
+    opt.textContent = player.name || player.entity_id;
+    parent.appendChild(opt);
+  };
+  for (const [area, list] of groups) {
+    const group = document.createElement('optgroup');
+    group.label = area;
+    list.forEach((p) => addOption(group, p));
+    select.appendChild(group);
+  }
+  ungrouped.forEach((p) => addOption(select, p));
+  if (selected && !players.some((p) => p.entity_id === selected)) {
+    const opt = document.createElement('option');
+    opt.value = selected;
+    opt.textContent = selected;
+    select.appendChild(opt);
+  }
+  if (selected) select.value = selected;
+}
+
+async function loadMediaPlayers() {
+  try {
+    const resp = await fetch(MEDIA_PLAYERS_URL, {
+      credentials: 'same-origin',
+      headers: authHeaders(),
+    });
+    if (!resp.ok) {
+      window._MEDIA_PLAYERS = [];
+    } else {
+      const data = await resp.json();
+      window._MEDIA_PLAYERS = Array.isArray(data) ? data : [];
+    }
+  } catch (e) {
+    window._MEDIA_PLAYERS = [];
+  }
+  const editId = document.getElementById('room-edit-id');
+  const form = document.getElementById('rooms-form');
+  if (form && !form.hidden) {
+    fillPlayerSelect(document.getElementById('room-player').value);
+  } else if (editId) {
+    fillPlayerSelect(editId.value ? roomEntity((window._ROOM_DATA || {})[editId.value]) : '');
+  }
+}
+
+function roomsFormOpen() {
+  const form = document.getElementById('rooms-form');
+  return !!(form && !form.hidden);
+}
+
+window.renderRoomsSettings = function () {
+  const list = document.getElementById('rooms-list');
+  const empty = document.getElementById('rooms-empty');
+  const addBtn = document.getElementById('rooms-add');
+  const volumeEl = document.getElementById('room-volume');
+  const pauseEl = document.getElementById('room-pause');
+  if (volumeEl) volumeEl.placeholder = I18N.t('roomsVolumeHint');
+  if (pauseEl) pauseEl.placeholder = I18N.t('roomsPauseHint');
+  if (!list) return;
+  const rooms = catalogRooms();
+  const keys = Object.keys(rooms);
+  const formOpen = roomsFormOpen();
+  list.innerHTML = '';
+  if (empty) empty.hidden = formOpen || keys.length > 0;
+  if (addBtn) addBtn.hidden = formOpen;
+  if (formOpen) {
+    fillPlayerSelect(document.getElementById('room-player').value);
+    return;
+  }
+
+  for (const key of keys) {
+    const room = rooms[key];
+    const entityId = roomEntity(room);
+    const player = playerById(entityId);
+    const row = el('div', 'rooms-row');
+    const info = el('div', 'rooms-row-info');
+    info.appendChild(el('div', 'rooms-row-name', room.name || key));
+    info.appendChild(el('div', 'rooms-row-entity', player ? playerLabel(player) : entityId));
+    const actions = el('div', 'rooms-row-actions');
+    actions.appendChild(deviceActionButton(I18N.t('roomsEdit'), '', () => openRoomForm(key)));
+    actions.appendChild(deviceActionButton(I18N.t('roomsDelete'), 'danger', () => deleteRoom(key)));
+    row.appendChild(info);
+    row.appendChild(actions);
+    list.appendChild(row);
+  }
+};
+
+function closeRoomForm() {
+  const form = document.getElementById('rooms-form');
+  const editId = document.getElementById('room-edit-id');
+  const nameEl = document.getElementById('room-name');
+  if (form) form.hidden = true;
+  if (editId) editId.value = '';
+  if (nameEl) nameEl.dataset.fromPlayer = '0';
+  window.renderRoomsSettings();
+}
+
+function openRoomForm(roomId) {
+  const form = document.getElementById('rooms-form');
+  const editId = document.getElementById('room-edit-id');
+  const nameEl = document.getElementById('room-name');
+  const volumeEl = document.getElementById('room-volume');
+  const pauseEl = document.getElementById('room-pause');
+  const addBtn = document.getElementById('rooms-add');
+  const empty = document.getElementById('rooms-empty');
+  const list = document.getElementById('rooms-list');
+  if (!form || !nameEl) return;
+  setRoomsMsg('');
+  const room = roomId ? (window._ROOM_DATA || {})[roomId] : null;
+  editId.value = roomId || '';
+  nameEl.value = room ? (room.name || '') : '';
+  nameEl.dataset.fromPlayer = roomId ? '0' : '1';
+  volumeEl.value = room && room.announce_volume ? String(room.announce_volume) : '';
+  pauseEl.value = room && room.pause_buffer ? String(room.pause_buffer) : '';
+  fillPlayerSelect(room ? roomEntity(room) : '');
+  if (!roomId) {
+    const select = document.getElementById('room-player');
+    const first = select && !select.disabled ? select.value : '';
+    const player = playerById(first);
+    if (player && !nameEl.value) nameEl.value = player.name || '';
+  }
+  form.hidden = false;
+  if (addBtn) addBtn.hidden = true;
+  if (empty) empty.hidden = true;
+  if (list) list.innerHTML = '';
+  nameEl.focus();
+}
+
+function roomsErrorMessage(error, status) {
+  if (status === 401) return I18N.t('roomsSaveFail');
+  if (error === 'yaml_read_only') return I18N.t('roomsErrorYaml');
+  if (error === 'no writable config entry') return I18N.t('roomsErrorNoEntry');
+  if (error === 'unknown room') return I18N.t('roomsErrorUnknown');
+  if (error === 'cannot persist rooms') return I18N.t('roomsSaveFail');
+  return error || I18N.t('roomsSaveFail');
+}
+
+async function saveRoom(e) {
+  e.preventDefault();
+  setRoomsMsg('');
+  const editId = document.getElementById('room-edit-id').value.trim();
+  const name = document.getElementById('room-name').value.trim();
+  const entityId = document.getElementById('room-player').value.trim();
+  if (!name || !entityId) {
+    setRoomsMsg(I18N.t('roomsSaveFail'));
+    return;
+  }
+  const existing = new Set(Object.keys(catalogRooms()));
+  const roomId = editId || slugRoomId(entityId, existing);
+  const body = {
+    name,
+    entity_id: entityId,
+    announce_volume: optionalNumber(document.getElementById('room-volume'), { integer: true }),
+    pause_buffer: optionalNumber(document.getElementById('room-pause')),
+  };
+  try {
+    const resp = await fetch(ROOMS_URL + '/' + encodeURIComponent(roomId), {
+      method: editId ? 'PATCH' : 'PUT',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    });
+    if (resp.status === 401 && !sessionStorage.getItem(RELOAD_ONCE_KEY)) {
+      sessionStorage.setItem(RELOAD_ONCE_KEY, '1');
+      location.reload();
+      return;
+    }
+    let data = {};
+    try { data = await resp.json(); } catch (err) { data = {}; }
+    if (!resp.ok) {
+      setRoomsMsg(roomsErrorMessage(data.error, resp.status));
+      return;
+    }
+    if (data.rooms && typeof data.rooms === 'object') rebuildRoomGrid(data.rooms);
+    else await loadRooms();
+    closeRoomForm();
+    setRoomsMsg(I18N.t('roomsSaved'));
+    pollSpeakerStatus();
+  } catch (err) {
+    setRoomsMsg(I18N.t('roomsSaveFail'));
+    console.error('saveRoom:', err);
+  }
+}
+
+async function deleteRoom(roomId) {
+  if (!confirm(I18N.t('roomsDeleteConfirm'))) return;
+  setRoomsMsg('');
+  try {
+    const resp = await fetch(ROOMS_URL + '/' + encodeURIComponent(roomId), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders(),
+    });
+    if (resp.status === 401 && !sessionStorage.getItem(RELOAD_ONCE_KEY)) {
+      sessionStorage.setItem(RELOAD_ONCE_KEY, '1');
+      location.reload();
+      return;
+    }
+    let data = {};
+    try { data = await resp.json(); } catch (err) { data = {}; }
+    if (!resp.ok) {
+      setRoomsMsg(roomsErrorMessage(data.error, resp.status));
+      return;
+    }
+    if (data.rooms && typeof data.rooms === 'object') rebuildRoomGrid(data.rooms);
+    else await loadRooms();
+    setRoomsMsg(I18N.t('roomsDeleted'));
+    pollSpeakerStatus();
+  } catch (err) {
+    setRoomsMsg(I18N.t('roomsSaveFail'));
+    console.error('deleteRoom:', err);
+  }
+}
+
+function initRoomsSettings() {
+  const addBtn = document.getElementById('rooms-add');
+  const form = document.getElementById('rooms-form');
+  const cancelBtn = document.getElementById('rooms-cancel');
+  const nameEl = document.getElementById('room-name');
+  const playerEl = document.getElementById('room-player');
+  if (!form || form.dataset.bound) return;
+  form.dataset.bound = '1';
+
+  addBtn?.addEventListener('click', () => {
+    loadMediaPlayers().then(() => openRoomForm(''));
+  });
+  cancelBtn?.addEventListener('click', () => {
+    setRoomsMsg('');
+    closeRoomForm();
+  });
+  form.addEventListener('submit', saveRoom);
+  playerEl?.addEventListener('change', () => {
+    if (document.getElementById('room-edit-id').value) return;
+    const player = playerById(playerEl.value);
+    if (player && (nameEl.dataset.fromPlayer === '1' || !nameEl.value.trim())) {
+      nameEl.value = player.name || '';
+      nameEl.dataset.fromPlayer = '1';
+    }
+  });
+  nameEl?.addEventListener('input', () => {
+    nameEl.dataset.fromPlayer = '0';
+  });
 }
 
 // --- Custom chime settings (issue #66) ---
@@ -1002,7 +1377,11 @@ function openSettingsPanel() {
   overlay.hidden = false;
   toggle.setAttribute('aria-expanded', 'true');
   setChimeMsg('');
+  setRoomsMsg('');
   refreshChimeStatus();
+  loadMediaPlayers().then(() => {
+    if (typeof window.renderRoomsSettings === 'function') window.renderRoomsSettings();
+  });
 }
 
 function closeSettingsPanel() {
@@ -1010,6 +1389,8 @@ function closeSettingsPanel() {
   const toggle = document.getElementById('settings-toggle');
   if (overlay) overlay.hidden = true;
   if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  setRoomsMsg('');
+  closeRoomForm();
   if (chimePreviewAudio) {
     chimePreviewAudio.pause();
     chimePreviewAudio = null;
@@ -1090,6 +1471,7 @@ document.addEventListener('visibilitychange', () => {
   pollSpeakerStatus();
 });
 initDevicesToggle();
+initRoomsSettings();
 initChimeSettings();
 
 // Show version number
