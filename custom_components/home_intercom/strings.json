@@ -3,18 +3,12 @@
         "step": {
             "user": {
                 "title": "Home Intercom",
-                "description": "Set up your first room. You can add more later via Options.",
-                "data": {
-                    "area_id": "Area",
-                    "entity_id": "Media Player",
-                    "announce_volume": "Announce Volume (0-100, 0=disabled)",
-                    "pause_buffer": "Pause Buffer (seconds)"
-                }
+                "description": "Rooms are managed in the PWA (Settings → Rooms). You can add speakers after this step."
             }
         },
         "abort": {
             "no_media_players": "No media_player entities found in Home Assistant.",
-            "already_configured": "Home Intercom is already configured. Use the Configure button to manage rooms."
+            "already_configured": "Home Intercom is already configured. Add or edit rooms in the PWA."
         }
     },
     "options": {

@@ -1,10 +1,9 @@
 """Room catalog helpers shared by HA and Docker (issue #72).
 
-GET /rooms stays a public map. Writes validate the same payload on both
-deployments, then persist in the native shape:
+GET /rooms stays a public map. Writes persist in the native store:
 
-- HA config entries: ``name`` + ``entity_id``
-- Docker ``/data/rooms.json``: ``name`` + ``entity``
+- HA: writable UI config entry (PWA)
+- Docker: ``/data/rooms.json`` (bundled ``rooms.json`` is seed only)
 """
 
 from __future__ import annotations

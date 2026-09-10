@@ -1,10 +1,7 @@
 """Config flow and Options flow for Home Intercom.
 
-Provides UI-driven setup (Settings → Devices & Services → Add Integration)
-and room management (Configure → Options).
-
-Config flow: area + media_player selection in a single step.
-Options flow: add / edit / delete rooms via UI dialogs.
+Config flow creates an empty writable entry; rooms are added from the PWA
+(issue #75). Options Flow remains a fallback editor.
 """
 
 from __future__ import annotations
@@ -65,61 +62,19 @@ class HomeIntercomConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1  # Config flow schema version (increment on breaking changes)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Step: pick area + media_player + optional params in one form."""
-        # Abort early if already configured — user should use Configure → Options
+        """Create an empty UI entry. Rooms are added from the PWA (issue #75)."""
         await self.async_set_unique_id(UI_UNIQUE_ID)
         self._abort_if_unique_id_configured()
-
-        errors: dict[str, str] = {}
-
-        areas = _area_choices(self.hass)
-        entities = _media_player_choices(self.hass)
-
-        if not entities:
-            return self.async_abort(reason="no_media_players")
-
-        if user_input is not None:
-            area_id = user_input[CONF_AREA_ID]
-            entity_id = user_input[CONF_ENTITY_ID]
-            area_name = areas.get(area_id, area_id)
-
-            return self.async_create_entry(
-                title="Home Intercom",
-                data={
-                    CONF_ROOMS: {
-                        area_id: {
-                            CONF_NAME: area_name,
-                            CONF_ENTITY_ID: entity_id,
-                            CONF_ANNOUNCE_VOLUME: user_input.get(CONF_ANNOUNCE_VOLUME),
-                            CONF_PAUSE_BUFFER: user_input.get(CONF_PAUSE_BUFFER, 0.0),
-                        }
-                    }
-                },
-            )
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_AREA_ID): vol.In(areas) if areas else vol.In({"_": "no areas"}),
-                vol.Required(CONF_ENTITY_ID): vol.In(entities),
-                vol.Optional(CONF_ANNOUNCE_VOLUME): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=100)
-                ),
-                vol.Optional(CONF_PAUSE_BUFFER): vol.All(
-                    vol.Coerce(float), vol.Range(min=0, max=10)
-                ),
-            }
-        )
-
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        if user_input is None:
+            return self.async_show_form(step_id="user", data_schema=vol.Schema({}))
+        return self.async_create_entry(title="Home Intercom", data={CONF_ROOMS: {}})
 
     async def async_step_import(self, import_data: dict[str, Any]) -> FlowResult:
-        """Import from YAML configuration.yaml."""
-        await self.async_set_unique_id(YAML_UNIQUE_ID)
-        self._abort_if_unique_id_configured(
-            updates={CONF_ROOMS: dict(import_data.get(CONF_ROOMS, {}))}
-        )
+        """Import leftover YAML rooms into the writable UI entry (issue #75)."""
+        await self.async_set_unique_id(UI_UNIQUE_ID)
+        self._abort_if_unique_id_configured()
         return self.async_create_entry(
-            title="Home Intercom (YAML)",
+            title="Home Intercom",
             data={CONF_ROOMS: dict(import_data.get(CONF_ROOMS, {}))},
         )
 

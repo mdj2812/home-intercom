@@ -131,18 +131,18 @@ else
     IMAGE="home-intercom"
 fi
 
-# ── Create minimal rooms.json for testing ────────────────────
+# ── Seed runtime rooms store (issue #75) ─────────────────────
 # Note: Docker room entries use "entity" (not HA's "entity_id") — /record reads it.
+# Live catalog is /data/rooms.json. Bundled /app/rooms.json is seed only.
 TMPDIR=$(mktemp -d)
 EXPECTED_ROOMS='{"test":{"name":"Test Room","entity":"media_player.test_speaker"}}'
-echo "${EXPECTED_ROOMS}" > "${TMPDIR}/rooms.json"
 mkdir -p "${TMPDIR}/data"
+echo "${EXPECTED_ROOMS}" > "${TMPDIR}/data/rooms.json"
 
 # ── Start container ─────────────────────────────────────────
 echo "==> Starting intercom container..."
 docker run -d \
     --name "${CONTAINER_NAME}" \
-    -v "${TMPDIR}/rooms.json:/app/rooms.json:ro" \
     -v "${TMPDIR}/data:/data" \
     -p "${PORT}:${PORT}" \
     -e HA_URL="http://ha:8123" \
@@ -197,7 +197,7 @@ print(f'ok: n={len(d)}')
 "
 assert_ha_alias "GET /api/home_intercom/media_players — matches /media_players" "${PLAYERS}" "/api/home_intercom/media_players"
 
-# 2. /rooms — verify matches input rooms.json
+# 2. /rooms — live catalog from /data/rooms.json (issue #75)
 ROOMS=$(fetch "${URL}/rooms" || echo "")
 assert_json "GET /rooms — matches input" "${ROOMS}" "
 import sys, json

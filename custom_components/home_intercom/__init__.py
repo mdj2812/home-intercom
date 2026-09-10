@@ -1,10 +1,8 @@
 """Home Intercom — PWA-based family broadcast system for Home Assistant.
 
-Two config entries:
-  - YAML (SOURCE_IMPORT): immutable, read-only in UI
-  - UI   (SOURCE_USER):   user-managed, deletable devices
-
-Both coexist under the same domain; announce service merges all rooms.
+Rooms live on the writable UI config entry (PWA / Options Flow). A leftover
+YAML SOURCE_IMPORT entry is imported once into that UI entry and then removed
+(issue #75). The buttons entry is separate and has no rooms.
 """
 
 from __future__ import annotations
@@ -20,7 +18,6 @@ import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_ENTITY_ID, CONF_NAME
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.storage import Store
@@ -75,48 +72,104 @@ UI_UNIQUE_ID = DOMAIN
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# YAML → immutable SOURCE_IMPORT entry
+# YAML → one-time import into the writable UI entry (issue #75)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Create a read-only YAML config entry. Does NOT merge into UI entry."""
-    if DOMAIN not in config:
-        return True
+def _entry_room_map(entry: ConfigEntry) -> dict[str, dict[str, Any]]:
+    """Combined data + options rooms for one config entry (options win)."""
+    data_rooms = dict(entry.data.get(CONF_ROOMS, {}) or {})
+    options_rooms = dict(entry.options.get(CONF_ROOMS, {}) or {})
+    return {**data_rooms, **options_rooms}
 
-    yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
 
-    # Monkey-patch config_entries.async_remove to block YAML entry deletion
-    if not hasattr(hass.config_entries, "_hi_patched"):
-        _orig_async_remove = hass.config_entries.async_remove
+def merge_incoming_rooms(
+    current: dict[str, dict[str, Any]], incoming: dict[str, dict[str, Any]]
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Add YAML keys that are not already on the UI entry. Existing keys win."""
+    merged = {key: dict(room) for key, room in current.items()}
+    added: list[str] = []
+    for key, room in incoming.items():
+        if key in merged or not isinstance(room, dict):
+            continue
+        merged[key] = dict(room)
+        added.append(key)
+    return merged, added
 
-        async def _patched_async_remove(entry_id: str) -> dict:
-            entry = hass.config_entries.async_get_entry(entry_id)
-            if entry and entry.domain == DOMAIN and entry.unique_id == YAML_UNIQUE_ID:
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="yaml_entry_delete_blocked",
-                    translation_placeholders={"title": entry.title},
-                )
-            return await _orig_async_remove(entry_id)
 
-        hass.config_entries.async_remove = _patched_async_remove  # type: ignore[method-assign]
-        hass.config_entries._hi_patched = True
+def _find_ui_entry(entries: list[ConfigEntry]) -> ConfigEntry | None:
+    """Find the writable UI config entry."""
+    for entry in entries:
+        if entry.unique_id == UI_UNIQUE_ID:
+            return entry
+    return None
 
-    entries = hass.config_entries.async_entries(DOMAIN)
+
+def _move_room_devices(hass: HomeAssistant, from_entry_id: str, to_entry_id: str) -> None:
+    """Re-home YAML room devices onto the UI entry so HA does not drop them."""
+    from homeassistant.helpers import device_registry as dr
+
+    if from_entry_id == to_entry_id:
+        return
+    mac_re = re.compile(MAC_PATTERN)
+    registry = dr.async_get(hass)
+    for device in list(registry.devices.get_devices_for_config_entry_id(from_entry_id)):
+        room_ids = [
+            ident
+            for domain, ident in device.identifiers
+            if domain == DOMAIN and not mac_re.fullmatch(ident)
+        ]
+        if not room_ids:
+            continue
+        registry.async_update_device(device.id, add_config_entry_id=to_entry_id)
+        registry.async_update_device(device.id, remove_config_entry_id=from_entry_id)
+
+
+async def _import_yaml_rooms(hass: HomeAssistant, config_rooms: dict[str, Any]) -> None:
+    """Copy leftover YAML rooms onto the UI entry, then drop the YAML entry."""
+    entries = list(hass.config_entries.async_entries(DOMAIN))
     yaml_entry = _find_yaml_entry(entries)
+    ui_entry = _find_ui_entry(entries)
+    incoming: dict[str, Any] = {}
+    if yaml_entry is not None:
+        incoming.update(_entry_room_map(yaml_entry))
+    incoming.update(config_rooms)
+    if not incoming and yaml_entry is None:
+        return
 
-    if yaml_entry:
-        # Update existing YAML entry with current config
-        hass.config_entries.async_update_entry(yaml_entry, data={CONF_ROOMS: yaml_rooms})
-    else:
-        hass.async_create_task(
-            hass.config_entries.flow.async_init(
-                DOMAIN,
-                context={"source": SOURCE_IMPORT},
-                data={CONF_ROOMS: yaml_rooms},
-            )
+    if ui_entry is None:
+        await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_IMPORT},
+            data={CONF_ROOMS: incoming},
         )
+        ui_entry = _find_ui_entry(list(hass.config_entries.async_entries(DOMAIN)))
+
+    if ui_entry is not None and incoming:
+        merged, added = merge_incoming_rooms(_entry_room_map(ui_entry), incoming)
+        if added:
+            options = dict(ui_entry.options)
+            options[CONF_ROOMS] = merged
+            hass.config_entries.async_update_entry(ui_entry, options=options)
+            _LOGGER.info("Imported YAML rooms into the UI entry: %s", ", ".join(added))
+
+    if yaml_entry is not None and ui_entry is not None:
+        _move_room_devices(hass, yaml_entry.entry_id, ui_entry.entry_id)
+        await hass.config_entries.async_remove(yaml_entry.entry_id)
+        _LOGGER.info("Removed YAML config entry after importing rooms into the PWA catalog")
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Import deprecated YAML rooms into the writable UI entry."""
+    yaml_rooms: dict[str, Any] = {}
+    if DOMAIN in config:
+        yaml_rooms = dict(config[DOMAIN][CONF_ROOMS])
+        _LOGGER.warning(
+            "home_intercom YAML is deprecated; rooms are imported into the UI entry. "
+            "Add and remove speakers in the PWA, then remove the home_intercom: block "
+            "from configuration.yaml"
+        )
+    await _import_yaml_rooms(hass, yaml_rooms)
     return True
 
 
@@ -156,15 +209,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry. YAML entries cannot be unloaded."""
-    if entry.unique_id == YAML_UNIQUE_ID:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="yaml_entry_delete_blocked",
-            translation_placeholders={"title": entry.title},
-        )
-
-    # Button entry: just unload platforms
+    """Unload a config entry."""
     if entry.unique_id == BUTTONS_UNIQUE_ID:
         return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
@@ -192,14 +237,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Block removal of YAML config entry."""
-    if entry.unique_id == YAML_UNIQUE_ID:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="yaml_entry_delete_blocked",
-            translation_placeholders={"title": entry.title},
-        )
-    # UI entry — normal cleanup
+    """Config entry removed — YAML leftovers are already imported into the UI entry."""
     return None
 
 
@@ -357,20 +395,11 @@ def _register_services(hass: HomeAssistant, room_map: dict[str, Any]) -> None:
 async def async_remove_config_entry_device(
     hass: HomeAssistant, entry: ConfigEntry, device_entry: Any
 ) -> bool:
-    """Allow device deletion — only blocked for YAML.
+    """Allow device deletion for room and button devices.
 
-    YAML entry → read-only. Room + button devices can be deleted.
     Deleting a button device removes it from device_store.json
     (unlike revoke which keeps the record but blocks hello).
     """
-    if entry.unique_id == YAML_UNIQUE_ID:
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="yaml_device_delete_blocked",
-            translation_placeholders={"name": device_entry.name},
-        )
-
-    # Button device: delete from device_store.json so it's truly gone
     _handle_button_device_delete(hass, device_entry)
 
     # Find which room this device belongs to

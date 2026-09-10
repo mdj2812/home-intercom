@@ -10,8 +10,6 @@ from .ha_fakes import install_fake_homeassistant
 
 install_fake_homeassistant()
 
-from homeassistant.exceptions import HomeAssistantError  # noqa: E402
-
 from custom_components.home_intercom.__init__ import (  # noqa: E402
     BUTTONS_UNIQUE_ID,
     CONF_ROOMS,
@@ -117,13 +115,17 @@ async def test_button_entry_unload_tears_down_platforms(hass):
 
 
 @pytest.mark.asyncio
-async def test_yaml_entry_unload_blocked(hass):
+async def test_yaml_entry_unload_tears_down_platforms(hass):
+    hass.data[DOMAIN]["entry_rooms"]["yaml-entry"] = {
+        "living": {"name": "Living", "entity_id": "media_player.test"},
+    }
     entry = _make_entry(YAML_UNIQUE_ID, "yaml-entry")
 
-    with pytest.raises(HomeAssistantError):
-        await async_unload_entry(hass, entry)
+    ok = await async_unload_entry(hass, entry)
 
-    hass.config_entries.async_unload_platforms.assert_not_called()
+    assert ok is True
+    hass.config_entries.async_unload_platforms.assert_awaited_once_with(entry, PLATFORMS)
+    assert "yaml-entry" not in hass.data[DOMAIN]["entry_rooms"]
 
 
 @pytest.mark.asyncio

@@ -3,18 +3,12 @@
         "step": {
             "user": {
                 "title": "Home Intercom",
-                "description": "设置第一个房间。之后可通过「配置」添加更多。",
-                "data": {
-                    "area_id": "区域",
-                    "entity_id": "媒体播放器",
-                    "announce_volume": "播报音量 (0-100, 0=不设置)",
-                    "pause_buffer": "暂停缓冲 (秒)"
-                }
+                "description": "房间在 PWA 设置中管理。完成此步骤后即可添加音箱。"
             }
         },
         "abort": {
             "no_media_players": "Home Assistant 中未找到 media_player 实体。",
-            "already_configured": "Home Intercom 已配置。请通过「配置」按钮管理房间。"
+            "already_configured": "Home Intercom 已配置。请在 PWA 中添加或编辑房间。"
         }
     },
     "options": {
