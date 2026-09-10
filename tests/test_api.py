@@ -586,6 +586,32 @@ class TestDevicesManageView:
         assert resp.status == 400
 
     @pytest.mark.asyncio
+    async def test_buttons_updates_map(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        store.update_field = AsyncMock(return_value={"buttons": {"4": "living_room"}})
+        req = self._req(
+            PWA_TOKEN,
+            store,
+            {
+                "mac": "AA:BB:CC:DD:EE:FF",
+                "action": "buttons",
+                "buttons": {"4": "living_room", "5": "mars"},
+            },
+        )
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["ok"] is True
+        assert body["buttons"] == {"4": "living_room"}
+        store.update_field.assert_awaited_once()
+        args = store.update_field.await_args.args
+        assert args[0] == "AA:BB:CC:DD:EE:FF"
+        assert args[1] == "buttons"
+        assert args[2] == {"4": "living_room"}
+
+    @pytest.mark.asyncio
     async def test_ota_sets_flags(self):
         from custom_components.home_intercom.api import DevicesManageView
         from custom_components.home_intercom.firmware import CachedFirmware

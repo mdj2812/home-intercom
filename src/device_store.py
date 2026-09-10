@@ -91,13 +91,15 @@ class DeviceStore(DeviceStoreBase):
         with self._lock:
             return super().devices
 
-    def register_or_update(self, mac: str, firmware_version: str = "") -> dict[str, Any]:
+    def register_or_update(
+        self, mac: str, firmware_version: str = "", pins: list[int] | None = None
+    ) -> dict[str, Any]:
         """Register a new device or refresh last_seen/firmware of a known one.
 
         Raises ValueError on a malformed MAC address.
         """
         with self._lock:
-            device, created = self._register_or_update(mac, firmware_version)
+            device, created = self._register_or_update(mac, firmware_version, pins)
             if created:
                 _LOGGER.info(
                     "Auto-registered new device %s (%s) — pending approval",

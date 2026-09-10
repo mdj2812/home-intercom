@@ -62,6 +62,10 @@ I18N_REQUIRED_KEYS = [
     "deviceMinutesAgo",
     "deviceHoursAgo",
     "deviceNeverSeen",
+    "devicePinsTitle",
+    "devicePinsPending",
+    "devicePinUnassigned",
+    "devicePinGpio",
     "roomsTitle",
     "roomsDesc",
     "roomsEmpty",
@@ -237,6 +241,11 @@ class TestHtmlStructure:
         assert "firmware_update_available" in html_content
         assert "deviceUpToDate" in html_content
         assert "!online || !needsUpdate" in html_content
+        assert "devicePinsBlock" in html_content
+        assert "select[data-gpio]" in html_content
+        js = _extract_inline_js(html_content)
+        assert "saveDeviceButtons" in js
+        assert "...(extra || {})" in js
 
     def test_devices_refetch_when_tab_visible(self, html_content):
         """Online uses last_seen vs Date.now(); re-rendering a stale cache goes offline."""

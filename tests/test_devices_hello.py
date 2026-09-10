@@ -80,6 +80,27 @@ class TestDockerDevicesHello:
         assert body["room"] == "study"
         # firmware refreshed
         assert client.store.get(MAC)["firmware_version"] == "2.0.0"
+        assert body["buttons"] == {}
+
+    def test_hello_stores_pins_and_returns_buttons(self, client):
+        client.store.register_or_update(MAC, "1.0.0")
+        client.store.approve(MAC)
+        client.store.update_field(MAC, "buttons", {"4": "living", "5": "mars"})
+        resp = client.post(
+            "/devices/hello",
+            headers={"X-Device-ID": MAC},
+            json={"firmware_version": "1.0.0", "pins": [5, 4, 12, 13]},
+        )
+        body = resp.get_json()
+        assert body["status"] == "ok"
+        assert body["buttons"] == {"4": "living"}
+        assert client.store.get(MAC)["pins"] == [4, 5, 12, 13]
+
+    def test_hello_without_pins_keeps_stored(self, client):
+        client.store.register_or_update(MAC, pins=[4, 5])
+        client.store.approve(MAC)
+        client.post("/devices/hello", headers={"X-Device-ID": MAC}, json={})
+        assert client.store.get(MAC)["pins"] == [4, 5]
 
     def test_hello_includes_ota_when_requested(self, client):
         client.store.register_or_update(MAC, "0.1.0")
@@ -283,6 +304,22 @@ class TestHADevicesHelloView:
         assert body["device_name"] == "Study Button"
         assert body["room"] == "study"
         assert store.get(MAC)["firmware_version"] == "2.0.0"
+        assert body["buttons"] == {}
+
+    @pytest.mark.asyncio
+    async def test_hello_stores_pins_and_filters_buttons(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC)
+        await store.approve(MAC)
+        await store.update_field(MAC, "buttons", {"4": "living_room", "5": "mars"})
+        hass = _make_hass_with_store(store)
+        hass.data["home_intercom"]["rooms"] = {"living_room": {"name": "Living"}}
+        resp, body, _ = await self._post(
+            body={"firmware_version": "1.0.0", "pins": [13, 4, 5]}, hass=hass
+        )
+        assert body["status"] == "ok"
+        assert body["buttons"] == {"4": "living_room"}
+        assert store.get(MAC)["pins"] == [4, 5, 13]
 
     @pytest.mark.asyncio
     async def test_hello_includes_ota_when_requested(self):

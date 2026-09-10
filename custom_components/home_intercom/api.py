@@ -11,7 +11,7 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /media_players  → MediaPlayersView (GET play_media speakers)
   /devices       → DevicesView        (GET registry)
   /devices/approve → DevicesApproveView
-  /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete/ota)
+  /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete/ota/buttons)
   /firmware        → FirmwareView (GET cached .bin)
   /firmware.sig    → FirmwareSigView
   /audio/<path>  → AudioView   (GET recorded WAV files)
@@ -50,6 +50,7 @@ from .media_players import media_player_catalog
 from .player import play_announcement
 from .rooms import RoomValidationError, patch_room, put_room, validate_room_key
 from .shared import (
+    buttons_from_manage_body,
     chime_public_url,
     chime_status_payload,
     config_payload,
@@ -61,6 +62,7 @@ from .shared import (
     is_wav,
     normalize_mac,
     parse_device_manage_body,
+    pins_from_hello_body,
     resolve_chime_wav,
     wait_for_pending_hello,
     write_custom_chime_wav,
@@ -559,6 +561,7 @@ class DevicesHelloView(HomeAssistantView):
         except Exception:
             body = {}
         firmware_version = body.get("firmware_version", "") if isinstance(body, dict) else ""
+        pins = pins_from_hello_body(body)
 
         store = _get_hass_data(hass).get("device_store")
         if store is None:
@@ -574,7 +577,7 @@ class DevicesHelloView(HomeAssistantView):
         was_empty = not store.devices
         is_new = existing is None  # before register_or_update
         try:
-            device = await store.register_or_update(mac, firmware_version)
+            device = await store.register_or_update(mac, firmware_version, pins=pins)
         except ValueError:
             return web.json_response(
                 {"status": "error", "error": "invalid X-Device-ID (MAC)"}, status=400
@@ -597,7 +600,8 @@ class DevicesHelloView(HomeAssistantView):
         if device.get("revoked"):
             return web.json_response({"status": "error", "error": "device revoked"}, status=403)
 
-        return web.json_response(device_hello_payload(device))
+        rooms = _get_hass_data(hass).get("rooms") or {}
+        return web.json_response(device_hello_payload(device, valid_rooms=set(rooms)))
 
 
 def _panel_base_from_path(path: str) -> str:
@@ -706,7 +710,7 @@ class DevicesApproveView(HomeAssistantView):
 class DevicesManageView(HomeAssistantView):
     """POST /api/home_intercom/devices/manage — PWA device actions.
 
-    Body: ``{"mac": "AA:BB:...", "action": "approve"|"deapprove"|"revoke"|"unrevoke"|"delete"|"ota"}``.
+    Body: ``{"mac": "AA:BB:...", "action": "approve"|"deapprove"|"revoke"|"unrevoke"|"delete"|"ota"|"buttons"}``.
     """
 
     url = "/api/home_intercom/devices/manage"
@@ -759,6 +763,16 @@ class DevicesManageView(HomeAssistantView):
             if updated is None:
                 return web.json_response({"ok": False, "error": "unknown device"}, status=404)
             return web.json_response({"ok": True, "target_version": cached.version})
+
+        if action == "buttons":
+            rooms = _get_hass_data(hass).get("rooms") or {}
+            mapping = buttons_from_manage_body(body, set(rooms))
+            if isinstance(mapping, str):
+                return web.json_response({"ok": False, "error": mapping}, status=400)
+            device = await store.update_field(mac, "buttons", mapping)
+            if device is None:
+                return web.json_response({"ok": False, "error": "unknown device"}, status=404)
+            return web.json_response({"ok": True, "buttons": device.get("buttons") or {}})
 
         if action == "approve":
             device = await store.approve(mac)

@@ -246,7 +246,7 @@ print('ok: rooms restored to seed')
 
 # 3. / — PWA frontend
 INDEX=$(fetch "${URL}/" || echo "")
-if echo "${INDEX}" | grep -q '<'; then
+if [[ "${INDEX}" == *'<'* ]]; then
     echo "  ✅ GET / — HTML returned"
 elif [ -n "${INDEX}" ]; then
     echo "  ⚠️  GET / — responded but not HTML"
@@ -267,7 +267,7 @@ assert_http "GET /api/home_intercom/static/icon-192.png" \
 
 # 8. POST /api/home_intercom/devices/hello — ESP32 registration (issue #37, #51)
 HELLO=$(fetch -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
-    -d '{"firmware_version": "smoke-1.0"}' "${URL}/api/home_intercom/devices/hello" || echo "")
+    -d '{"firmware_version": "smoke-1.0", "pins": [13, 4, 5, 12]}' "${URL}/api/home_intercom/devices/hello" || echo "")
 assert_json "POST /api/home_intercom/devices/hello — pending until approve" "${HELLO}" "
 import sys, json
 d = json.load(sys.stdin)
@@ -290,6 +290,8 @@ assert dev, f'registered MAC missing: {d}'
 assert dev.get('name') == 'Device EE:FF', f'bad name: {dev}'
 assert dev.get('firmware_version') == 'smoke-1.0', f'bad firmware: {dev}'
 assert dev.get('pending') is True, f'new device should be pending: {dev}'
+assert dev.get('pins') == [4, 5, 12, 13], f'expected sorted pins from hello: {dev}'
+assert dev.get('buttons') == {}, f'new device buttons should be empty: {dev}'
 print(f'ok: devices={list(d)}')
 "
 assert_ha_alias "GET /api/home_intercom/devices — matches /devices" "${DEVICES}" "/api/home_intercom/devices"
@@ -315,6 +317,28 @@ import sys, json
 d = json.load(sys.stdin)
 assert d.get('status') == 'ok', f'expected ok after approve, got: {d}'
 assert d.get('sample_rate') == 16000, f'bad sample_rate: {d}'
+assert d.get('buttons') == {}, f'unconfigured buttons should be empty: {d}'
+print(f'ok: hello={d}')
+"
+
+# 9e. GPIO → room map (issue #78)
+MAP=$(fetch -X POST -H "Content-Type: application/json" \
+    -d '{"mac": "AA:BB:CC:DD:EE:FF", "action": "buttons", "buttons": {"4": "test", "5": "mars"}}' \
+    "${URL}/api/home_intercom/devices/manage" || echo "")
+assert_json "POST /devices/manage action=buttons" "${MAP}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'map failed: {d}'
+assert d.get('buttons') == {'4': 'test'}, f'unknown rooms must be dropped: {d}'
+print('ok')
+"
+HELLO_MAPPED=$(fetch -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
+    -d '{"firmware_version": "smoke-1.0"}' "${URL}/api/home_intercom/devices/hello" || echo "")
+assert_json "POST /devices/hello — delivers GPIO map" "${HELLO_MAPPED}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('status') == 'ok', f'expected ok, got: {d}'
+assert d.get('buttons') == {'4': 'test'}, f'hello should deliver mapped pins: {d}'
 print(f'ok: hello={d}')
 "
 
