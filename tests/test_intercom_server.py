@@ -55,6 +55,72 @@ class TestStaticRoutes:
         assert resp.status_code == 404
 
 
+class TestRoomsWrite:
+    """PUT/PATCH/DELETE /rooms/<id> (issue #72)."""
+
+    @pytest.fixture
+    def rooms_client(self, client, monkeypatch, tmp_path):
+        import copy
+
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "ROOMS_STORE", str(tmp_path / "rooms.json"))
+        monkeypatch.setattr(intercom_server, "ROOM_MAP", copy.deepcopy(intercom_server.ROOM_MAP))
+        return client
+
+    def test_put_creates_and_get_reflects(self, rooms_client):
+        resp = rooms_client.put(
+            "/rooms/office",
+            json={"name": "Office", "entity": "media_player.office", "announce_volume": 40},
+        )
+        assert resp.status_code == 200
+        assert resp.json["ok"] is True
+        assert resp.json["rooms"]["office"]["entity"] == "media_player.office"
+        got = rooms_client.get("/rooms").json
+        assert got["office"]["name"] == "Office"
+
+    def test_put_ha_alias(self, rooms_client):
+        resp = rooms_client.put(
+            "/api/home_intercom/rooms/office",
+            json={"name": "Office", "entity_id": "media_player.office"},
+        )
+        assert resp.status_code == 200
+        assert rooms_client.get("/rooms").json["office"]["entity"] == "media_player.office"
+
+    def test_patch_and_delete(self, rooms_client):
+        rooms_client.put("/rooms/office", json={"name": "Office", "entity": "media_player.office"})
+        patched = rooms_client.patch("/rooms/office", json={"name": "Study", "pause_buffer": 1.5})
+        assert patched.status_code == 200
+        room = patched.json["rooms"]["office"]
+        assert room["name"] == "Study"
+        assert room["pause_buffer"] == 1.5
+        deleted = rooms_client.delete("/rooms/office")
+        assert deleted.status_code == 200
+        assert "office" not in deleted.json["rooms"]
+        assert rooms_client.delete("/rooms/office").status_code == 404
+
+    def test_rejects_reserved_id(self, rooms_client):
+        resp = rooms_client.put("/rooms/all", json={"name": "All", "entity": "media_player.x"})
+        assert resp.status_code == 400
+
+    def test_patch_unknown(self, rooms_client):
+        resp = rooms_client.patch("/rooms/mars", json={"name": "Mars"})
+        assert resp.status_code == 404
+
+    def test_persist_error_is_500(self, rooms_client, monkeypatch):
+        import intercom_server
+
+        def _boom():
+            raise OSError("ebusy")
+
+        monkeypatch.setattr(intercom_server, "_persist_room_map", _boom)
+        resp = rooms_client.put(
+            "/rooms/office", json={"name": "Office", "entity": "media_player.office"}
+        )
+        assert resp.status_code == 500
+        assert resp.json["error"] == "cannot persist rooms"
+
+
 class TestDevicesRoute:
     """GET /devices + HA alias — read-only registry listing (issue #52)."""
 

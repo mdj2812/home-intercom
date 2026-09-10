@@ -136,12 +136,14 @@ fi
 TMPDIR=$(mktemp -d)
 EXPECTED_ROOMS='{"test":{"name":"Test Room","entity":"media_player.test_speaker"}}'
 echo "${EXPECTED_ROOMS}" > "${TMPDIR}/rooms.json"
+mkdir -p "${TMPDIR}/data"
 
 # ── Start container ─────────────────────────────────────────
 echo "==> Starting intercom container..."
 docker run -d \
     --name "${CONTAINER_NAME}" \
     -v "${TMPDIR}/rooms.json:/app/rooms.json:ro" \
+    -v "${TMPDIR}/data:/data" \
     -p "${PORT}:${PORT}" \
     -e HA_URL="http://ha:8123" \
     -e HA_TOKEN="fake-token" \
@@ -193,6 +195,43 @@ got = json.load(sys.stdin)
 expected = json.loads('${EXPECTED_ROOMS}')
 assert got == expected, f'mismatch\\n  got:      {json.dumps(got)}\\n  expected: {json.dumps(expected)}'
 print('ok: rooms match input')
+"
+
+# 2b. PUT/PATCH/DELETE /rooms/<id> — writable catalog (issue #72)
+PUT=$(fetch -X PUT -H "Content-Type: application/json" \
+    -d '{"name":"Office","entity":"media_player.office","announce_volume":40}' \
+    "${URL}/rooms/office" || echo "")
+assert_json "PUT /rooms/office" "${PUT}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'not ok: {d}'
+assert d['rooms']['office']['entity'] == 'media_player.office'
+print('ok: office created')
+"
+PATCH=$(fetch -X PATCH -H "Content-Type: application/json" \
+    -d '{"name":"Study"}' "${URL}/rooms/office" || echo "")
+assert_json "PATCH /rooms/office" "${PATCH}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d['rooms']['office']['name'] == 'Study', d
+print('ok: renamed')
+"
+assert_ha_alias "PUT /api/home_intercom/rooms/office — matches /rooms after write" \
+    "$(fetch "${URL}/rooms" || echo "")" "/api/home_intercom/rooms"
+DEL=$(fetch -X DELETE "${URL}/rooms/office" || echo "")
+assert_json "DELETE /rooms/office" "${DEL}" "
+import sys, json
+d = json.load(sys.stdin)
+assert 'office' not in d.get('rooms', {}), d
+print('ok: office removed')
+"
+ROOMS=$(fetch "${URL}/rooms" || echo "")
+assert_json "GET /rooms — seed rooms remain after delete" "${ROOMS}" "
+import sys, json
+got = json.load(sys.stdin)
+expected = json.loads('${EXPECTED_ROOMS}')
+assert got == expected, f'mismatch\\n  got:      {json.dumps(got)}\\n  expected: {json.dumps(expected)}'
+print('ok: rooms restored to seed')
 "
 
 # 3. / — PWA frontend
