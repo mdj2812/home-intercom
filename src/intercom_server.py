@@ -222,6 +222,12 @@ def rooms_status():
     return jsonify(haclient.query_statuses(ROOM_MAP))
 
 
+@app.route("/media_players")
+def media_players():
+    """HA media_player entities that support play_media (issue #73). Public like GET /rooms."""
+    return jsonify(haclient.media_player_catalog())
+
+
 @app.route("/version")
 def version():
     return jsonify({"version": VERSION})
@@ -484,6 +490,7 @@ app.add_url_rule(
     methods=["PUT", "PATCH", "DELETE"],
 )
 app.add_url_rule(f"{_HA_PREFIX}/rooms/status", "ha_rooms_status", rooms_status)
+app.add_url_rule(f"{_HA_PREFIX}/media_players", "ha_media_players", media_players)
 app.add_url_rule(f"{_HA_PREFIX}/version", "ha_version", version)
 app.add_url_rule(f"{_HA_PREFIX}/config", "ha_config", config)
 app.add_url_rule(f"{_HA_PREFIX}/record", "ha_record", record, methods=["POST"])

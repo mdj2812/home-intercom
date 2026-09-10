@@ -32,6 +32,7 @@ from .const import (
     UI_UNIQUE_ID,
     YAML_UNIQUE_ID,
 )
+from .media_players import media_player_catalog
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,39 +42,9 @@ _LOGGER = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-# SUPPORT_PLAY_MEDIA = 1 << 9 (MediaPlayerEntityFeature.PLAY_MEDIA)
-_PLAY_MEDIA = 1 << 9
-
-
 def _media_player_choices(hass):
-    """Return {entity_id: friendly_name} for media_player entities that support play_media.
-
-    Sorted by area name, then friendly_name. Entities without an area sort last.
-    """
-    from homeassistant.helpers import area_registry as ar
-    from homeassistant.helpers import entity_registry as er
-
-    er_reg = er.async_get(hass)
-    ar_reg = ar.async_get(hass)
-
-    entries: list[
-        tuple[str, str, str, str]
-    ] = []  # (area_key, friendly_key, entity_id, friendly_display)
-    for state in hass.states.async_all("media_player"):
-        supported = state.attributes.get("supported_features", 0)
-        if not (supported & _PLAY_MEDIA):
-            continue
-        friendly = state.attributes.get("friendly_name") or state.entity_id
-        area_name = "\uffff"  # sort entities without area last
-        e_entry = er_reg.async_get(state.entity_id)
-        if e_entry and e_entry.area_id:
-            area = ar_reg.async_get_area(e_entry.area_id)
-            if area and area.name:
-                area_name = area.name.strip()
-        entries.append((area_name.lower(), friendly.lower(), state.entity_id, friendly))
-
-    entries.sort(key=lambda e: (e[0], e[1]))
-    return {e[2]: e[3] for e in entries}
+    """Return {entity_id: friendly_name} for media_player entities that support play_media."""
+    return {entry["entity_id"]: entry["name"] for entry in media_player_catalog(hass)}
 
 
 def _area_choices(hass):

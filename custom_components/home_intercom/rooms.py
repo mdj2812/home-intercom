@@ -28,6 +28,8 @@ ENTITY_RE = re.compile(r"^media_player\.[a-z0-9_]+$")
 RESERVED_ROOM_KEYS = frozenset({"all", "status"})
 MAX_ROOM_NAME_LEN = 64
 MAX_PAUSE_BUFFER = 10.0
+# MediaPlayerEntityFeature.PLAY_MEDIA — same bit Options Flow uses.
+PLAY_MEDIA = 1 << 9
 
 EntityKey = Literal["entity", "entity_id"]
 
@@ -143,6 +145,43 @@ def patch_room(existing: dict[str, Any], body: Any, *, entity_key: EntityKey) ->
         room[entity_key] = entity
     _apply_optional(room, body, replace=False)
     return room
+
+
+def sort_media_player_catalog(entries: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Sort by area name, then friendly name. Players without an area sort last."""
+
+    def key(entry: dict[str, str]) -> tuple[str, str, str]:
+        area = (entry.get("area") or "").strip()
+        area_key = area.lower() if area else "\uffff"
+        return (area_key, (entry.get("name") or "").lower(), entry.get("entity_id") or "")
+
+    return sorted(entries, key=key)
+
+
+def catalog_from_ha_states(states: Any) -> list[dict[str, str]]:
+    """Build GET /media_players from HA REST ``GET /api/states``.
+
+    Area is empty: the REST state payload does not include the area registry.
+    """
+    if not isinstance(states, list):
+        return []
+    entries: list[dict[str, str]] = []
+    for state in states:
+        if not isinstance(state, dict):
+            continue
+        entity_id = str(state.get("entity_id") or "")
+        if not entity_id.startswith("media_player."):
+            continue
+        attrs = state.get("attributes") if isinstance(state.get("attributes"), dict) else {}
+        try:
+            supported = int(attrs.get("supported_features") or 0)
+        except (TypeError, ValueError):
+            supported = 0
+        if not (supported & PLAY_MEDIA):
+            continue
+        name = str(attrs.get("friendly_name") or entity_id)
+        entries.append({"entity_id": entity_id, "name": name, "area": ""})
+    return sort_media_player_catalog(entries)
 
 
 def load_rooms(store_path: str, seed_path: str) -> dict[str, Any]:

@@ -309,6 +309,23 @@ class HAClient:
             )
         return ok
 
+    def media_player_catalog(self) -> list[dict]:
+        """media_player entities that support play_media (issue #73).
+
+        Uses REST ``GET /api/states``. Area is always empty — that lives in
+        the entity registry, which this client does not query.
+        """
+        from rooms import catalog_from_ha_states
+
+        if not self._token:
+            return []
+        timeout = max(self._state_timeout, 15)
+        code, result = self._request("GET", "/states", timeout=timeout)
+        if code != 200 or not isinstance(result, list):
+            _logger.warning("[intercom] media_player catalog failed: HTTP %s", code or result)
+            return []
+        return catalog_from_ha_states(result)
+
     def supports_repeat_set(self, entity_id: str) -> bool:
         """Check if entity supports repeat_set — used as modernity proxy.
 

@@ -81,6 +81,35 @@ class TestHAClientRequest:
         assert "no route" in result
 
 
+class TestHAClientMediaPlayerCatalog:
+    def test_filters_play_media(self):
+        from rooms import PLAY_MEDIA
+
+        client = HAClient("http://ha:8123", "tok")
+        payload = [
+            {
+                "entity_id": "media_player.study",
+                "attributes": {"friendly_name": "Study", "supported_features": PLAY_MEDIA},
+            },
+            {
+                "entity_id": "media_player.dead",
+                "attributes": {"friendly_name": "Dead", "supported_features": 0},
+            },
+        ]
+        with patch.object(client, "_request", return_value=(200, payload)):
+            catalog = client.media_player_catalog()
+        assert catalog == [{"entity_id": "media_player.study", "name": "Study", "area": ""}]
+
+    def test_empty_without_token(self):
+        client = HAClient("http://ha:8123", "")
+        assert client.media_player_catalog() == []
+
+    def test_ha_error_returns_empty(self):
+        client = HAClient("http://ha:8123", "tok")
+        with patch.object(client, "_request", return_value=(500, "HTTP 500")):
+            assert client.media_player_catalog() == []
+
+
 class TestHAClientState:
     def test_returns_state_string(self):
         client = HAClient("http://ha:8123", "tok")

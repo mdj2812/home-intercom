@@ -664,6 +664,7 @@ class TestRegisterApiViews:
             DevicesManageView,
             FirmwareSigView,
             FirmwareView,
+            MediaPlayersView,
             PanelAliasView,
             PanelView,
             RecordView,
@@ -678,6 +679,7 @@ class TestRegisterApiViews:
         register_api_views(hass)
         calls = [c.args[0] for c in hass.http.register_view.call_args_list]
         assert RecordView in calls
+        assert MediaPlayersView in calls
         assert RoomsItemView in calls
         assert ChimeView in calls
         assert DeviceRecordView in calls
@@ -774,6 +776,80 @@ class TestRoomsView:
         resp = await RoomsView().get(req)
         assert resp.status == 200
         assert json.loads(resp.text) == {}
+
+
+class TestMediaPlayersView:
+    """GET /api/home_intercom/media_players (issue #73)."""
+
+    def test_class_attributes(self):
+        from custom_components.home_intercom.api import MediaPlayersView
+
+        assert MediaPlayersView.url == "/api/home_intercom/media_players"
+        assert MediaPlayersView.requires_auth is False
+
+    @pytest.mark.asyncio
+    async def test_get_returns_catalog(self):
+        from custom_components.home_intercom.api import MediaPlayersView
+
+        catalog = [{"entity_id": "media_player.study", "name": "Study", "area": "Study"}]
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+        with patch(
+            "custom_components.home_intercom.api.media_player_catalog", return_value=catalog
+        ):
+            resp = await MediaPlayersView().get(req)
+        assert resp.status == 200
+        assert json.loads(resp.text) == catalog
+
+    def test_catalog_filters_and_area(self):
+        from custom_components.home_intercom.media_players import media_player_catalog
+        from custom_components.home_intercom.rooms import PLAY_MEDIA
+
+        play = MagicMock()
+        play.entity_id = "media_player.kitchen"
+        play.attributes = {"friendly_name": "Kitchen Speaker", "supported_features": PLAY_MEDIA}
+        skip = MagicMock()
+        skip.entity_id = "media_player.dead"
+        skip.attributes = {"friendly_name": "Dead", "supported_features": 0}
+        hass = MagicMock()
+        hass.states.async_all.return_value = [play, skip]
+        ent = MagicMock()
+        ent.area_id = "kitchen"
+        er_reg = MagicMock()
+        er_reg.async_get.return_value = ent
+        area = MagicMock()
+        area.name = "Kitchen"
+        ar_reg = MagicMock()
+        ar_reg.async_get_area.return_value = area
+        with (
+            patch("homeassistant.helpers.entity_registry.async_get", return_value=er_reg),
+            patch("homeassistant.helpers.area_registry.async_get", return_value=ar_reg),
+        ):
+            catalog = media_player_catalog(hass)
+        assert catalog == [
+            {"entity_id": "media_player.kitchen", "name": "Kitchen Speaker", "area": "Kitchen"}
+        ]
+
+    def test_catalog_empty_area_and_entity_id_fallback(self):
+        from custom_components.home_intercom.media_players import media_player_catalog
+        from custom_components.home_intercom.rooms import PLAY_MEDIA
+
+        player = MagicMock()
+        player.entity_id = "media_player.study"
+        player.attributes = {"supported_features": PLAY_MEDIA}
+        hass = MagicMock()
+        hass.states.async_all.return_value = [player]
+        er_reg = MagicMock()
+        er_reg.async_get.return_value = None
+        ar_reg = MagicMock()
+        with (
+            patch("homeassistant.helpers.entity_registry.async_get", return_value=er_reg),
+            patch("homeassistant.helpers.area_registry.async_get", return_value=ar_reg),
+        ):
+            catalog = media_player_catalog(hass)
+        assert catalog == [
+            {"entity_id": "media_player.study", "name": "media_player.study", "area": ""}
+        ]
 
 
 class TestRoomsItemView:

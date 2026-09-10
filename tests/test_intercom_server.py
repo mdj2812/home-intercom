@@ -487,6 +487,27 @@ class TestConfigRoute:
         assert resp.json == {"sample_rate": 16000, "max_record_secs": 60}
 
 
+class TestMediaPlayersRoute:
+    """GET /media_players + HA alias (issue #73)."""
+
+    def test_returns_catalog(self, client, monkeypatch):
+        import intercom_server
+
+        catalog = [{"entity_id": "media_player.study", "name": "Study", "area": ""}]
+        monkeypatch.setattr(intercom_server.haclient, "media_player_catalog", lambda: catalog)
+        resp = client.get("/media_players")
+        assert resp.status_code == 200
+        assert resp.json == catalog
+
+    def test_ha_alias(self, client, monkeypatch):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server.haclient, "media_player_catalog", lambda: [])
+        resp = client.get("/api/home_intercom/media_players")
+        assert resp.status_code == 200
+        assert resp.json == []
+
+
 class TestRoomsStatus:
     def test_returns_500_without_token(self, client, monkeypatch):
         monkeypatch.setattr("intercom_server.HA_TOKEN", "")

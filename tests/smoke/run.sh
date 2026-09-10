@@ -188,6 +188,17 @@ else
     exit 1
 fi
 
+# 2b. /api/home_intercom/media_players — JSON array (issue #73)
+PLAYERS=$(docker exec "${CONTAINER_NAME}" \
+    curl -sS "http://localhost:${HA_PORT}/api/home_intercom/media_players" 2>/dev/null || echo "")
+if echo "${PLAYERS}" | python3 -c "import sys,json; d=json.load(sys.stdin); assert isinstance(d, list)" 2>/dev/null; then
+    echo "  ✅ GET /api/home_intercom/media_players — JSON array"
+else
+    echo "  ❌ GET /api/home_intercom/media_players — expected JSON array"
+    echo "     Response: ${PLAYERS}"
+    exit 1
+fi
+
 # 3. /api/home_intercom/rooms/status
 STATUS=$(docker exec "${CONTAINER_NAME}" \
     curl -sS "http://localhost:${HA_PORT}/api/home_intercom/rooms/status" 2>/dev/null || echo "{}")
