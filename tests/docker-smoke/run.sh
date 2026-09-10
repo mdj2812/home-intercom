@@ -246,7 +246,7 @@ print('ok: rooms restored to seed')
 
 # 3. / — PWA frontend
 INDEX=$(fetch "${URL}/" || echo "")
-if echo "${INDEX}" | grep -q '<'; then
+if [[ "${INDEX}" == *'<'* ]]; then
     echo "  ✅ GET / — HTML returned"
 elif [ -n "${INDEX}" ]; then
     echo "  ⚠️  GET / — responded but not HTML"
@@ -323,13 +323,13 @@ print(f'ok: hello={d}')
 
 # 9e. GPIO → room map (issue #78)
 MAP=$(fetch -X POST -H "Content-Type: application/json" \
-    -d '{"mac": "AA:BB:CC:DD:EE:FF", "action": "buttons", "buttons": {"4": "living", "5": "mars"}}' \
+    -d '{"mac": "AA:BB:CC:DD:EE:FF", "action": "buttons", "buttons": {"4": "test", "5": "mars"}}' \
     "${URL}/api/home_intercom/devices/manage" || echo "")
 assert_json "POST /devices/manage action=buttons" "${MAP}" "
 import sys, json
 d = json.load(sys.stdin)
 assert d.get('ok') is True, f'map failed: {d}'
-assert d.get('buttons') == {'4': 'living'}, f'unknown rooms must be dropped: {d}'
+assert d.get('buttons') == {'4': 'test'}, f'unknown rooms must be dropped: {d}'
 print('ok')
 "
 HELLO_MAPPED=$(fetch -X POST -H "X-Device-ID: AA:BB:CC:DD:EE:FF" -H "Content-Type: application/json" \
@@ -338,7 +338,7 @@ assert_json "POST /devices/hello — delivers GPIO map" "${HELLO_MAPPED}" "
 import sys, json
 d = json.load(sys.stdin)
 assert d.get('status') == 'ok', f'expected ok, got: {d}'
-assert d.get('buttons') == {'4': 'living'}, f'hello should deliver mapped pins: {d}'
+assert d.get('buttons') == {'4': 'test'}, f'hello should deliver mapped pins: {d}'
 print(f'ok: hello={d}')
 "
 

@@ -594,7 +594,11 @@ class TestDevicesManageView:
         req = self._req(
             PWA_TOKEN,
             store,
-            {"mac": "AA:BB:CC:DD:EE:FF", "action": "buttons", "buttons": {"4": "living_room", "5": "mars"}},
+            {
+                "mac": "AA:BB:CC:DD:EE:FF",
+                "action": "buttons",
+                "buttons": {"4": "living_room", "5": "mars"},
+            },
         )
         resp = await DevicesManageView().post(req)
         assert resp.status == 200

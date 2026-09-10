@@ -324,9 +324,7 @@ def pins_from_hello_body(body: Any) -> list[int] | None:
         return None
 
 
-def normalize_buttons_map(
-    raw: Any, *, valid_rooms: set[str] | None = None
-) -> dict[str, str]:
+def normalize_buttons_map(raw: Any, *, valid_rooms: set[str] | None = None) -> dict[str, str]:
     """GPIO string → room key. Drops bad GPIOs, empty rooms, and unknown catalog keys."""
     if raw is None:
         return {}
