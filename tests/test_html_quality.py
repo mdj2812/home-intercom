@@ -62,6 +62,29 @@ I18N_REQUIRED_KEYS = [
     "deviceMinutesAgo",
     "deviceHoursAgo",
     "deviceNeverSeen",
+    "roomsTitle",
+    "roomsDesc",
+    "roomsEmpty",
+    "roomsAdd",
+    "roomsName",
+    "roomsPlayer",
+    "roomsVolume",
+    "roomsPause",
+    "roomsVolumeHint",
+    "roomsPauseHint",
+    "roomsSave",
+    "roomsCancel",
+    "roomsEdit",
+    "roomsDelete",
+    "roomsDeleteConfirm",
+    "roomsSaved",
+    "roomsDeleted",
+    "roomsSaveFail",
+    "roomsNoPlayers",
+    "roomsPlayerRemoved",
+    "roomsErrorYaml",
+    "roomsErrorNoEntry",
+    "roomsErrorUnknown",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -222,6 +245,42 @@ class TestHtmlStructure:
         assert "document.visibilityState" in js
         assert "refreshDevicesIfVisible" in js
         assert "if (window._DEVICES) window.renderDevices();" not in js
+
+    def test_rooms_settings_in_overlay(self, html_content):
+        """PWA settings can add, edit, and delete rooms (issue #74)."""
+        js = _extract_inline_js(html_content)
+        assert 'id="rooms-list"' in html_content
+        assert 'id="rooms-form"' in html_content
+        assert 'id="rooms-add"' in html_content
+        assert 'id="room-player"' in html_content
+        assert 'id="room-name"' in html_content
+        assert 'id="room-volume"' in html_content
+        assert 'id="room-pause"' in html_content
+        assert "/media_players" in html_content
+        assert "GRID.innerHTML = ''" in js or 'GRID.innerHTML = ""' in js
+        assert "rebuildRoomGrid" in js
+        assert "resetRoomFormState" in js
+        assert "playerMissingLabel" in js
+        assert "opt.disabled = true" in js
+        assert "rooms-player-missing" in js
+        assert "method: editId ? 'PATCH' : 'PUT'" in js
+        assert "method: 'DELETE'" in js
+        assert "renderRoomsSettings" in js
+        css_path = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "custom_components",
+            "home_intercom",
+            "static",
+            "intercom.css",
+        )
+        with open(css_path) as f:
+            css = f.read()
+        assert "4 * var(--rooms-row-height)" in css
+        assert ".rooms-list" in css
+        assert "overflow: hidden auto" in css
+        assert ".rooms-player-missing" in css
+        assert ".rooms-row-entity-missing" in css
 
 
 class TestJsSyntax:

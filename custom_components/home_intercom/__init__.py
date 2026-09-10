@@ -143,9 +143,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("entry_rooms", {})
     hass.data[DOMAIN]["entry_rooms"][entry.entry_id] = room_map
 
-    # Reconcile YAML devices on every setup/reload (#63)
-    if entry.unique_id == YAML_UNIQUE_ID:
-        _reconcile_yaml_devices(hass, entry.entry_id, set(room_map.keys()))
+    # Drop HA devices for rooms no longer on this entry (YAML #63, UI PWA delete).
+    # Button devices are MAC identifiers on a different entry — do not run this there.
+    if entry.unique_id != BUTTONS_UNIQUE_ID:
+        _reconcile_room_devices(hass, entry.entry_id, set(room_map.keys()))
 
     # Full setup with merged rooms from all entries
     await _full_setup(hass, entry)
@@ -525,16 +526,17 @@ def _register_devices(hass: HomeAssistant, entry_id: str, room_map: dict[str, An
             registry.async_update_device(device.id, area_id=room_id)
 
 
-def _reconcile_yaml_devices(
+def _reconcile_room_devices(
     hass: HomeAssistant,
     entry_id: str,
     current_rooms: set[str],
 ) -> None:
-    """Remove YAML-owned devices whose room is no longer in configuration.yaml.
+    """Remove HA devices owned by this entry whose room is gone.
 
-    Unlike _register_devices (which only calls async_get_or_create),
-    this actively removes orphaned devices.  Called unconditionally on
-    every async_setup so that cold-restarts also pick up stale entries.
+    ``_register_devices`` only calls ``async_get_or_create``. Without this,
+    deleting a room (YAML edit or PWA) leaves an empty card in
+    Settings → Devices. Called on every setup/reload so cold restarts
+    also drop stale entries.
     """
     from homeassistant.helpers import device_registry as dr
 
@@ -549,6 +551,9 @@ def _reconcile_yaml_devices(
                 )
                 registry.async_remove_device(device.id)
                 break
+
+
+_reconcile_yaml_devices = _reconcile_room_devices
 
 
 def _find_yaml_entry(entries: list[ConfigEntry]) -> ConfigEntry | None:

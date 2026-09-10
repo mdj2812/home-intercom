@@ -906,9 +906,11 @@ class TestRoomsItemView:
 
         hass = _make_hass()
         req = self._req(PWA_TOKEN, hass=hass)
-        resp = await RoomsItemView().delete(req, "bedroom")
+        with patch("custom_components.home_intercom.api._remove_room_ha_device") as remove_ha:
+            resp = await RoomsItemView().delete(req, "bedroom")
         assert resp.status == 200
         assert "bedroom" not in json.loads(resp.text)["rooms"]
+        remove_ha.assert_called_once_with(hass, "bedroom", "ui-entry")
 
     @pytest.mark.asyncio
     async def test_rejects_missing_token(self):
@@ -957,9 +959,11 @@ class TestRoomsItemView:
         }
         ui_entry.data = {CONF_ROOMS: {}}
         req = self._req(PWA_TOKEN, hass=hass)
-        resp = await RoomsItemView().delete(req, "study")
+        with patch("custom_components.home_intercom.api._remove_room_ha_device") as remove_ha:
+            resp = await RoomsItemView().delete(req, "study")
         assert resp.status == 409
         assert json.loads(resp.text)["error"] == "yaml_read_only"
+        remove_ha.assert_not_called()
 
 
 # ——— ChimeView tests (issue #66) ———

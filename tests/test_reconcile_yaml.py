@@ -1,4 +1,4 @@
-"""Tests for _reconcile_yaml_devices — YAML orphan cleanup (issue #63)."""
+"""Tests for _reconcile_room_devices — YAML/UI orphan cleanup (issue #63)."""
 
 from __future__ import annotations
 
@@ -14,8 +14,10 @@ import homeassistant.helpers.device_registry as dr  # noqa: E402
 
 from custom_components.home_intercom.__init__ import (  # noqa: E402
     DOMAIN,
+    _reconcile_room_devices,
     _reconcile_yaml_devices,
 )
+from custom_components.home_intercom.api import _remove_room_ha_device  # noqa: E402
 
 
 class FakeDevice:
@@ -34,10 +36,17 @@ class FakeDeviceRegistry:
     def __init__(self, devices: list[FakeDevice]):
         self.devices = MagicMock()
         self.devices.get_devices_for_config_entry_id = MagicMock(return_value=list(devices))
+        self._by_ident = {next(iter(d.identifiers)): d for d in devices if d.identifiers}
         self._removed: list[str] = []
         self.async_remove_device = MagicMock(
             side_effect=lambda device_id: self._removed.append(device_id)
         )
+
+    def async_get_device(self, identifiers=None, connections=None):
+        if not identifiers:
+            return None
+        key = next(iter(identifiers))
+        return self._by_ident.get(key)
 
 
 @pytest.fixture
@@ -109,3 +118,29 @@ def test_no_devices_at_all(registry):
     _reconcile_yaml_devices(hass, "entry_1", {"living"})
 
     assert len(reg._removed) == 0
+
+
+def test_yaml_alias_is_room_reconcile():
+    assert _reconcile_yaml_devices is _reconcile_room_devices
+
+
+def test_remove_room_ha_device_by_id():
+    gone = FakeDevice("d1", "Study", {(DOMAIN, "shu_fang")})
+    kept = FakeDevice("d2", "客厅", {(DOMAIN, "living")})
+    reg = FakeDeviceRegistry([gone, kept])
+    dr.async_get = MagicMock(return_value=reg)
+
+    _remove_room_ha_device(MagicMock(), "shu_fang", "ui-entry")
+
+    assert "d1" in reg._removed
+    assert "d2" not in reg._removed
+
+
+def test_remove_room_ha_device_noop_when_missing():
+    reg = FakeDeviceRegistry([])
+    dr.async_get = MagicMock(return_value=reg)
+
+    _remove_room_ha_device(MagicMock(), "missing", "ui-entry")
+
+    assert reg._removed == []
+    reg.async_remove_device.assert_not_called()

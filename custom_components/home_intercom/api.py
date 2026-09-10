@@ -256,6 +256,25 @@ def _remove_button_ha_device(hass: HomeAssistant, mac: str) -> None:
         registry.async_remove_device(device.id)
 
 
+def _remove_room_ha_device(hass: HomeAssistant, room_id: str, entry_id: str) -> None:
+    """Remove the HA device (and its entities) for a PWA-deleted room.
+
+    Home Assistant only — Docker has no device registry and never calls this.
+    Look up by the owning config entry: HA 2026.9 identifiers are unique per
+    entry, and ``async_get_device(identifiers=...)`` is deprecated / unreliable.
+    Reload also runs ``_reconcile_room_devices`` so leftovers still disappear.
+    """
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+    ident = (DOMAIN, room_id)
+    for device in list(registry.devices.get_devices_for_config_entry_id(entry_id)):
+        if ident in device.identifiers:
+            _LOGGER.info("Removing HA device for room %s", room_id)
+            registry.async_remove_device(device.id)
+            return
+
+
 class RecordView(HomeAssistantView):
     """POST /api/home_intercom/record using the PWA shared token."""
 
@@ -480,6 +499,7 @@ async def _rooms_write(request: web.Request, room_id: str, *, method: str) -> we
             return web.json_response({"ok": False, "error": "unknown room"}, status=404)
         ui_rooms.pop(key)
         rooms = _persist_ui_rooms(hass, entry, ui_rooms)
+        _remove_room_ha_device(hass, key, entry.entry_id)
         return web.json_response({"ok": True, "rooms": rooms})
 
     try:
