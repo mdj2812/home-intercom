@@ -151,6 +151,7 @@ async def test_reload_cycle_unloads_before_forward(hass):
     with (
         patch.object(hi, "register_api_views"),
         patch.object(hi, "_register_devices"),
+        patch.object(hi, "_reconcile_room_devices"),
         patch.object(hi, "_ensure_button_entry", AsyncMock(return_value=None)),
         patch.object(hi, "DeviceStore") as mock_store_cls,
     ):

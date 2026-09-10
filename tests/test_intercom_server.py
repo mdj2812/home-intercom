@@ -99,6 +99,17 @@ class TestRoomsWrite:
         assert "office" not in deleted.json["rooms"]
         assert rooms_client.delete("/rooms/office").status_code == 404
 
+    def test_delete_does_not_touch_ha_device_registry(self, rooms_client):
+        """Docker room delete is rooms.json only — HA registry cleanup lives in api.py."""
+        import inspect
+
+        import intercom_server
+
+        src = inspect.getsource(intercom_server.rooms_item)
+        assert "device_registry" not in src
+        assert "_remove_room_ha_device" not in src
+        assert "async_remove_device" not in src
+
     def test_rejects_reserved_id(self, rooms_client):
         resp = rooms_client.put("/rooms/all", json={"name": "All", "entity": "media_player.x"})
         assert resp.status_code == 400
