@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.2.0 (2026-09-10)
+
+> **PWA-managed rooms**
+
+Rooms are added, edited, and deleted in the PWA. YAML and a hand-edited `rooms.json` are no longer how you operate the catalog.
+
+### ⚠️ Breaking changes
+
+- **YAML rooms (#75)** — `home_intercom:` in `configuration.yaml` is deprecated. On first start after upgrade, leftover YAML rooms are imported into the writable UI entry (existing UI keys win) and the YAML config entry is removed. Then delete the YAML block from `configuration.yaml`.
+- **Docker seed catalog (#75)** — the image no longer ships a bundled `rooms.json`, and `GET /rooms.json` is gone. New volumes start empty; add speakers in **⚙ → Rooms**. Live config is still `/data/rooms.json` on the `./data` volume — existing catalogs are kept. Do not bind-mount a `rooms.json` file onto the container.
+- **Empty new installs** — Add Integration creates an empty room list. Open the PWA to add speakers.
+
+### ✨ Features
+
+- **Rooms write API (#72)** — `PUT` / `PATCH` / `DELETE` on `/rooms/<id>` (HA `/api/home_intercom/rooms/...` and Docker `/rooms/...`).
+- **Media player catalog (#73)** — `GET /media_players` for the room picker (grouped by area; `play_media` only).
+- **PWA room settings (#74)** — add, edit, and delete rooms from ⚙ → Rooms. Missing speakers stay labelled; deleting a room also drops its HA device.
+- **GPIO → room map (#78)** — multi-button panels store per-GPIO room targets from hello `pins` and the PWA device card.
+
+### 🐛 Fixes
+
+- **YAML import deadlock** — leftover YAML is imported after setup so the UI entry can load.
+- **Rooms form** — closing the editor resets it; a removed speaker stays selectable as a labelled option.
+
+---
+
 ## v2.1.3 (2026-09-10)
 
 > **Server-Triggered OTA from GitHub over LAN**
