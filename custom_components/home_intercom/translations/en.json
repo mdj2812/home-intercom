@@ -3,18 +3,12 @@
         "step": {
             "user": {
                 "title": "Home Intercom",
-                "description": "Set up your first room. You can add more later via Options.",
-                "data": {
-                    "area_id": "Area",
-                    "entity_id": "Media Player",
-                    "announce_volume": "Announce Volume (0-100, 0=disabled)",
-                    "pause_buffer": "Pause Buffer (seconds)"
-                }
+                "description": "Rooms are managed in the PWA (Settings → Rooms). You can add speakers after this step."
             }
         },
         "abort": {
             "no_media_players": "No media_player entities found in Home Assistant.",
-            "already_configured": "Home Intercom is already configured. Use the Configure button to manage rooms."
+            "already_configured": "Home Intercom is already configured. Add or edit rooms in the PWA."
         }
     },
     "options": {
@@ -25,10 +19,6 @@
                 "data": {
                     "room_choice": "Room"
                 }
-            },
-            "yaml_info": {
-                "title": "YAML Configured Rooms",
-                "description": "{room_count} room(s) from configuration.yaml. To modify, edit configuration.yaml and restart Home Assistant."
             },
             "add_room": {
                 "title": "Add Room",
@@ -55,16 +45,7 @@
             "room_exists": "A room with this area is already configured."
         },
         "abort": {
-            "yaml_read_only": "YAML configured rooms are read-only. Edit configuration.yaml and restart Home Assistant.",
             "buttons_read_only": "Intercom button devices are auto-managed — no configuration needed. They appear automatically when an ESP32 button checks in."
-        }
-    },
-    "exceptions": {
-        "yaml_device_delete_blocked": {
-            "message": "\"{name}\" is a YAML-configured device and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
-        },
-        "yaml_entry_delete_blocked": {
-            "message": "\"{title}\" is a YAML-configured integration and cannot be deleted via UI. Edit configuration.yaml and restart Home Assistant."
         }
     },
     "entity": {

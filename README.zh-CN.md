@@ -13,13 +13,13 @@
 ```
 手机 PWA → Flask :8764 → Home Assistant API → 音箱播放
                 ↕
-           rooms.json（房间配置）
+        /data/rooms.json（PWA 管理）
 
     ── 或者 ──
 
 手机 PWA → HA 集成 → Home Assistant API → 音箱播放
                 ↕
-        configuration.yaml（YAML 配置）
+        PWA 设置 → 房间
 ```
 
 两种部署方式：
@@ -46,26 +46,11 @@ MA 播放器支持原生 `play_announcement` 服务——播完自动停止。**
 1. 在 HACS 中添加自定义仓库
 2. 安装 "Home Intercom"
 3. 前往 **设置 → 设备与服务 → 添加集成** → 搜索 "Home Intercom"
-4. 填写表单：选择区域、媒体播放器，可选设置播报音量和暂停缓冲
-5. 重复 配置 → 添加房间 来添加更多房间
+4. 确认安装 — 初始没有房间。打开 PWA（**⚙ → 房间**）添加音箱。
 
-也可以使用 YAML（导入后只读）：
+`configuration.yaml` 里的 `home_intercom:` 已弃用。启动时会把遗留 YAML 房间一次性导入可写条目并删除 YAML 配置条目。之后请删掉 YAML 块，在 PWA 里管理房间。
 
-```yaml
-home_intercom:
-  rooms:
-    living:
-      name: "客厅"
-      entity_id: "media_player.living_room_speaker"
-      announce_volume: 50  # 可选, 0-100
-    bedroom:
-      name: "主卧"
-      entity_id: "media_player.bedroom_speaker"
-```
-
-YAML 房间会以独立的 "YAML" 配置条目显示。通过 UI 集成管理可编辑的房间；YAML 房间需编辑 `configuration.yaml` 并重启 HA。
-
-4. **添加到侧边栏**（HA 要求仪表盘/网页卡片 URL 必须包含连字符 `-`）：
+5. **添加到侧边栏**（HA 要求仪表盘/网页卡片 URL 必须包含连字符 `-`）：
 
    **方式 A — 直接打开（最简单）：** 访问或收藏 `https://<你的HA>/home-intercom`
 
@@ -140,18 +125,11 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `STATE_TIMEOUT` | （可选）实体状态查询超时秒数，默认 `5`（蓝牙/MA 设备增大） |
 | `TRUSTED_PROXY` | （可选）反代 IP，默认 `*`（允许所有） |
 
-#### rooms.json
+#### 房间（PWA）
 
-```json
-{
-  "living":  {"name": "客厅", "entity": "media_player.living_room_speaker", "announce_volume": 50},
-  "bedroom": {"name": "主卧", "entity": "media_player.bedroom_speaker"}
-}
-```
+在 PWA **⚙ → 房间** 中添加、编辑、删除房间。运行时配置在 `/data/rooms.json`（compose 的 `./data` 卷，新卷为空）。不要再单独挂载 `rooms.json`。
 
-`entity` 填 HA 中音箱的 entity_id。改完无需重启，PWA 自动加载。
-
-`announce_volume`（可选，0-100）仅对 Music Assistant 播放器生效。设置后 MA 会先响提示音再按指定音量播报。不填则沿用播放器当前音量。
+每个房间有 `name`、音箱 `entity`（HA `media_player` entity_id），以及可选的 `announce_volume`（0–100，仅 MA）和 `pause_buffer`。
 
 ## 前导提示音
 

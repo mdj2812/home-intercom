@@ -211,7 +211,7 @@ def _verify_pwa_token(request: web.Request, *, view: str) -> web.Response | None
 
 
 def _find_ui_entry(hass: HomeAssistant):
-    """Writable UI config entry (Options Flow store). YAML/buttons are not writable."""
+    """Writable UI config entry (Options Flow / PWA store). Buttons are not writable."""
     for entry in hass.config_entries.async_entries(DOMAIN):
         if getattr(entry, "unique_id", None) == UI_UNIQUE_ID:
             return entry
@@ -492,12 +492,9 @@ async def _rooms_write(request: web.Request, room_id: str, *, method: str) -> we
         return web.json_response({"ok": False, "error": "no writable config entry"}, status=409)
 
     ui_rooms = _entry_rooms(entry)
-    merged = _get_hass_data(hass).get("rooms", {})
 
     if method == "DELETE":
         if key not in ui_rooms:
-            if key in merged:
-                return web.json_response({"ok": False, "error": "yaml_read_only"}, status=409)
             return web.json_response({"ok": False, "error": "unknown room"}, status=404)
         ui_rooms.pop(key)
         rooms = _persist_ui_rooms(hass, entry, ui_rooms)
@@ -512,8 +509,6 @@ async def _rooms_write(request: web.Request, room_id: str, *, method: str) -> we
         if method == "PUT":
             room = put_room(body, entity_key="entity_id")
         elif key not in ui_rooms:
-            if key in merged:
-                return web.json_response({"ok": False, "error": "yaml_read_only"}, status=409)
             return web.json_response({"ok": False, "error": "unknown room"}, status=404)
         else:
             room = patch_room(ui_rooms[key], body, entity_key="entity_id")

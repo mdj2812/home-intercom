@@ -25,7 +25,6 @@ from .const import (
     CONF_PAUSE_BUFFER,
     CONF_ROOMS,
     DOMAIN,
-    YAML_UNIQUE_ID,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,10 +69,6 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up number entities from a config entry."""
-    # YAML rooms are read-only — no interactive config entities
-    if entry.unique_id == YAML_UNIQUE_ID:
-        return
-
     rooms: dict[str, dict] = {}
     rooms.update(entry.data.get(CONF_ROOMS, {}))
     rooms.update(entry.options.get(CONF_ROOMS, {}))

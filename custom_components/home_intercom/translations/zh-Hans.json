@@ -3,18 +3,12 @@
         "step": {
             "user": {
                 "title": "Home Intercom",
-                "description": "设置第一个房间。之后可通过「配置」添加更多。",
-                "data": {
-                    "area_id": "区域",
-                    "entity_id": "媒体播放器",
-                    "announce_volume": "播报音量 (0-100, 0=不设置)",
-                    "pause_buffer": "暂停缓冲 (秒)"
-                }
+                "description": "房间在 PWA 设置中管理。完成此步骤后即可添加音箱。"
             }
         },
         "abort": {
             "no_media_players": "Home Assistant 中未找到 media_player 实体。",
-            "already_configured": "Home Intercom 已配置。请通过「配置」按钮管理房间。"
+            "already_configured": "Home Intercom 已配置。请在 PWA 中添加或编辑房间。"
         }
     },
     "options": {
@@ -25,10 +19,6 @@
                 "data": {
                     "room_choice": "房间"
                 }
-            },
-            "yaml_info": {
-                "title": "YAML 配置的房间",
-                "description": "从 configuration.yaml 加载了 {room_count} 个房间。要修改请编辑 configuration.yaml 后重启 Home Assistant。"
             },
             "add_room": {
                 "title": "添加房间",
@@ -55,16 +45,7 @@
             "room_exists": "该区域已配置。"
         },
         "abort": {
-            "yaml_read_only": "YAML 配置的房间不可通过 UI 修改。请编辑 configuration.yaml 后重启 Home Assistant。",
             "buttons_read_only": "对讲按钮设备由系统自动管理，无需手动配置。ESP32 按钮上线后自动出现在此处。"
-        }
-    },
-    "exceptions": {
-        "yaml_device_delete_blocked": {
-            "message": "「{name}」是 YAML 配置的设备，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
-        },
-        "yaml_entry_delete_blocked": {
-            "message": "「{title}」是 YAML 配置的集成，不可通过 UI 删除。请修改 configuration.yaml 后重启 Home Assistant。"
         }
     },
     "entity": {

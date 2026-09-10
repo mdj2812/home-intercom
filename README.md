@@ -13,13 +13,13 @@ No ffmpeg needed — browser-native recording + pure Python PCM→WAV keeps the 
 ```
 Phone PWA → Flask :8764 → Home Assistant API → speakers
                 ↕
-           rooms.json (config)
+        /data/rooms.json (PWA-managed)
 
     ── or ──
 
 Phone PWA → HA integration → Home Assistant API → speakers
                 ↕
-        configuration.yaml (YAML config)
+        PWA Settings → Rooms
 ```
 
 Two deployment modes:
@@ -46,26 +46,11 @@ MA players support the native `play_announcement` service — playback stops aut
 1. Add this repository as a custom repository in HACS
 2. Install "Home Intercom" from HACS
 3. Go to **Settings → Devices & Services → Add Integration** → search "Home Intercom"
-4. Fill in the form: select an Area, pick a media player, optionally set announce volume and pause buffer
-5. Repeat Configure → Add Room for each additional room
+4. Confirm setup — the entry starts with no rooms. Open the PWA (**⚙ → Rooms**) to add speakers.
 
-Alternatively, use YAML (read-only after import):
+YAML `home_intercom:` in `configuration.yaml` is deprecated. On startup, leftover YAML rooms are imported once into the writable entry and the YAML config entry is removed. After that, remove the YAML block and manage rooms in the PWA.
 
-```yaml
-home_intercom:
-  rooms:
-    living:
-      name: "Living Room"
-      entity_id: "media_player.living_room_speaker"
-      announce_volume: 50  # optional, 0-100
-    bedroom:
-      name: "Bedroom"
-      entity_id: "media_player.bedroom_speaker"
-```
-
-YAML rooms appear as a separate config entry labeled "YAML". Use the UI integration for editable management. For YAML rooms, edit `configuration.yaml` and restart HA.
-
-4. **Add to sidebar** (HA requires a hyphen `-` in dashboard/webpage URLs):
+5. **Add to sidebar** (HA requires a hyphen `-` in dashboard/webpage URLs):
 
    **Option A — direct panel URL (simplest):** open or bookmark `https://<your-ha>/home-intercom`
 
@@ -140,18 +125,11 @@ docker compose -f docker/docker-compose.example.yml up -d
 | `STATE_TIMEOUT` | (Optional) Seconds to wait for entity state queries, defaults to `5` (increase for Bluetooth/MA devices) |
 | `TRUSTED_PROXY` | (Optional) Reverse proxy IP, defaults to `*` (any) |
 
-#### rooms.json
+#### Rooms (PWA)
 
-```json
-{
-  "living":  {"name": "Living Room", "entity": "media_player.living_room_speaker", "announce_volume": 50},
-  "bedroom": {"name": "Bedroom",    "entity": "media_player.bedroom_speaker"}
-}
-```
+Add, edit, and delete rooms from **⚙ → Rooms** in the PWA. Live config is stored at `/data/rooms.json` on the compose `./data` volume (empty until you add rooms). Do not mount a `rooms.json` file.
 
-`entity` is the HA entity_id of your speaker. Changes take effect immediately — no restart needed.
-
-`announce_volume` (optional, 0-100) overrides the announcement volume for Music Assistant players only. When set, MA will play a chime then announce at the specified volume. Omit the field to use the player's current volume.
+Each room has a `name`, speaker `entity` (HA `media_player` entity_id), and optional `announce_volume` (0–100, Music Assistant only) and `pause_buffer`.
 
 ## Pre-announce chime
 
