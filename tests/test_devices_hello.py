@@ -38,6 +38,11 @@ def client(tmp_path, monkeypatch):
     store = DockerDeviceStore(str(tmp_path / "device_registry.json"))
     monkeypatch.setattr(intercom_server, "device_store", store)
     monkeypatch.setattr(intercom_server, "schedule_firmware_refresh", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        intercom_server,
+        "ROOM_MAP",
+        {"living": {"name": "Living", "entity": "media_player.living"}},
+    )
     intercom_server.app.config["TESTING"] = True
     with intercom_server.app.test_client() as c:
         c.store = store  # convenience handle for seeding/assertions
