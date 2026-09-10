@@ -86,7 +86,6 @@ I18N_REQUIRED_KEYS = [
     "roomsSaveFail",
     "roomsNoPlayers",
     "roomsPlayerRemoved",
-    "roomsErrorYaml",
     "roomsErrorNoEntry",
     "roomsErrorUnknown",
 ]

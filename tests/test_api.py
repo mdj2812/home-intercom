@@ -970,26 +970,18 @@ class TestRoomsItemView:
         assert json.loads(resp.text)["error"] == "no writable config entry"
 
     @pytest.mark.asyncio
-    async def test_yaml_only_room_delete_conflict(self):
+    async def test_delete_unknown_room_404(self):
         from custom_components.home_intercom.api import RoomsItemView
 
         hass = _make_hass(rooms={})
         ui_entry = hass.config_entries.async_entries.return_value[0]
-        assert ui_entry.unique_id == UI_UNIQUE_ID
-        hass.data["home_intercom"]["entry_rooms"] = {
-            "ui-entry": {},
-            "yaml-entry": {"study": {"name": "Study", "entity_id": "media_player.study_speaker"}},
-        }
-        hass.data["home_intercom"]["rooms"] = {
-            "study": {"name": "Study", "entity_id": "media_player.study_speaker"}
-        }
         ui_entry.data = {CONF_ROOMS: {}}
+        hass.data["home_intercom"]["entry_rooms"] = {"ui-entry": {}}
+        hass.data["home_intercom"]["rooms"] = {}
         req = self._req(PWA_TOKEN, hass=hass)
-        with patch("custom_components.home_intercom.api._remove_room_ha_device") as remove_ha:
-            resp = await RoomsItemView().delete(req, "study")
-        assert resp.status == 409
-        assert json.loads(resp.text)["error"] == "yaml_read_only"
-        remove_ha.assert_not_called()
+        resp = await RoomsItemView().delete(req, "study")
+        assert resp.status == 404
+        assert json.loads(resp.text)["error"] == "unknown room"
 
 
 # ——— ChimeView tests (issue #66) ———

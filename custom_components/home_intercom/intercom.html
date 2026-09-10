@@ -1049,7 +1049,6 @@ function openRoomForm(roomId) {
 
 function roomsErrorMessage(error, status) {
   if (status === 401) return I18N.t('roomsSaveFail');
-  if (error === 'yaml_read_only') return I18N.t('roomsErrorYaml');
   if (error === 'no writable config entry') return I18N.t('roomsErrorNoEntry');
   if (error === 'unknown room') return I18N.t('roomsErrorUnknown');
   if (error === 'cannot persist rooms') return I18N.t('roomsSaveFail');

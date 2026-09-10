@@ -27,7 +27,6 @@ from .const import (
     CONF_ROOMS,
     DOMAIN,
     UI_UNIQUE_ID,
-    YAML_UNIQUE_ID,
 )
 from .media_players import media_player_catalog
 
@@ -111,8 +110,6 @@ class HomeIntercomOptionsFlow(OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Entry point — pick Add Room or select a room to edit."""
-        if self._entry.unique_id == YAML_UNIQUE_ID:
-            return self.async_abort(reason="yaml_read_only")
         if self._entry.unique_id == BUTTONS_UNIQUE_ID:
             return self.async_abort(reason="buttons_read_only")
 
