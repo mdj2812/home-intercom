@@ -15,6 +15,8 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /devices/manage  → DevicesManageView (approve/deapprove/revoke/unrevoke/delete/ota/buttons)
   /firmware        → FirmwareView (GET cached .bin)
   /firmware.sig    → FirmwareSigView
+  /firmware/status → FirmwareStatusView (GET cached version)
+  /firmware/sync   → FirmwareSyncView (POST GitHub fetch, PWA token)
   /audio/<path>  → AudioView   (GET recorded WAV files)
   /home_intercom  → PanelView        (GET PWA frontend HTML, legacy path)
   /home-intercom  → PanelAliasView   (GET PWA frontend HTML, sidebar-friendly)
@@ -43,9 +45,11 @@ from .const import (
 from .firmware import (
     FirmwareError,
     ensure_latest_firmware,
+    firmware_cache_status,
     firmware_checksum_headers,
     load_cached_firmware,
     schedule_firmware_refresh,
+    sync_firmware_cache,
 )
 from .media_players import media_player_catalog
 from .player import play_announcement
@@ -881,6 +885,40 @@ async def _serve_static(request: web.Request, filename: str) -> web.Response:
     )
 
 
+class FirmwareStatusView(HomeAssistantView):
+    """GET /api/home_intercom/firmware/status — cached GitHub version for the PWA."""
+
+    url = "/api/home_intercom/firmware/status"
+    name = "api:home_intercom:firmware-status"
+    requires_auth = False  # public: version string only, same as /version
+
+    async def get(self, request: web.Request) -> web.Response:
+        hass = request.app["hass"]
+        return web.json_response(firmware_cache_status(_firmware_dir(hass)))
+
+
+class FirmwareSyncView(HomeAssistantView):
+    """POST /api/home_intercom/firmware/sync — fetch latest GitHub release into cache."""
+
+    url = "/api/home_intercom/firmware/sync"
+    name = "api:home_intercom:firmware-sync"
+    requires_auth = False  # auth via X-PWA-Token header
+
+    async def post(self, request: web.Request) -> web.Response:
+        denied = _verify_pwa_token(request, view="FirmwareSyncView")
+        if denied is not None:
+            return denied
+        hass = request.app["hass"]
+        try:
+            cached, updated = await hass.async_add_executor_job(
+                sync_firmware_cache, _firmware_dir(hass)
+            )
+        except FirmwareError as exc:
+            _LOGGER.warning("firmware sync failed: %s", exc)
+            return web.json_response({"ok": False, "error": "firmware unavailable"}, status=502)
+        return web.json_response({"ok": True, "version": cached.version, "updated": updated})
+
+
 class FirmwareView(HomeAssistantView):
     """GET /api/home_intercom/firmware — cached GitHub .bin for ESP32 OTA."""
 
@@ -955,6 +993,8 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(DevicesApproveView)
     hass.http.register_view(DevicesManageView)
     hass.http.register_view(DevicesView)
+    hass.http.register_view(FirmwareStatusView)
+    hass.http.register_view(FirmwareSyncView)
     hass.http.register_view(FirmwareView)
     hass.http.register_view(FirmwareSigView)
     hass.http.register_view(PanelView)

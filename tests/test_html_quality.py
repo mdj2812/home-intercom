@@ -90,6 +90,15 @@ I18N_REQUIRED_KEYS = [
     "roomsErrorNoEntry",
     "roomsErrorUnknown",
     "roomsDrag",
+    "firmwareTitle",
+    "firmwareDesc",
+    "firmwareSync",
+    "firmwareNone",
+    "firmwareCached",
+    "firmwareUpdated",
+    "firmwareLatest",
+    "firmwareSyncFail",
+    "firmwareSyncing",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -306,6 +315,11 @@ class TestHtmlStructure:
         assert ".rooms-icon-picker" in css
         assert ".rooms-icon-opt.selected" in css
         assert ".room-card.dragging" not in css
+        assert 'id="firmware-sync"' in html_content
+        assert "/firmware/sync" in html_content
+        assert "/firmware/status" in html_content
+        assert "syncFirmwareCache" in js
+        assert ".firmware-section" in css
 
 
 class TestJsSyntax:

@@ -578,6 +578,71 @@ class TestFirmwareRoute:
         assert resp.data == sig
 
 
+class TestFirmwareCacheRoutes:
+    def test_status_empty(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(tmp_path / "firmware"))
+        resp = client.get("/firmware/status")
+        assert resp.status_code == 200
+        assert resp.json == {"version": ""}
+        alias = client.get("/api/home_intercom/firmware/status")
+        assert alias.status_code == 200
+        assert alias.json == {"version": ""}
+
+    def test_status_cached(self, client, monkeypatch, tmp_path):
+        import hashlib
+        import json
+
+        import intercom_server
+
+        cache = tmp_path / "firmware"
+        cache.mkdir()
+        blob = b"esp32-bin"
+        sha = hashlib.sha256(blob).hexdigest()
+        (cache / "firmware.bin").write_bytes(blob)
+        (cache / "firmware.json").write_text(json.dumps({"version": "0.2.0", "sha256": sha}))
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(cache))
+        resp = client.get("/firmware/status")
+        assert resp.json == {"version": "0.2.0"}
+
+    def test_sync_ok(self, client, monkeypatch, tmp_path):
+        from firmware import CachedFirmware
+
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(tmp_path / "firmware"))
+        monkeypatch.setattr(
+            intercom_server,
+            "sync_firmware_cache",
+            lambda _dir: (
+                CachedFirmware(version="0.2.1", sha256="ab", bin_path="x"),
+                True,
+            ),
+        )
+        resp = client.post("/firmware/sync")
+        assert resp.status_code == 200
+        assert resp.json == {"ok": True, "version": "0.2.1", "updated": True}
+        alias = client.post("/api/home_intercom/firmware/sync")
+        assert alias.status_code == 200
+        assert alias.json["updated"] is True
+
+    def test_sync_unavailable(self, client, monkeypatch, tmp_path):
+        from firmware import FirmwareError
+
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(tmp_path / "firmware"))
+
+        def _fail(_dir):
+            raise FirmwareError("github down")
+
+        monkeypatch.setattr(intercom_server, "sync_firmware_cache", _fail)
+        resp = client.post("/firmware/sync")
+        assert resp.status_code == 502
+        assert resp.json["error"] == "firmware unavailable"
+
+
 class TestVersionRoute:
     def test_returns_version_json(self, client):
         resp = client.get("/version")

@@ -95,6 +95,15 @@ const I18N = (() => {
       roomsErrorNoEntry: "没有可写入的配置项",
       roomsErrorUnknown: "找不到这个房间",
       roomsDrag: "拖动排序",
+      firmwareTitle: "按钮固件",
+      firmwareDesc: "从 GitHub 缓存最新固件，供对讲按钮升级",
+      firmwareSync: "同步",
+      firmwareNone: "尚未缓存",
+      firmwareCached: "已缓存 %s",
+      firmwareUpdated: "已缓存新版本 %s",
+      firmwareLatest: "已是最新 %s",
+      firmwareSyncFail: "同步失败",
+      firmwareSyncing: "正在同步…",
     },
     en: {
       appTitle: "Home Intercom",
@@ -180,6 +189,15 @@ const I18N = (() => {
       roomsErrorNoEntry: "No writable config entry",
       roomsErrorUnknown: "Unknown room",
       roomsDrag: "Drag to reorder",
+      firmwareTitle: "Button firmware",
+      firmwareDesc: "Cache the latest GitHub firmware for button updates",
+      firmwareSync: "Sync",
+      firmwareNone: "Not cached",
+      firmwareCached: "Cached %s",
+      firmwareUpdated: "Cached new version %s",
+      firmwareLatest: "Already latest %s",
+      firmwareSyncFail: "Sync failed",
+      firmwareSyncing: "Syncing…",
     },
   };
 
@@ -292,6 +310,7 @@ const I18N = (() => {
     // Re-render the device list with the new language (room names change)
     if (typeof window.renderDevices === "function") window.renderDevices();
     if (typeof window.renderRoomsSettings === "function") window.renderRoomsSettings();
+    if (typeof window.renderFirmwareStatus === "function") window.renderFirmwareStatus();
 
     document.title = t("appTitle");
 

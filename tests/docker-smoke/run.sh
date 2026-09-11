@@ -174,6 +174,15 @@ print(f'ok: version={d[\"version\"]}')
 # 1c. GET /api/home_intercom/firmware — empty cache is 404
 assert_http "GET /api/home_intercom/firmware — empty cache → 404" \
     "$(fetch_code "${URL}/api/home_intercom/firmware")" "404"
+FW_STATUS=$(fetch "${URL}/firmware/status" || echo "")
+assert_json "GET /firmware/status — empty cache" "${FW_STATUS}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('version') == '', f'expected empty version, got: {d}'
+print('ok: no cached firmware')
+"
+assert_ha_alias "GET /api/home_intercom/firmware/status — matches /firmware/status" \
+    "${FW_STATUS}" "/api/home_intercom/firmware/status"
 
 # 1b. /config — global audio settings (issue #39)
 CFG=$(fetch "${URL}/config" || echo "")

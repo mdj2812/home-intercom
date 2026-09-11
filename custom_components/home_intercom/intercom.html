@@ -171,6 +171,17 @@
       </div>
     </section>
     <p class="settings-msg" id="chime-msg" aria-live="polite"></p>
+    <section class="firmware-section" aria-labelledby="firmware-heading">
+      <div class="chime-heading">
+        <h3 id="firmware-heading" data-i18n="firmwareTitle">按钮固件</h3>
+        <p class="chime-desc" data-i18n="firmwareDesc">从 GitHub 缓存最新固件，供对讲按钮升级</p>
+      </div>
+      <div class="firmware-row">
+        <div class="firmware-status" id="firmware-status">—</div>
+        <button type="button" id="firmware-sync" class="settings-btn" data-i18n="firmwareSync">同步</button>
+      </div>
+      <p class="settings-msg" id="firmware-msg" aria-live="polite"></p>
+    </section>
   </div>
 </div>
 
@@ -1596,6 +1607,77 @@ async function resetChime() {
   }
 }
 
+function setFirmwareMsg(text) {
+  const el = document.getElementById('firmware-msg');
+  if (el) el.textContent = text || '';
+}
+
+let firmwareCachedVersion = '';
+
+function firmwareStatusLabel(version) {
+  if (!version) return I18N.t('firmwareNone');
+  return I18N.t('firmwareCached').replace('%s', version);
+}
+
+window.renderFirmwareStatus = function () {
+  const el = document.getElementById('firmware-status');
+  if (el) el.textContent = firmwareStatusLabel(firmwareCachedVersion);
+};
+
+async function refreshFirmwareStatus() {
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/firmware/status', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders(),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json().catch(() => ({}));
+    firmwareCachedVersion = (data && data.version) || '';
+    window.renderFirmwareStatus();
+  } catch (e) { /* ignore */ }
+}
+
+async function syncFirmwareCache() {
+  const btn = document.getElementById('firmware-sync');
+  setFirmwareMsg(I18N.t('firmwareSyncing'));
+  if (btn) btn.disabled = true;
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/firmware/sync', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders(),
+    });
+    if (resp.status === 401 && !sessionStorage.getItem(RELOAD_ONCE_KEY)) {
+      sessionStorage.setItem(RELOAD_ONCE_KEY, '1');
+      location.reload();
+      return;
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      setFirmwareMsg(I18N.t('firmwareSyncFail'));
+      return;
+    }
+    firmwareCachedVersion = data.version || '';
+    window.renderFirmwareStatus();
+    setFirmwareMsg(I18N.t(data.updated ? 'firmwareUpdated' : 'firmwareLatest').replace('%s', firmwareCachedVersion));
+    if (typeof loadDevices === 'function') loadDevices();
+  } catch (e) {
+    setFirmwareMsg(I18N.t('firmwareSyncFail'));
+    console.error('syncFirmwareCache:', e);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function initFirmwareSettings() {
+  const btn = document.getElementById('firmware-sync');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', syncFirmwareCache);
+}
+
 function openSettingsPanel() {
   const overlay = document.getElementById('settings-overlay');
   const toggle = document.getElementById('settings-toggle');
@@ -1606,7 +1688,9 @@ function openSettingsPanel() {
   toggle.setAttribute('aria-expanded', 'true');
   setChimeMsg('');
   setRoomsMsg('');
+  setFirmwareMsg('');
   refreshChimeStatus();
+  refreshFirmwareStatus();
   loadMediaPlayers().then(() => {
     if (typeof window.renderRoomsSettings === 'function') window.renderRoomsSettings();
   });
@@ -1701,6 +1785,7 @@ document.addEventListener('visibilitychange', () => {
 initDevicesToggle();
 initRoomsSettings();
 initChimeSettings();
+initFirmwareSettings();
 
 // Show version number
 fetch((window.API_BASE || '') + '/version', { credentials: 'same-origin' }).then(r => r.json()).then(d => {

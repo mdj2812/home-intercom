@@ -703,6 +703,8 @@ class TestRegisterApiViews:
             DevicesApproveView,
             DevicesManageView,
             FirmwareSigView,
+            FirmwareStatusView,
+            FirmwareSyncView,
             FirmwareView,
             MediaPlayersView,
             PanelAliasView,
@@ -728,6 +730,8 @@ class TestRegisterApiViews:
         assert DevicesApproveView in calls
         assert DevicesManageView in calls
         assert FirmwareView in calls
+        assert FirmwareStatusView in calls
+        assert FirmwareSyncView in calls
         assert FirmwareSigView in calls
         assert PanelView in calls
         assert PanelAliasView in calls
@@ -1154,3 +1158,71 @@ class TestFirmwareView:
         resp = await FirmwareSigView().get(req)
         assert resp.status == 200
         assert resp.body == sig
+
+
+class TestFirmwareCacheViews:
+    @pytest.mark.asyncio
+    async def test_status_empty(self):
+        from custom_components.home_intercom.api import FirmwareStatusView
+
+        req = _make_request()
+        req.app = {"hass": _make_hass()}
+        resp = await FirmwareStatusView().get(req)
+        assert resp.status == 200
+        assert json.loads(resp.text) == {"version": ""}
+
+    @pytest.mark.asyncio
+    async def test_status_cached(self):
+        from custom_components.home_intercom.api import FirmwareStatusView
+
+        hass = _make_hass()
+        _seed_firmware_cache(Path(hass.data["home_intercom"]["audio_dir"]) / "firmware", b"bin")
+        req = _make_request()
+        req.app = {"hass": hass}
+        resp = await FirmwareStatusView().get(req)
+        assert json.loads(resp.text) == {"version": "0.2.0"}
+
+    @pytest.mark.asyncio
+    async def test_sync_ok(self):
+        from custom_components.home_intercom.api import FirmwareSyncView
+        from custom_components.home_intercom.firmware import CachedFirmware
+
+        hass = _make_hass()
+        req = _make_request()
+        req.headers = {"X-PWA-Token": PWA_TOKEN}
+        req.app = {"hass": hass}
+        cached = CachedFirmware(version="0.2.1", sha256="ab", bin_path="x")
+        with patch(
+            "custom_components.home_intercom.api.sync_firmware_cache",
+            return_value=(cached, True),
+        ):
+            resp = await FirmwareSyncView().post(req)
+        assert resp.status == 200
+        assert json.loads(resp.text) == {"ok": True, "version": "0.2.1", "updated": True}
+
+    @pytest.mark.asyncio
+    async def test_sync_unauthorized(self):
+        from custom_components.home_intercom.api import FirmwareSyncView
+
+        req = _make_request()
+        req.headers = {}
+        req.app = {"hass": _make_hass()}
+        resp = await FirmwareSyncView().post(req)
+        assert resp.status == 401
+
+    @pytest.mark.asyncio
+    async def test_sync_unavailable(self):
+        from custom_components.home_intercom.api import FirmwareSyncView
+        from custom_components.home_intercom.firmware import FirmwareError
+
+        hass = _make_hass()
+        req = _make_request()
+        req.headers = {"X-PWA-Token": PWA_TOKEN}
+        req.app = {"hass": hass}
+        with patch(
+            "custom_components.home_intercom.api.sync_firmware_cache",
+            side_effect=FirmwareError("github down"),
+        ):
+            resp = await FirmwareSyncView().post(req)
+        assert resp.status == 502
+        assert json.loads(resp.text)["error"] == "firmware unavailable"

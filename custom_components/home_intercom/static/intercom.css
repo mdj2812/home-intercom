@@ -690,6 +690,23 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   background: var(--danger-btn-bg-disabled);
 }
 
+.firmware-section {
+  margin-top: 18px;
+}
+
+.firmware-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.firmware-status {
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--text-heading);
+}
+
 .chime-upload-label {
   display: inline-flex;
   align-items: center;
