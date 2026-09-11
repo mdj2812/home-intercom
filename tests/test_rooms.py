@@ -89,6 +89,37 @@ class TestPutPatch:
         with pytest.raises(RoomValidationError, match="empty patch"):
             patch_room({"name": "A", "entity": "media_player.a"}, {}, entity_key="entity")
 
+    def test_put_stores_icon(self) -> None:
+        room = put_room(
+            {"name": "Study", "entity": "media_player.study", "icon": "📚"},
+            entity_key="entity",
+        )
+        assert room["icon"] == "📚"
+
+    def test_put_rejects_unknown_icon(self) -> None:
+        with pytest.raises(RoomValidationError, match="invalid icon"):
+            put_room(
+                {"name": "Study", "entity": "media_player.study", "icon": "🚀"},
+                entity_key="entity",
+            )
+
+    def test_put_empty_icon_omits_field(self) -> None:
+        room = put_room(
+            {"name": "Study", "entity": "media_player.study", "icon": ""},
+            entity_key="entity",
+        )
+        assert "icon" not in room
+
+    def test_patch_clears_icon(self) -> None:
+        existing = {
+            "name": "Study",
+            "entity": "media_player.study",
+            "icon": "📚",
+        }
+        room = patch_room(existing, {"icon": None}, entity_key="entity")
+        assert "icon" not in room
+        assert room["name"] == "Study"
+
     def test_room_entity_reads_both_keys(self) -> None:
         assert room_entity({"entity": "media_player.a"}) == "media_player.a"
         assert room_entity({"entity_id": "media_player.b"}) == "media_player.b"

@@ -71,6 +71,7 @@ I18N_REQUIRED_KEYS = [
     "roomsEmpty",
     "roomsAdd",
     "roomsName",
+    "roomsIcon",
     "roomsPlayer",
     "roomsVolume",
     "roomsPause",
@@ -265,6 +266,10 @@ class TestHtmlStructure:
         assert 'id="room-name"' in html_content
         assert 'id="room-volume"' in html_content
         assert 'id="room-pause"' in html_content
+        assert 'id="room-icon-picker"' in html_content
+        assert 'id="room-icon"' in html_content
+        assert "fillIconPicker" in js
+        assert "ROOM_ICON_PRESETS" in js
         assert "/media_players" in html_content
         assert "GRID.innerHTML = ''" in js or 'GRID.innerHTML = ""' in js
         assert "rebuildRoomGrid" in js
@@ -298,6 +303,8 @@ class TestHtmlStructure:
         assert ".rooms-player-missing" in css
         assert ".rooms-row-entity-missing" in css
         assert ".rooms-row.dragging" in css
+        assert ".rooms-icon-picker" in css
+        assert ".rooms-icon-opt.selected" in css
         assert ".room-card.dragging" not in css
 
 

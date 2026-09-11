@@ -219,13 +219,14 @@ print('ok: test room created')
 
 # 2b. PUT/PATCH/DELETE /rooms/<id> — writable catalog (issue #72)
 PUT=$(fetch -X PUT -H "Content-Type: application/json" \
-    -d '{"name":"Office","entity":"media_player.office","announce_volume":40}' \
+    -d '{"name":"Office","entity":"media_player.office","announce_volume":40,"icon":"📺"}' \
     "${URL}/rooms/office" || echo "")
 assert_json "PUT /rooms/office" "${PUT}" "
 import sys, json
 d = json.load(sys.stdin)
 assert d.get('ok') is True, f'not ok: {d}'
 assert d['rooms']['office']['entity'] == 'media_player.office'
+assert d['rooms']['office']['icon'] == '📺', d
 print('ok: office created')
 "
 PATCH=$(fetch -X PATCH -H "Content-Type: application/json" \

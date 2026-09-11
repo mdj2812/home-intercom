@@ -27,6 +27,24 @@ ENTITY_RE = re.compile(r"^media_player\.[a-z0-9_]+$")
 RESERVED_ROOM_KEYS = frozenset({"all", "status", "order"})
 MAX_ROOM_NAME_LEN = 64
 MAX_PAUSE_BUFFER = 10.0
+ICON_KEY = "icon"
+# Keep in sync with ROOM_ICON_PRESETS in intercom.html (issue #85).
+ROOM_ICONS = frozenset(
+    {
+        "🔊",
+        "🛋️",
+        "🛏️",
+        "📚",
+        "🎬",
+        "📺",
+        "🍽️",
+        "🚿",
+        "🚪",
+        "🌳",
+        "🎵",
+        "💻",
+    }
+)
 # MediaPlayerEntityFeature.PLAY_MEDIA — same bit Options Flow uses.
 PLAY_MEDIA = 1 << 9
 
@@ -134,6 +152,20 @@ def _parse_pause_buffer(value: Any) -> float | None:
     return buf
 
 
+def _parse_icon(value: Any) -> str | None:
+    """Return an allowlisted emoji, or None to omit/clear. Empty and null clear."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise RoomValidationError("invalid icon")
+    icon = value.strip()
+    if icon == "":
+        return None
+    if icon not in ROOM_ICONS:
+        raise RoomValidationError("invalid icon")
+    return icon
+
+
 def _apply_optional(room: dict[str, Any], body: dict[str, Any], *, replace: bool) -> None:
     if replace or CONF_ANNOUNCE_VOLUME in body:
         volume = _parse_announce_volume(body.get(CONF_ANNOUNCE_VOLUME))
@@ -147,6 +179,12 @@ def _apply_optional(room: dict[str, Any], body: dict[str, Any], *, replace: bool
             room.pop(CONF_PAUSE_BUFFER, None)
         else:
             room[CONF_PAUSE_BUFFER] = buf
+    if replace or ICON_KEY in body:
+        icon = _parse_icon(body.get(ICON_KEY))
+        if icon is None:
+            room.pop(ICON_KEY, None)
+        else:
+            room[ICON_KEY] = icon
 
 
 def put_room(body: Any, *, entity_key: EntityKey) -> dict[str, Any]:
@@ -166,7 +204,7 @@ def patch_room(existing: dict[str, Any], body: Any, *, entity_key: EntityKey) ->
     """Merge PATCH fields into an existing room."""
     if not isinstance(body, dict):
         raise RoomValidationError("invalid body")
-    known = {"name", "entity", "entity_id", CONF_ANNOUNCE_VOLUME, CONF_PAUSE_BUFFER}
+    known = {"name", "entity", "entity_id", CONF_ANNOUNCE_VOLUME, CONF_PAUSE_BUFFER, ICON_KEY}
     if not any(key in body for key in known):
         raise RoomValidationError("empty patch")
     room = dict(existing)

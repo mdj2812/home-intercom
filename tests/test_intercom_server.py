@@ -102,6 +102,20 @@ class TestRoomsWrite:
         got = rooms_client.get("/rooms").json
         assert got["office"]["name"] == "Office"
 
+    def test_put_stores_icon(self, rooms_client):
+        resp = rooms_client.put(
+            "/rooms/office",
+            json={"name": "Office", "entity": "media_player.office", "icon": "💻"},
+        )
+        assert resp.status_code == 200
+        assert resp.json["rooms"]["office"]["icon"] == "💻"
+        assert rooms_client.get("/rooms").json["office"]["icon"] == "💻"
+        bad = rooms_client.put(
+            "/rooms/office",
+            json={"name": "Office", "entity": "media_player.office", "icon": "🚀"},
+        )
+        assert bad.status_code == 400
+
     def test_put_ha_alias(self, rooms_client):
         resp = rooms_client.put(
             "/api/home_intercom/rooms/office",

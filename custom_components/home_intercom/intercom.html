@@ -115,6 +115,11 @@
           <span data-i18n="roomsName">名称</span>
           <input type="text" id="room-name" maxlength="64" required autocomplete="off">
         </label>
+        <div class="rooms-field">
+          <span data-i18n="roomsIcon">图标</span>
+          <input type="hidden" id="room-icon" value="">
+          <div class="rooms-icon-picker" id="room-icon-picker" role="radiogroup" aria-label="图标"></div>
+        </div>
         <label class="rooms-field">
           <span data-i18n="roomsPlayer">扬声器</span>
           <select id="room-player" required></select>
@@ -220,7 +225,9 @@ let currentTarget = '';
 let currentCard = null;
 let ROOM_NAMES = {};
 
-// Room icon mapping (extensible, falls back to 📢)
+// Room icons (issue #85). Presets must match rooms.py ROOM_ICONS.
+const ROOM_ICON_DEFAULT = '🔊';
+const ROOM_ICON_PRESETS = ['🔊','🛋️','🛏️','📚','🎬','📺','🍽️','🚿','🚪','🌳','🎵','💻'];
 const ROOM_ICONS = {
   all:     '📢',
   living:  '🛋️',
@@ -228,11 +235,14 @@ const ROOM_ICONS = {
   study:   '📚',
   cinema:  '🎬',
 };
-function roomIcon(target) {
-  return ROOM_ICONS[target] || '🔊';
+function roomIcon(target, room) {
+  if (target === 'all') return ROOM_ICONS.all;
+  const stored = room && typeof room.icon === 'string' ? room.icon.trim() : '';
+  if (ROOM_ICON_PRESETS.includes(stored)) return stored;
+  return ROOM_ICONS[target] || ROOM_ICON_DEFAULT;
 }
 
-function makeCard(target, name, isBroadcast) {
+function makeCard(target, name, isBroadcast, room) {
   const card = document.createElement('div');
   card.className = 'room-card' + (isBroadcast ? ' broadcast-card' : '');
   card.id = 'card-' + target;
@@ -269,7 +279,7 @@ function makeCard(target, name, isBroadcast) {
             <span class="device-name">…</span>
           </div>
         </div>
-        <span class="room-icon">${roomIcon(target)}</span>
+        <span class="room-icon">${roomIcon(target, room)}</span>
       </div>
       ${pttHtml}
       <div class="status">${I18N.t('statusReady')}</div>`;
@@ -387,7 +397,7 @@ function rebuildRoomGrid(rooms) {
     for (const [key, room] of Object.entries(rooms)) {
       window._ROOM_DATA[key] = room;
       ROOM_NAMES[key] = room.name;
-      GRID.appendChild(makeCard(key, room.name, false));
+      GRID.appendChild(makeCard(key, room.name, false, room));
     }
   }
   if (typeof window.renderRoomsSettings === 'function') window.renderRoomsSettings();
@@ -1076,7 +1086,12 @@ window.renderRoomsSettings = function () {
     const row = el('div', 'rooms-row');
     row.dataset.roomId = key;
     const info = el('div', 'rooms-row-info');
-    info.appendChild(el('div', 'rooms-row-name', room.name || key));
+    const nameWrap = el('div', 'rooms-row-name');
+    const glyph = el('span', 'rooms-row-icon', roomIcon(key, room));
+    glyph.setAttribute('aria-hidden', 'true');
+    nameWrap.appendChild(glyph);
+    nameWrap.appendChild(el('span', 'rooms-row-name-text', room.name || key));
+    info.appendChild(nameWrap);
     const entityClass = player || !entityId ? 'rooms-row-entity' : 'rooms-row-entity rooms-row-entity-missing';
     info.appendChild(el('div', entityClass, player ? playerLabel(player) : (entityId ? playerMissingLabel(entityId) : '')));
     const actions = el('div', 'rooms-row-actions');
@@ -1088,6 +1103,36 @@ window.renderRoomsSettings = function () {
     list.appendChild(row);
   }
 };
+
+function fillIconPicker(selected) {
+  const picker = document.getElementById('room-icon-picker');
+  const input = document.getElementById('room-icon');
+  if (!picker || !input) return;
+  const icon = ROOM_ICON_PRESETS.includes(selected) ? selected : ROOM_ICON_DEFAULT;
+  input.value = icon;
+  picker.setAttribute('aria-label', I18N.t('roomsIcon'));
+  picker.replaceChildren();
+  for (const glyph of ROOM_ICON_PRESETS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rooms-icon-opt' + (glyph === icon ? ' selected' : '');
+    btn.dataset.icon = glyph;
+    btn.textContent = glyph;
+    btn.draggable = false;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', glyph === icon ? 'true' : 'false');
+    btn.setAttribute('aria-label', glyph);
+    btn.addEventListener('click', () => {
+      input.value = glyph;
+      picker.querySelectorAll('.rooms-icon-opt').forEach((el) => {
+        const on = el.dataset.icon === glyph;
+        el.classList.toggle('selected', on);
+        el.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+    });
+    picker.appendChild(btn);
+  }
+}
 
 function resetRoomFormState() {
   const form = document.getElementById('rooms-form');
@@ -1105,6 +1150,7 @@ function resetRoomFormState() {
   if (volumeEl) volumeEl.value = '';
   if (pauseEl) pauseEl.value = '';
   if (playerEl) playerEl.classList.remove('rooms-player-missing');
+  fillIconPicker(ROOM_ICON_DEFAULT);
 }
 
 function closeRoomForm() {
@@ -1130,6 +1176,7 @@ function openRoomForm(roomId) {
   volumeEl.value = room && room.announce_volume ? String(room.announce_volume) : '';
   pauseEl.value = room && room.pause_buffer ? String(room.pause_buffer) : '';
   fillPlayerSelect(room ? roomEntity(room) : '');
+  fillIconPicker(roomId ? roomIcon(roomId, room) : ROOM_ICON_DEFAULT);
   if (!roomId) {
     const select = document.getElementById('room-player');
     const first = select && !select.disabled ? select.value : '';
@@ -1166,6 +1213,7 @@ async function saveRoom(e) {
   const body = {
     name,
     entity_id: entityId,
+    icon: document.getElementById('room-icon').value.trim() || ROOM_ICON_DEFAULT,
     announce_volume: optionalNumber(document.getElementById('room-volume'), { integer: true }),
     pause_buffer: optionalNumber(document.getElementById('room-pause')),
   };

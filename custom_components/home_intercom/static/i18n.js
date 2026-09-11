@@ -76,6 +76,7 @@ const I18N = (() => {
       roomsEmpty: "还没有房间。添加一个扬声器开始使用。",
       roomsAdd: "添加房间",
       roomsName: "名称",
+      roomsIcon: "图标",
       roomsPlayer: "扬声器",
       roomsVolume: "播报音量",
       roomsPause: "暂停缓冲（秒）",
@@ -160,6 +161,7 @@ const I18N = (() => {
       roomsEmpty: "No rooms yet. Add a speaker to get started.",
       roomsAdd: "Add room",
       roomsName: "Name",
+      roomsIcon: "Icon",
       roomsPlayer: "Speaker",
       roomsVolume: "Announce volume",
       roomsPause: "Pause buffer (s)",
@@ -283,6 +285,9 @@ const I18N = (() => {
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       el.textContent = t(el.getAttribute("data-i18n"));
     });
+
+    const iconPicker = document.getElementById("room-icon-picker");
+    if (iconPicker) iconPicker.setAttribute("aria-label", t("roomsIcon"));
 
     // Re-render the device list with the new language (room names change)
     if (typeof window.renderDevices === "function") window.renderDevices();
