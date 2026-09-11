@@ -16,15 +16,15 @@ import re
 from typing import Any, Literal
 
 try:
-    from .const import CONF_ANNOUNCE_VOLUME, CONF_PAUSE_BUFFER
+    from .const import CONF_ANNOUNCE_VOLUME, CONF_PAUSE_BUFFER, CONF_ROOMS
 except ImportError:
-    from const import CONF_ANNOUNCE_VOLUME, CONF_PAUSE_BUFFER
+    from const import CONF_ANNOUNCE_VOLUME, CONF_PAUSE_BUFFER, CONF_ROOMS
 
 _LOGGER = logging.getLogger(__name__)
 
 ROOM_KEY_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 ENTITY_RE = re.compile(r"^media_player\.[a-z0-9_]+$")
-RESERVED_ROOM_KEYS = frozenset({"all", "status"})
+RESERVED_ROOM_KEYS = frozenset({"all", "status", "order"})
 MAX_ROOM_NAME_LEN = 64
 MAX_PAUSE_BUFFER = 10.0
 # MediaPlayerEntityFeature.PLAY_MEDIA — same bit Options Flow uses.
@@ -35,6 +35,41 @@ EntityKey = Literal["entity", "entity_id"]
 
 class RoomValidationError(ValueError):
     """Invalid room key or body. ``str(exc)`` is safe to return to the client."""
+
+
+def combined_entry_rooms(entry: Any) -> dict[str, Any]:
+    """Rooms for one HA config entry. Options key order wins when set (issue #76)."""
+    data = getattr(entry, "data", None) or {}
+    options = getattr(entry, "options", None) or {}
+    data_rooms = dict(data.get(CONF_ROOMS) or {})
+    if CONF_ROOMS in options:
+        merged = dict(options.get(CONF_ROOMS) or {})
+        for key, room in data_rooms.items():
+            if key not in merged and isinstance(room, dict):
+                merged[key] = room
+        return merged
+    return data_rooms
+
+
+def reorder_rooms(rooms: dict[str, Any], order: Any) -> dict[str, Any]:
+    """Return ``rooms`` in ``order``. ``order`` must be a permutation of the keys."""
+    if not isinstance(order, list):
+        raise RoomValidationError("invalid order")
+    keys: list[str] = []
+    seen: set[str] = set()
+    for item in order:
+        if not isinstance(item, str):
+            raise RoomValidationError("invalid order")
+        key = validate_room_key(item)
+        if key not in rooms:
+            raise RoomValidationError("unknown room")
+        if key in seen:
+            raise RoomValidationError("invalid order")
+        seen.add(key)
+        keys.append(key)
+    if seen != set(rooms):
+        raise RoomValidationError("invalid order")
+    return {key: rooms[key] for key in keys}
 
 
 def validate_room_key(room_id: str) -> str:

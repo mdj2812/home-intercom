@@ -26,6 +26,7 @@ from rooms import (
     load_rooms,
     patch_room,
     put_room,
+    reorder_rooms,
     room_entity,
     save_rooms,
     validate_room_key,
@@ -55,6 +56,7 @@ from device_store import DeviceStore
 from ha_client import DEFAULT_STATE_TIMEOUT, HAClient
 
 app = Flask(__name__)
+app.json.sort_keys = False  # GET /rooms must keep PWA list order (#76)
 
 HA_URL = os.environ.get("HA_URL", "")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
@@ -127,6 +129,26 @@ def rooms():
 def _persist_room_map():
     """Write ROOM_MAP to the Docker store. Raises OSError if the path is not writable."""
     save_rooms(ROOMS_STORE, ROOM_MAP)
+
+
+@app.route("/rooms/order", methods=["PUT"])
+def rooms_order():
+    """Replace catalog key order. LAN trust, same as /chime POST (#76)."""
+    body = request.get_json(silent=True)
+    try:
+        reordered = reorder_rooms(ROOM_MAP, (body or {}).get("order"))
+    except RoomValidationError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    previous = dict(ROOM_MAP)
+    ROOM_MAP.clear()
+    ROOM_MAP.update(reordered)
+    try:
+        _persist_room_map()
+    except OSError:
+        ROOM_MAP.clear()
+        ROOM_MAP.update(previous)
+        return jsonify({"ok": False, "error": "cannot persist rooms"}), 500
+    return jsonify({"ok": True, "rooms": ROOM_MAP})
 
 
 @app.route("/rooms/<room_id>", methods=["PUT", "PATCH", "DELETE"])
@@ -500,6 +522,7 @@ app.add_url_rule(
 )
 app.add_url_rule(f"{_HA_PREFIX}/devices", "ha_devices", devices_list)
 app.add_url_rule(f"{_HA_PREFIX}/rooms", "ha_rooms", rooms)
+app.add_url_rule(f"{_HA_PREFIX}/rooms/order", "ha_rooms_order", rooms_order, methods=["PUT"])
 app.add_url_rule(
     f"{_HA_PREFIX}/rooms/<room_id>",
     "ha_rooms_item",

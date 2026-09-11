@@ -525,6 +525,7 @@ function el(tag, className, text) {
 function deviceActionButton(label, extraClass, onClick, disabled) {
   const btn = el('button', 'device-action' + (extraClass ? ' ' + extraClass : ''), label);
   btn.type = 'button';
+  btn.draggable = false;
   if (disabled) {
     btn.disabled = true;
   }
@@ -955,6 +956,99 @@ function roomsFormOpen() {
   return !!(form && !form.hidden);
 }
 
+// HTML5 drag&drop sortable list (https://stackoverflow.com/q/10588607)
+let _el;
+
+function isBefore(el1, el2) {
+  if (el2.parentNode === el1.parentNode) {
+    for (let cur = el1.previousSibling; cur && cur.nodeType !== 9; cur = cur.previousSibling) {
+      if (cur === el2) return true;
+    }
+  }
+  return false;
+}
+
+function roomRowFromEvent(e) {
+  let node = e.target;
+  if (node && node.nodeType !== 1) node = node.parentNode;
+  return node && node.closest ? node.closest('#rooms-list .rooms-row') : null;
+}
+
+function dragStart(e) {
+  if (e.target.closest && e.target.closest('button, select, input')) {
+    e.preventDefault();
+    return;
+  }
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', null);
+  _el = e.currentTarget;
+  _el.classList.add('dragging');
+}
+
+function dragOver(e) {
+  e.preventDefault();
+  const target = roomRowFromEvent(e);
+  if (!_el || !target || target === _el) return;
+  if (isBefore(_el, target)) target.parentNode.insertBefore(_el, target);
+  else target.parentNode.insertBefore(_el, target.nextSibling);
+}
+
+function dragEnd() {
+  if (_el) _el.classList.remove('dragging');
+  _el = null;
+  persistRoomOrder();
+}
+
+function bindRoomReorder(row) {
+  row.draggable = true;
+  row.setAttribute('aria-label', I18N.t('roomsDrag'));
+  row.addEventListener('dragstart', dragStart);
+  row.addEventListener('dragover', dragOver);
+  row.addEventListener('dragend', dragEnd);
+}
+
+function roomOrderRows() {
+  return [...document.querySelectorAll('#rooms-list .rooms-row')];
+}
+
+async function persistRoomOrder() {
+  const order = roomOrderRows().map((r) => r.dataset.roomId).filter(Boolean);
+  const current = Object.keys(catalogRooms());
+  if (order.length !== current.length || order.every((key, i) => key === current[i])) return;
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/rooms/order', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ order }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'order');
+    const rooms = data.rooms && typeof data.rooms === 'object' ? data.rooms : {};
+    const all = window._ROOM_DATA && window._ROOM_DATA.all;
+    window._ROOM_DATA = all ? { all } : {};
+    ROOM_NAMES = { all: I18N.t('broadcastAll') };
+    for (const [key, room] of Object.entries(rooms)) {
+      window._ROOM_DATA[key] = room;
+      ROOM_NAMES[key] = room.name;
+    }
+    const cards = [...GRID.querySelectorAll('.room-card:not(.broadcast-card)')];
+    const byId = Object.fromEntries(cards.map((c) => [c.id.replace(/^card-/, ''), c]));
+    const keys = Object.keys(rooms);
+    if (keys.length === cards.length && keys.every((k) => byId[k])) {
+      for (const key of keys) GRID.appendChild(byId[key]);
+    } else {
+      rebuildRoomGrid(rooms);
+    }
+    if (typeof window.renderDevices === 'function' && window._DEVICES) window.renderDevices();
+  } catch (err) {
+    console.error('persistRoomOrder:', err);
+    setRoomsMsg(I18N.t('roomsSaveFail'));
+    await loadRooms();
+  }
+}
+
 window.renderRoomsSettings = function () {
   const list = document.getElementById('rooms-list');
   const empty = document.getElementById('rooms-empty');
@@ -980,6 +1074,7 @@ window.renderRoomsSettings = function () {
     const entityId = roomEntity(room);
     const player = playerById(entityId);
     const row = el('div', 'rooms-row');
+    row.dataset.roomId = key;
     const info = el('div', 'rooms-row-info');
     info.appendChild(el('div', 'rooms-row-name', room.name || key));
     const entityClass = player || !entityId ? 'rooms-row-entity' : 'rooms-row-entity rooms-row-entity-missing';
@@ -989,6 +1084,7 @@ window.renderRoomsSettings = function () {
     actions.appendChild(deviceActionButton(I18N.t('roomsDelete'), 'danger', () => deleteRoom(key)));
     row.appendChild(info);
     row.appendChild(actions);
+    if (keys.length > 1) bindRoomReorder(row);
     list.appendChild(row);
   }
 };

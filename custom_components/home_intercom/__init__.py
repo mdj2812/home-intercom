@@ -44,6 +44,7 @@ from .const import (
 )
 from .device_store import DeviceStore
 from .firmware import refresh_cached_firmware
+from .rooms import combined_entry_rooms
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,10 +78,8 @@ UI_UNIQUE_ID = DOMAIN
 
 
 def _entry_room_map(entry: ConfigEntry) -> dict[str, dict[str, Any]]:
-    """Combined data + options rooms for one config entry (options win)."""
-    data_rooms = dict(entry.data.get(CONF_ROOMS, {}) or {})
-    options_rooms = dict(entry.options.get(CONF_ROOMS, {}) or {})
-    return {**data_rooms, **options_rooms}
+    """Combined data + options rooms for one config entry (options key order wins)."""
+    return combined_entry_rooms(entry)
 
 
 def merge_incoming_rooms(
@@ -199,9 +198,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _setup_device_store_listener(hass, entry)
         return True
 
-    data_rooms = entry.data.get(CONF_ROOMS, {})
-    options_rooms = entry.options.get(CONF_ROOMS, {})
-    room_map = {**data_rooms, **options_rooms}
+    room_map = combined_entry_rooms(entry)
 
     # Store per-entry rooms
     hass.data.setdefault(DOMAIN, {})

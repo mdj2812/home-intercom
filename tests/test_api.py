@@ -709,6 +709,7 @@ class TestRegisterApiViews:
             PanelView,
             RecordView,
             RoomsItemView,
+            RoomsOrderView,
             StaticAliasView,
             StaticView,
             register_api_views,
@@ -721,6 +722,7 @@ class TestRegisterApiViews:
         assert RecordView in calls
         assert MediaPlayersView in calls
         assert RoomsItemView in calls
+        assert RoomsOrderView in calls
         assert ChimeView in calls
         assert DeviceRecordView in calls
         assert DevicesApproveView in calls
@@ -996,6 +998,38 @@ class TestRoomsItemView:
         resp = await RoomsItemView().delete(req, "study")
         assert resp.status == 404
         assert json.loads(resp.text)["error"] == "unknown room"
+
+
+class TestRoomsOrderView:
+    """PUT /api/home_intercom/rooms/order (issue #76)."""
+
+    def _req(self, token: str, body: dict, *, hass: MagicMock | None = None) -> MagicMock:
+        req = _make_request()
+        req.app = {"hass": hass or _make_hass()}
+        req.headers = {"X-PWA-Token": token}
+        req.json = AsyncMock(return_value=body)
+        return req
+
+    @pytest.mark.asyncio
+    async def test_put_reorders_keys(self):
+        from custom_components.home_intercom.api import RoomsOrderView
+
+        hass = _make_hass()
+        req = self._req(PWA_TOKEN, {"order": ["bedroom", "living_room"]}, hass=hass)
+        resp = await RoomsOrderView().put(req)
+        assert resp.status == 200
+        rooms = json.loads(resp.text)["rooms"]
+        assert list(rooms) == ["bedroom", "living_room"]
+
+    @pytest.mark.asyncio
+    async def test_put_rejects_partial_list(self):
+        from custom_components.home_intercom.api import RoomsOrderView
+
+        hass = _make_hass()
+        req = self._req(PWA_TOKEN, {"order": ["bedroom"]}, hass=hass)
+        resp = await RoomsOrderView().put(req)
+        assert resp.status == 400
+        assert json.loads(resp.text)["error"] == "invalid order"
 
 
 # ——— ChimeView tests (issue #66) ———

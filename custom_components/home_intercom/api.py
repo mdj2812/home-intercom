@@ -8,6 +8,7 @@ Maps the Flask routes from intercom_server.py to HomeAssistantView:
   /version       → VersionView (GET version only)
   /rooms         → RoomsView       (GET room config)
   /rooms/{id}    → RoomsItemView   (PUT/PATCH/DELETE via PWA token)
+  /rooms/order   → RoomsOrderView  (PUT ordered id list via PWA token)
   /media_players  → MediaPlayersView (GET play_media speakers)
   /devices       → DevicesView        (GET registry)
   /devices/approve → DevicesApproveView
@@ -48,7 +49,14 @@ from .firmware import (
 )
 from .media_players import media_player_catalog
 from .player import play_announcement
-from .rooms import RoomValidationError, patch_room, put_room, validate_room_key
+from .rooms import (
+    RoomValidationError,
+    combined_entry_rooms,
+    patch_room,
+    put_room,
+    reorder_rooms,
+    validate_room_key,
+)
 from .shared import (
     buttons_from_manage_body,
     chime_public_url,
@@ -219,10 +227,8 @@ def _find_ui_entry(hass: HomeAssistant):
 
 
 def _entry_rooms(entry) -> dict:
-    """Combined data + options rooms for one config entry (options win)."""
-    data_rooms = dict(entry.data.get(CONF_ROOMS, {}) or {})
-    options_rooms = dict(entry.options.get(CONF_ROOMS, {}) or {})
-    return {**data_rooms, **options_rooms}
+    """Combined data + options rooms for one config entry (options key order wins)."""
+    return combined_entry_rooms(entry)
 
 
 def _persist_ui_rooms(hass: HomeAssistant, entry, rooms: dict) -> dict:
@@ -518,6 +524,33 @@ async def _rooms_write(request: web.Request, room_id: str, *, method: str) -> we
     ui_rooms[key] = room
     rooms = _persist_ui_rooms(hass, entry, ui_rooms)
     return web.json_response({"ok": True, "rooms": rooms})
+
+
+class RoomsOrderView(HomeAssistantView):
+    """PUT /api/home_intercom/rooms/order — persist settings-list order (#76)."""
+
+    url = "/api/home_intercom/rooms/order"
+    name = "api:home_intercom:rooms-order"
+    requires_auth = False  # auth via X-PWA-Token header
+
+    async def put(self, request: web.Request) -> web.Response:
+        denied = _verify_pwa_token(request, view="RoomsOrderView")
+        if denied is not None:
+            return denied
+        hass = request.app["hass"]
+        entry = _find_ui_entry(hass)
+        if entry is None:
+            return web.json_response({"ok": False, "error": "no writable config entry"}, status=409)
+        try:
+            body = await request.json()
+        except Exception:
+            body = None
+        try:
+            rooms = reorder_rooms(_entry_rooms(entry), (body or {}).get("order"))
+        except RoomValidationError as exc:
+            return web.json_response({"ok": False, "error": str(exc)}, status=400)
+        persisted = _persist_ui_rooms(hass, entry, rooms)
+        return web.json_response({"ok": True, "rooms": persisted})
 
 
 class MediaPlayersView(HomeAssistantView):
@@ -915,6 +948,7 @@ def register_api_views(hass: HomeAssistant) -> None:
     hass.http.register_view(VersionView)
     hass.http.register_view(ConfigView)
     hass.http.register_view(RoomsView)
+    hass.http.register_view(RoomsOrderView)
     hass.http.register_view(RoomsItemView)
     hass.http.register_view(MediaPlayersView)
     hass.http.register_view(DevicesHelloView)

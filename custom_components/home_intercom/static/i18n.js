@@ -93,6 +93,7 @@ const I18N = (() => {
       roomsPlayerRemoved: "%s（已移除）",
       roomsErrorNoEntry: "没有可写入的配置项",
       roomsErrorUnknown: "找不到这个房间",
+      roomsDrag: "拖动排序",
     },
     en: {
       appTitle: "Home Intercom",
@@ -176,6 +177,7 @@ const I18N = (() => {
       roomsPlayerRemoved: "%s (removed)",
       roomsErrorNoEntry: "No writable config entry",
       roomsErrorUnknown: "Unknown room",
+      roomsDrag: "Drag to reorder",
     },
   };
 
@@ -309,6 +311,9 @@ const I18N = (() => {
     const settingsClose = document.getElementById("settings-close");
     if (settingsToggle) settingsToggle.setAttribute("aria-label", t("settingsTitle"));
     if (settingsClose) settingsClose.setAttribute("aria-label", t("settingsClose"));
+    document.querySelectorAll("#rooms-list .rooms-row[draggable='true']").forEach((el) => {
+      el.setAttribute("aria-label", t("roomsDrag"));
+    });
     if (typeof THEME !== "undefined" && typeof THEME.updateDropdown === "function") THEME.updateDropdown();
   }
 

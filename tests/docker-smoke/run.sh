@@ -238,6 +238,18 @@ print('ok: renamed')
 "
 assert_ha_alias "PUT /api/home_intercom/rooms/office — matches /rooms after write" \
     "$(fetch "${URL}/rooms" || echo "")" "/api/home_intercom/rooms"
+ORDER=$(fetch -X PUT -H "Content-Type: application/json" \
+    -d '{"order":["office","test"]}' "${URL}/rooms/order" || echo "")
+assert_json "PUT /rooms/order" "${ORDER}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'not ok: {d}'
+assert list(d['rooms']) == ['office', 'test'], d
+print('ok: reordered')
+"
+assert_eq "GET /rooms key order" \
+    "$(fetch "${URL}/rooms" | python3 -c 'import sys,json; print(list(json.load(sys.stdin)))')" \
+    "['office', 'test']"
 DEL=$(fetch -X DELETE "${URL}/rooms/office" || echo "")
 assert_json "DELETE /rooms/office" "${DEL}" "
 import sys, json

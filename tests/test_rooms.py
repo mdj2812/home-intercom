@@ -10,9 +10,11 @@ from rooms import (
     PLAY_MEDIA,
     RoomValidationError,
     catalog_from_ha_states,
+    combined_entry_rooms,
     load_rooms,
     patch_room,
     put_room,
+    reorder_rooms,
     room_entity,
     save_rooms,
     sort_media_player_catalog,
@@ -29,6 +31,8 @@ class TestValidateRoomKey:
             validate_room_key("all")
         with pytest.raises(RoomValidationError, match="invalid room id"):
             validate_room_key("status")
+        with pytest.raises(RoomValidationError, match="invalid room id"):
+            validate_room_key("order")
 
     def test_rejects_empty(self) -> None:
         with pytest.raises(RoomValidationError, match="invalid room id"):
@@ -88,6 +92,28 @@ class TestPutPatch:
     def test_room_entity_reads_both_keys(self) -> None:
         assert room_entity({"entity": "media_player.a"}) == "media_player.a"
         assert room_entity({"entity_id": "media_player.b"}) == "media_player.b"
+
+
+class TestReorder:
+    def test_permutes_keys(self) -> None:
+        rooms = {"a": {"name": "A"}, "b": {"name": "B"}}
+        assert list(reorder_rooms(rooms, ["b", "a"])) == ["b", "a"]
+
+    def test_rejects_bad_order(self) -> None:
+        rooms = {"a": {"name": "A"}}
+        with pytest.raises(RoomValidationError, match="unknown room"):
+            reorder_rooms(rooms, ["mars"])
+        with pytest.raises(RoomValidationError, match="invalid order"):
+            reorder_rooms(rooms, [])
+        with pytest.raises(RoomValidationError, match="invalid order"):
+            reorder_rooms(rooms, ["a", "a"])
+
+    def test_combined_entry_options_key_order_wins(self) -> None:
+        class Entry:
+            data = {"rooms": {"a": {"name": "A"}, "b": {"name": "B"}}}
+            options = {"rooms": {"b": {"name": "B"}, "a": {"name": "A"}}}
+
+        assert list(combined_entry_rooms(Entry())) == ["b", "a"]
 
 
 class TestLoadSave:

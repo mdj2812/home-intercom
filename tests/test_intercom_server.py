@@ -154,6 +154,27 @@ class TestRoomsWrite:
         assert resp.status_code == 500
         assert resp.json["error"] == "cannot persist rooms"
 
+    def test_put_order(self, rooms_client, monkeypatch):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "ROOM_MAP", {})
+        rooms_client.put("/rooms/office", json={"name": "Office", "entity": "media_player.office"})
+        rooms_client.put("/rooms/den", json={"name": "Den", "entity": "media_player.den"})
+        resp = rooms_client.put("/rooms/order", json={"order": ["den", "office"]})
+        assert resp.status_code == 200
+        assert list(resp.json["rooms"]) == ["den", "office"]
+        assert list(rooms_client.get("/rooms").json) == ["den", "office"]
+        alias = rooms_client.put(
+            "/api/home_intercom/rooms/order",
+            json={"order": ["office", "den"]},
+        )
+        assert alias.status_code == 200
+        assert list(alias.json["rooms"]) == ["office", "den"]
+
+    def test_put_order_rejects_unknown(self, rooms_client):
+        resp = rooms_client.put("/rooms/order", json={"order": ["mars"]})
+        assert resp.status_code == 400
+
 
 class TestDevicesRoute:
     """GET /devices + HA alias — read-only registry listing (issue #52)."""

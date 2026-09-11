@@ -318,6 +318,15 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
+  user-select: none;
+}
+
+.rooms-row[draggable="true"] {
+  cursor: grab;
+}
+
+.rooms-row.dragging {
+  opacity: 0.65;
 }
 
 .rooms-row-info {

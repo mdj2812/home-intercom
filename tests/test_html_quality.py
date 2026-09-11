@@ -88,6 +88,7 @@ I18N_REQUIRED_KEYS = [
     "roomsPlayerRemoved",
     "roomsErrorNoEntry",
     "roomsErrorUnknown",
+    "roomsDrag",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -274,6 +275,13 @@ class TestHtmlStructure:
         assert "method: editId ? 'PATCH' : 'PUT'" in js
         assert "method: 'DELETE'" in js
         assert "renderRoomsSettings" in js
+        assert "draggable = true" in js
+        assert "function dragStart" in js
+        assert "function dragOver" in js
+        assert "function isBefore" in js
+        assert "persistRoomOrder" in js
+        assert "/rooms/order" in js
+        assert "dataset.roomId" in js
         css_path = os.path.join(
             os.path.dirname(__file__),
             "..",
@@ -289,6 +297,8 @@ class TestHtmlStructure:
         assert "overflow: hidden auto" in css
         assert ".rooms-player-missing" in css
         assert ".rooms-row-entity-missing" in css
+        assert ".rooms-row.dragging" in css
+        assert ".room-card.dragging" not in css
 
 
 class TestJsSyntax:
