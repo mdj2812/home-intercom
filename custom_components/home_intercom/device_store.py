@@ -102,6 +102,15 @@ class DeviceStore(DeviceStoreBase):
         _LOGGER.info("OTA requested: %s → %s", mac, target_version)
         return device
 
+    async def cancel_ota(self, mac: str) -> dict[str, Any] | None:
+        """Clear leftover hello ``ota`` without deapproving (manage action ``ota_cancel``)."""
+        device = self._cancel_ota(mac)
+        if device is None:
+            return None
+        await self._async_save()
+        _LOGGER.info("OTA cancelled: %s", mac)
+        return device
+
     async def remove(self, mac: str) -> None:
         """Permanently delete a device from the registry.
 

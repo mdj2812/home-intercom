@@ -486,6 +486,15 @@ class DeviceStoreBase:
         device["ota_target_version"] = normalize_firmware_version(target_version)
         return dict(device)
 
+    def _cancel_ota(self, mac: str) -> dict[str, Any] | None:
+        """Drop a leftover OTA request without changing pending/revoked."""
+        device = self._devices.get(normalize_mac(mac))
+        if device is None:
+            return None
+        device["ota_requested"] = False
+        device["ota_target_version"] = ""
+        return dict(device)
+
 
 class PendingHelloHub:
     """Wake a held /devices/hello when the device is approved (issue #51).
@@ -659,7 +668,7 @@ def devices_payload(store: DeviceStoreBase, latest_firmware: str = "") -> dict[s
 
 
 DEVICE_MANAGE_ACTIONS = frozenset(
-    {"approve", "deapprove", "revoke", "unrevoke", "delete", "ota", "buttons"}
+    {"approve", "deapprove", "revoke", "unrevoke", "delete", "ota", "ota_cancel", "buttons"}
 )
 
 

@@ -144,6 +144,21 @@ class TestDockerDeviceStore:
         assert device["ota_requested"] is False
         assert device["ota_target_version"] == ""
 
+    def test_cancel_ota_clears_flags(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        store.register_or_update(MAC)
+        store.approve(MAC)
+        store.request_ota(MAC, "0.3.0")
+        device = store.cancel_ota(MAC)
+        assert device["ota_requested"] is False
+        assert device["ota_target_version"] == ""
+        reloaded = _fresh_docker_store(tmp_path)
+        assert reloaded.get(MAC)["ota_requested"] is False
+
+    def test_cancel_ota_unknown_returns_none(self, tmp_path):
+        store = _fresh_docker_store(tmp_path)
+        assert store.cancel_ota(MAC) is None
+
     def test_revoke_flags_not_deletes(self, tmp_path):
         store = _fresh_docker_store(tmp_path)
         store.register_or_update(MAC)
@@ -350,6 +365,16 @@ class TestHADeviceStore:
         assert device["ota_target_version"] == "0.2.0"
         cleared = await store.register_or_update(MAC, "0.2.0")
         assert cleared["ota_requested"] is False
+
+    @pytest.mark.asyncio
+    async def test_cancel_ota_clears_flags(self):
+        store = await _fresh_ha_store()
+        await store.register_or_update(MAC, "0.1.0")
+        await store.approve(MAC)
+        await store.request_ota(MAC, "0.3.0")
+        device = await store.cancel_ota(MAC)
+        assert device["ota_requested"] is False
+        assert device["ota_target_version"] == ""
 
     @pytest.mark.asyncio
     async def test_revoke_flags_not_deletes(self):

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **ota_cancel** — `POST /devices/manage` action `ota_cancel` clears leftover hello `ota` without deapproving (HIL / a PWA Update that already applied).
+
 ## v2.2.0 (2026-09-10)
 
 > **PWA-managed rooms**

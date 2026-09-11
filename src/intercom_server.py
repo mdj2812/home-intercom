@@ -262,7 +262,7 @@ def devices_approve():
 
 @app.route("/devices/manage", methods=["POST"])
 def devices_manage():
-    """Approve, deapprove, revoke, unrevoke, delete, OTA, or GPIO map a button. LAN trust."""
+    """Approve, deapprove, revoke, unrevoke, delete, OTA, cancel OTA, or GPIO map a button. LAN trust."""
     body = request.get_json(silent=True) or {}
     parsed = parse_device_manage_body(body)
     if isinstance(parsed, str):
@@ -292,6 +292,12 @@ def devices_manage():
         if updated is None:
             return jsonify({"ok": False, "error": "unknown device"}), 404
         return jsonify({"ok": True, "target_version": cached.version})
+
+    if action == "ota_cancel":
+        device = device_store.cancel_ota(mac)
+        if device is None:
+            return jsonify({"ok": False, "error": "unknown device"}), 404
+        return jsonify({"ok": True, "ota_requested": False})
 
     if action == "buttons":
         mapping = buttons_from_manage_body(body, set(ROOM_MAP))

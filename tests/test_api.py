@@ -632,6 +632,20 @@ class TestDevicesManageView:
         store.request_ota.assert_awaited_once_with("AA:BB:CC:DD:EE:FF", "0.2.0")
 
     @pytest.mark.asyncio
+    async def test_ota_cancel_clears_flags(self):
+        from custom_components.home_intercom.api import DevicesManageView
+
+        store = MagicMock()
+        store.cancel_ota = AsyncMock(return_value={"ota_requested": False})
+        req = self._req(PWA_TOKEN, store, {"mac": "AA:BB:CC:DD:EE:FF", "action": "ota_cancel"})
+        resp = await DevicesManageView().post(req)
+        assert resp.status == 200
+        body = json.loads(resp.text)
+        assert body["ok"] is True
+        assert body["ota_requested"] is False
+        store.cancel_ota.assert_awaited_once_with("AA:BB:CC:DD:EE:FF")
+
+    @pytest.mark.asyncio
     async def test_ota_unknown_mac_404(self):
         from custom_components.home_intercom.api import DevicesManageView
 

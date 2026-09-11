@@ -383,6 +383,32 @@ class TestDevicesManage:
         assert device["ota_requested"] is True
         assert device["ota_target_version"] == "0.2.0"
 
+    def test_ota_cancel_clears_flags(self, dev_client, monkeypatch, tmp_path):
+        from firmware import CachedFirmware
+
+        import intercom_server
+
+        client, store = dev_client
+        store.register_or_update("AA:BB:CC:DD:EE:FF")
+        store.approve("AA:BB:CC:DD:EE:FF")
+        cached = CachedFirmware(version="0.2.0", sha256="ab", bin_path=str(tmp_path / "fw.bin"))
+        monkeypatch.setattr(intercom_server, "ensure_latest_firmware", lambda _dir: cached)
+        client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "ota"},
+            content_type="application/json",
+        )
+        resp = client.post(
+            "/devices/manage",
+            json={"mac": "AA:BB:CC:DD:EE:FF", "action": "ota_cancel"},
+            content_type="application/json",
+        )
+        assert resp.status_code == 200
+        assert resp.json["ota_requested"] is False
+        device = store.get("AA:BB:CC:DD:EE:FF")
+        assert device["ota_requested"] is False
+        assert device["ota_target_version"] == ""
+
     def test_ota_pending_rejected(self, dev_client, monkeypatch):
         from firmware import CachedFirmware
 

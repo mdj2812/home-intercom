@@ -705,7 +705,7 @@ class DevicesApproveView(HomeAssistantView):
 class DevicesManageView(HomeAssistantView):
     """POST /api/home_intercom/devices/manage — PWA device actions.
 
-    Body: ``{"mac": "AA:BB:...", "action": "approve"|"deapprove"|"revoke"|"unrevoke"|"delete"|"ota"|"buttons"}``.
+    Body: ``{"mac": "AA:BB:...", "action": "approve"|"deapprove"|"revoke"|"unrevoke"|"delete"|"ota"|"ota_cancel"|"buttons"}``.
     """
 
     url = "/api/home_intercom/devices/manage"
@@ -758,6 +758,12 @@ class DevicesManageView(HomeAssistantView):
             if updated is None:
                 return web.json_response({"ok": False, "error": "unknown device"}, status=404)
             return web.json_response({"ok": True, "target_version": cached.version})
+
+        if action == "ota_cancel":
+            device = await store.cancel_ota(mac)
+            if device is None:
+                return web.json_response({"ok": False, "error": "unknown device"}, status=404)
+            return web.json_response({"ok": True, "ota_requested": False})
 
         if action == "buttons":
             rooms = _get_hass_data(hass).get("rooms") or {}
