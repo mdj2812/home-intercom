@@ -321,12 +321,17 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   user-select: none;
 }
 
-.rooms-row[draggable="true"] {
+.rooms-row-sortable {
   cursor: grab;
+  touch-action: pan-y;
+  /* stylelint-disable-next-line property-no-vendor-prefix */
+  -webkit-touch-callout: none;
 }
 
 .rooms-row.dragging {
+  cursor: grabbing;
   opacity: 0.65;
+  touch-action: none;
 }
 
 .rooms-row-info {

@@ -977,55 +977,124 @@ function roomsFormOpen() {
   return !!(form && !form.hidden);
 }
 
-// HTML5 drag&drop sortable list (https://stackoverflow.com/q/10588607)
-let _el;
+// Pointer sortable. HTML5 DnD does not fire on iOS and is incomplete on Android.
+const REORDER_HOLD_MS = 200;
+const REORDER_MOVE_PX = 8;
+let _reorder = null;
 
-function isBefore(el1, el2) {
-  if (el2.parentNode === el1.parentNode) {
-    for (let cur = el1.previousSibling; cur && cur.nodeType !== 9; cur = cur.previousSibling) {
-      if (cur === el2) return true;
-    }
+function reorderIgnoreTarget(target) {
+  return !!(target && target.closest && target.closest('button, select, input, a'));
+}
+
+function clearReorderTimer() {
+  if (_reorder && _reorder.timer) {
+    clearTimeout(_reorder.timer);
+    _reorder.timer = 0;
   }
-  return false;
 }
 
-function roomRowFromEvent(e) {
-  let node = e.target;
-  if (node && node.nodeType !== 1) node = node.parentNode;
-  return node && node.closest ? node.closest('#rooms-list .rooms-row') : null;
+function unbindReorderWindow() {
+  window.removeEventListener('pointermove', onReorderPointerMove, true);
+  window.removeEventListener('pointerup', onReorderPointerUp, true);
+  window.removeEventListener('pointercancel', onReorderPointerUp, true);
+  window.removeEventListener('touchmove', onReorderTouchMove, true);
 }
 
-function dragStart(e) {
-  if (e.target.closest && e.target.closest('button, select, input')) {
-    e.preventDefault();
-    return;
-  }
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', null);
-  _el = e.currentTarget;
-  _el.classList.add('dragging');
-}
-
-function dragOver(e) {
-  e.preventDefault();
-  const target = roomRowFromEvent(e);
-  if (!_el || !target || target === _el) return;
-  if (isBefore(_el, target)) target.parentNode.insertBefore(_el, target);
-  else target.parentNode.insertBefore(_el, target.nextSibling);
-}
-
-function dragEnd() {
-  if (_el) _el.classList.remove('dragging');
-  _el = null;
-  persistRoomOrder();
+function bindReorderWindow() {
+  window.addEventListener('pointermove', onReorderPointerMove, true);
+  window.addEventListener('pointerup', onReorderPointerUp, true);
+  window.addEventListener('pointercancel', onReorderPointerUp, true);
+  window.addEventListener('touchmove', onReorderTouchMove, { capture: true, passive: false });
 }
 
 function bindRoomReorder(row) {
-  row.draggable = true;
+  row.classList.add('rooms-row-sortable');
   row.setAttribute('aria-label', I18N.t('roomsDrag'));
-  row.addEventListener('dragstart', dragStart);
-  row.addEventListener('dragover', dragOver);
-  row.addEventListener('dragend', dragEnd);
+  row.addEventListener('pointerdown', onReorderPointerDown);
+}
+
+function onReorderPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (reorderIgnoreTarget(e.target)) return;
+  if (_reorder) endReorder(false);
+  _reorder = {
+    row: e.currentTarget,
+    pointerId: e.pointerId,
+    pointerType: e.pointerType,
+    startX: e.clientX,
+    startY: e.clientY,
+    dragging: false,
+    timer: 0,
+  };
+  bindReorderWindow();
+  if (e.pointerType !== 'mouse') {
+    _reorder.timer = setTimeout(beginReorder, REORDER_HOLD_MS);
+  }
+}
+
+function onReorderTouchMove(e) {
+  if (_reorder && _reorder.dragging) e.preventDefault();
+}
+
+function onReorderPointerMove(e) {
+  if (!_reorder || e.pointerId !== _reorder.pointerId) return;
+  const dist = Math.hypot(e.clientX - _reorder.startX, e.clientY - _reorder.startY);
+  if (_reorder.dragging) {
+    e.preventDefault();
+    reorderByClientY(e.clientY);
+    return;
+  }
+  if (dist < REORDER_MOVE_PX) return;
+  if (_reorder.pointerType === 'mouse') {
+    beginReorder();
+    reorderByClientY(e.clientY);
+    return;
+  }
+  endReorder(false);
+}
+
+function onReorderPointerUp(e) {
+  if (!_reorder || e.pointerId !== _reorder.pointerId) return;
+  endReorder(_reorder.dragging);
+}
+
+function beginReorder() {
+  if (!_reorder || _reorder.dragging) return;
+  clearReorderTimer();
+  _reorder.dragging = true;
+  _reorder.row.classList.add('dragging');
+  try { _reorder.row.setPointerCapture(_reorder.pointerId); } catch (err) { /* older WebKit */ }
+  if (_reorder.pointerType !== 'mouse' && navigator.vibrate) {
+    try { navigator.vibrate(12); } catch (err) { /* ignore */ }
+  }
+}
+
+function reorderByClientY(clientY) {
+  const row = _reorder && _reorder.row;
+  if (!row || !row.parentNode) return;
+  const rows = roomOrderRows();
+  let next = null;
+  for (const other of rows) {
+    if (other === row) continue;
+    const box = other.getBoundingClientRect();
+    if (clientY < box.top + box.height / 2) {
+      next = other;
+      break;
+    }
+  }
+  if (next) row.parentNode.insertBefore(row, next);
+  else row.parentNode.appendChild(row);
+}
+
+function endReorder(persist) {
+  if (!_reorder) return;
+  clearReorderTimer();
+  unbindReorderWindow();
+  const row = _reorder.row;
+  try { row.releasePointerCapture(_reorder.pointerId); } catch (err) { /* not captured */ }
+  row.classList.remove('dragging');
+  _reorder = null;
+  if (persist) persistRoomOrder();
 }
 
 function roomOrderRows() {

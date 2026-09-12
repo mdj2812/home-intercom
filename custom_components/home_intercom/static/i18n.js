@@ -94,7 +94,7 @@ const I18N = (() => {
       roomsPlayerRemoved: "%s（已移除）",
       roomsErrorNoEntry: "没有可写入的配置项",
       roomsErrorUnknown: "找不到这个房间",
-      roomsDrag: "拖动排序",
+      roomsDrag: "按住拖动排序",
       firmwareTitle: "按钮固件",
       firmwareDesc: "从 GitHub 缓存最新固件，供对讲按钮升级",
       firmwareSync: "同步",
@@ -188,7 +188,7 @@ const I18N = (() => {
       roomsPlayerRemoved: "%s (removed)",
       roomsErrorNoEntry: "No writable config entry",
       roomsErrorUnknown: "Unknown room",
-      roomsDrag: "Drag to reorder",
+      roomsDrag: "Hold and drag to reorder",
       firmwareTitle: "Button firmware",
       firmwareDesc: "Cache the latest GitHub firmware for button updates",
       firmwareSync: "Sync",
@@ -335,7 +335,7 @@ const I18N = (() => {
     const settingsClose = document.getElementById("settings-close");
     if (settingsToggle) settingsToggle.setAttribute("aria-label", t("settingsTitle"));
     if (settingsClose) settingsClose.setAttribute("aria-label", t("settingsClose"));
-    document.querySelectorAll("#rooms-list .rooms-row[draggable='true']").forEach((el) => {
+    document.querySelectorAll("#rooms-list .rooms-row-sortable").forEach((el) => {
       el.setAttribute("aria-label", t("roomsDrag"));
     });
     if (typeof THEME !== "undefined" && typeof THEME.updateDropdown === "function") THEME.updateDropdown();

@@ -289,10 +289,9 @@ class TestHtmlStructure:
         assert "method: editId ? 'PATCH' : 'PUT'" in js
         assert "method: 'DELETE'" in js
         assert "renderRoomsSettings" in js
-        assert "draggable = true" in js
-        assert "function dragStart" in js
-        assert "function dragOver" in js
-        assert "function isBefore" in js
+        assert "rooms-row-sortable" in js
+        assert "function onReorderPointerDown" in js
+        assert "function beginReorder" in js
         assert "persistRoomOrder" in js
         assert "/rooms/order" in js
         assert "dataset.roomId" in js
@@ -312,6 +311,7 @@ class TestHtmlStructure:
         assert ".rooms-player-missing" in css
         assert ".rooms-row-entity-missing" in css
         assert ".rooms-row.dragging" in css
+        assert ".rooms-row-sortable" in css
         assert ".rooms-icon-picker" in css
         assert ".rooms-icon-opt.selected" in css
         assert ".room-card.dragging" not in css
