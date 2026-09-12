@@ -2,7 +2,22 @@
 
 ## Unreleased
 
+## v2.2.1 (2026-09-12)
+
+> **PWA room order, icons, and firmware sync**
+
+### ✨ Features
+
+- **Room order (#76)** — drag rooms in ⚙ → Rooms; `PUT /rooms/order` persists catalog key order so the grid comes back the same after refresh. **All** stays first and is not in the list.
+- **Room card icons (#85)** — add/edit room includes an allowlisted emoji picker. `icon` is stored on the room and used on the grid and settings list. Missing/invalid falls back to the old key map or 🔊. **All** stays 📢.
+- **Firmware Sync** — ⚙ → Button firmware fetches the latest GitHub `intercom-button` release into the OTA cache so device Update badges do not wait for the hourly poll.
 - **ota_cancel** — `POST /devices/manage` action `ota_cancel` clears leftover hello `ota` without deapproving (HIL / a PWA Update that already applied).
+
+### 🐛 Fixes
+
+- **Phone reorder** — HTML5 drag-and-drop never fires on iOS. A short hold then slide reorders the settings list without blocking a flick-to-scroll.
+
+---
 
 ## v2.2.0 (2026-09-10)
 
