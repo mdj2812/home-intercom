@@ -71,6 +71,7 @@ I18N_REQUIRED_KEYS = [
     "roomsEmpty",
     "roomsAdd",
     "roomsName",
+    "roomsIcon",
     "roomsPlayer",
     "roomsVolume",
     "roomsPause",
@@ -88,6 +89,16 @@ I18N_REQUIRED_KEYS = [
     "roomsPlayerRemoved",
     "roomsErrorNoEntry",
     "roomsErrorUnknown",
+    "roomsDrag",
+    "firmwareTitle",
+    "firmwareDesc",
+    "firmwareSync",
+    "firmwareNone",
+    "firmwareCached",
+    "firmwareUpdated",
+    "firmwareLatest",
+    "firmwareSyncFail",
+    "firmwareSyncing",
 ]
 
 CHINESE_STATUS_STRINGS = [
@@ -264,6 +275,10 @@ class TestHtmlStructure:
         assert 'id="room-name"' in html_content
         assert 'id="room-volume"' in html_content
         assert 'id="room-pause"' in html_content
+        assert 'id="room-icon-picker"' in html_content
+        assert 'id="room-icon"' in html_content
+        assert "fillIconPicker" in js
+        assert "ROOM_ICON_PRESETS" in js
         assert "/media_players" in html_content
         assert "GRID.innerHTML = ''" in js or 'GRID.innerHTML = ""' in js
         assert "rebuildRoomGrid" in js
@@ -274,6 +289,12 @@ class TestHtmlStructure:
         assert "method: editId ? 'PATCH' : 'PUT'" in js
         assert "method: 'DELETE'" in js
         assert "renderRoomsSettings" in js
+        assert "rooms-row-sortable" in js
+        assert "function onReorderPointerDown" in js
+        assert "function beginReorder" in js
+        assert "persistRoomOrder" in js
+        assert "/rooms/order" in js
+        assert "dataset.roomId" in js
         css_path = os.path.join(
             os.path.dirname(__file__),
             "..",
@@ -289,6 +310,16 @@ class TestHtmlStructure:
         assert "overflow: hidden auto" in css
         assert ".rooms-player-missing" in css
         assert ".rooms-row-entity-missing" in css
+        assert ".rooms-row.dragging" in css
+        assert ".rooms-row-sortable" in css
+        assert ".rooms-icon-picker" in css
+        assert ".rooms-icon-opt.selected" in css
+        assert ".room-card.dragging" not in css
+        assert 'id="firmware-sync"' in html_content
+        assert "/firmware/sync" in html_content
+        assert "/firmware/status" in html_content
+        assert "syncFirmwareCache" in js
+        assert ".firmware-section" in css
 
 
 class TestJsSyntax:

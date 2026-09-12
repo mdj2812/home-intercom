@@ -76,6 +76,7 @@ const I18N = (() => {
       roomsEmpty: "还没有房间。添加一个扬声器开始使用。",
       roomsAdd: "添加房间",
       roomsName: "名称",
+      roomsIcon: "图标",
       roomsPlayer: "扬声器",
       roomsVolume: "播报音量",
       roomsPause: "暂停缓冲（秒）",
@@ -93,6 +94,16 @@ const I18N = (() => {
       roomsPlayerRemoved: "%s（已移除）",
       roomsErrorNoEntry: "没有可写入的配置项",
       roomsErrorUnknown: "找不到这个房间",
+      roomsDrag: "按住拖动排序",
+      firmwareTitle: "按钮固件",
+      firmwareDesc: "从 GitHub 缓存最新固件，供对讲按钮升级",
+      firmwareSync: "同步",
+      firmwareNone: "尚未缓存",
+      firmwareCached: "已缓存 %s",
+      firmwareUpdated: "已缓存新版本 %s",
+      firmwareLatest: "已是最新 %s",
+      firmwareSyncFail: "同步失败",
+      firmwareSyncing: "正在同步…",
     },
     en: {
       appTitle: "Home Intercom",
@@ -159,6 +170,7 @@ const I18N = (() => {
       roomsEmpty: "No rooms yet. Add a speaker to get started.",
       roomsAdd: "Add room",
       roomsName: "Name",
+      roomsIcon: "Icon",
       roomsPlayer: "Speaker",
       roomsVolume: "Announce volume",
       roomsPause: "Pause buffer (s)",
@@ -176,6 +188,16 @@ const I18N = (() => {
       roomsPlayerRemoved: "%s (removed)",
       roomsErrorNoEntry: "No writable config entry",
       roomsErrorUnknown: "Unknown room",
+      roomsDrag: "Hold and drag to reorder",
+      firmwareTitle: "Button firmware",
+      firmwareDesc: "Cache the latest GitHub firmware for button updates",
+      firmwareSync: "Sync",
+      firmwareNone: "Not cached",
+      firmwareCached: "Cached %s",
+      firmwareUpdated: "Cached new version %s",
+      firmwareLatest: "Already latest %s",
+      firmwareSyncFail: "Sync failed",
+      firmwareSyncing: "Syncing…",
     },
   };
 
@@ -282,9 +304,13 @@ const I18N = (() => {
       el.textContent = t(el.getAttribute("data-i18n"));
     });
 
+    const iconPicker = document.getElementById("room-icon-picker");
+    if (iconPicker) iconPicker.setAttribute("aria-label", t("roomsIcon"));
+
     // Re-render the device list with the new language (room names change)
     if (typeof window.renderDevices === "function") window.renderDevices();
     if (typeof window.renderRoomsSettings === "function") window.renderRoomsSettings();
+    if (typeof window.renderFirmwareStatus === "function") window.renderFirmwareStatus();
 
     document.title = t("appTitle");
 
@@ -309,6 +335,9 @@ const I18N = (() => {
     const settingsClose = document.getElementById("settings-close");
     if (settingsToggle) settingsToggle.setAttribute("aria-label", t("settingsTitle"));
     if (settingsClose) settingsClose.setAttribute("aria-label", t("settingsClose"));
+    document.querySelectorAll("#rooms-list .rooms-row-sortable").forEach((el) => {
+      el.setAttribute("aria-label", t("roomsDrag"));
+    });
     if (typeof THEME !== "undefined" && typeof THEME.updateDropdown === "function") THEME.updateDropdown();
   }
 

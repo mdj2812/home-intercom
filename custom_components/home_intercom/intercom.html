@@ -115,6 +115,11 @@
           <span data-i18n="roomsName">名称</span>
           <input type="text" id="room-name" maxlength="64" required autocomplete="off">
         </label>
+        <div class="rooms-field">
+          <span data-i18n="roomsIcon">图标</span>
+          <input type="hidden" id="room-icon" value="">
+          <div class="rooms-icon-picker" id="room-icon-picker" role="radiogroup" aria-label="图标"></div>
+        </div>
         <label class="rooms-field">
           <span data-i18n="roomsPlayer">扬声器</span>
           <select id="room-player" required></select>
@@ -166,6 +171,17 @@
       </div>
     </section>
     <p class="settings-msg" id="chime-msg" aria-live="polite"></p>
+    <section class="firmware-section" aria-labelledby="firmware-heading">
+      <div class="chime-heading">
+        <h3 id="firmware-heading" data-i18n="firmwareTitle">按钮固件</h3>
+        <p class="chime-desc" data-i18n="firmwareDesc">从 GitHub 缓存最新固件，供对讲按钮升级</p>
+      </div>
+      <div class="firmware-row">
+        <div class="firmware-status" id="firmware-status">—</div>
+        <button type="button" id="firmware-sync" class="settings-btn" data-i18n="firmwareSync">同步</button>
+      </div>
+      <p class="settings-msg" id="firmware-msg" aria-live="polite"></p>
+    </section>
   </div>
 </div>
 
@@ -220,7 +236,9 @@ let currentTarget = '';
 let currentCard = null;
 let ROOM_NAMES = {};
 
-// Room icon mapping (extensible, falls back to 📢)
+// Room icons (issue #85). Presets must match rooms.py ROOM_ICONS.
+const ROOM_ICON_DEFAULT = '🔊';
+const ROOM_ICON_PRESETS = ['🔊','🛋️','🛏️','📚','🎬','📺','🍽️','🚿','🚪','🌳','🎵','💻'];
 const ROOM_ICONS = {
   all:     '📢',
   living:  '🛋️',
@@ -228,11 +246,14 @@ const ROOM_ICONS = {
   study:   '📚',
   cinema:  '🎬',
 };
-function roomIcon(target) {
-  return ROOM_ICONS[target] || '🔊';
+function roomIcon(target, room) {
+  if (target === 'all') return ROOM_ICONS.all;
+  const stored = room && typeof room.icon === 'string' ? room.icon.trim() : '';
+  if (ROOM_ICON_PRESETS.includes(stored)) return stored;
+  return ROOM_ICONS[target] || ROOM_ICON_DEFAULT;
 }
 
-function makeCard(target, name, isBroadcast) {
+function makeCard(target, name, isBroadcast, room) {
   const card = document.createElement('div');
   card.className = 'room-card' + (isBroadcast ? ' broadcast-card' : '');
   card.id = 'card-' + target;
@@ -269,7 +290,7 @@ function makeCard(target, name, isBroadcast) {
             <span class="device-name">…</span>
           </div>
         </div>
-        <span class="room-icon">${roomIcon(target)}</span>
+        <span class="room-icon">${roomIcon(target, room)}</span>
       </div>
       ${pttHtml}
       <div class="status">${I18N.t('statusReady')}</div>`;
@@ -387,7 +408,7 @@ function rebuildRoomGrid(rooms) {
     for (const [key, room] of Object.entries(rooms)) {
       window._ROOM_DATA[key] = room;
       ROOM_NAMES[key] = room.name;
-      GRID.appendChild(makeCard(key, room.name, false));
+      GRID.appendChild(makeCard(key, room.name, false, room));
     }
   }
   if (typeof window.renderRoomsSettings === 'function') window.renderRoomsSettings();
@@ -525,6 +546,7 @@ function el(tag, className, text) {
 function deviceActionButton(label, extraClass, onClick, disabled) {
   const btn = el('button', 'device-action' + (extraClass ? ' ' + extraClass : ''), label);
   btn.type = 'button';
+  btn.draggable = false;
   if (disabled) {
     btn.disabled = true;
   }
@@ -955,6 +977,168 @@ function roomsFormOpen() {
   return !!(form && !form.hidden);
 }
 
+// Pointer sortable. HTML5 DnD does not fire on iOS and is incomplete on Android.
+const REORDER_HOLD_MS = 200;
+const REORDER_MOVE_PX = 8;
+let _reorder = null;
+
+function reorderIgnoreTarget(target) {
+  return !!(target && target.closest && target.closest('button, select, input, a'));
+}
+
+function clearReorderTimer() {
+  if (_reorder && _reorder.timer) {
+    clearTimeout(_reorder.timer);
+    _reorder.timer = 0;
+  }
+}
+
+function unbindReorderWindow() {
+  window.removeEventListener('pointermove', onReorderPointerMove, true);
+  window.removeEventListener('pointerup', onReorderPointerUp, true);
+  window.removeEventListener('pointercancel', onReorderPointerUp, true);
+  window.removeEventListener('touchmove', onReorderTouchMove, true);
+}
+
+function bindReorderWindow() {
+  window.addEventListener('pointermove', onReorderPointerMove, true);
+  window.addEventListener('pointerup', onReorderPointerUp, true);
+  window.addEventListener('pointercancel', onReorderPointerUp, true);
+  window.addEventListener('touchmove', onReorderTouchMove, { capture: true, passive: false });
+}
+
+function bindRoomReorder(row) {
+  row.classList.add('rooms-row-sortable');
+  row.setAttribute('aria-label', I18N.t('roomsDrag'));
+  row.addEventListener('pointerdown', onReorderPointerDown);
+}
+
+function onReorderPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  if (reorderIgnoreTarget(e.target)) return;
+  if (_reorder) endReorder(false);
+  _reorder = {
+    row: e.currentTarget,
+    pointerId: e.pointerId,
+    pointerType: e.pointerType,
+    startX: e.clientX,
+    startY: e.clientY,
+    dragging: false,
+    timer: 0,
+  };
+  bindReorderWindow();
+  if (e.pointerType !== 'mouse') {
+    _reorder.timer = setTimeout(beginReorder, REORDER_HOLD_MS);
+  }
+}
+
+function onReorderTouchMove(e) {
+  if (_reorder && _reorder.dragging) e.preventDefault();
+}
+
+function onReorderPointerMove(e) {
+  if (!_reorder || e.pointerId !== _reorder.pointerId) return;
+  const dist = Math.hypot(e.clientX - _reorder.startX, e.clientY - _reorder.startY);
+  if (_reorder.dragging) {
+    e.preventDefault();
+    reorderByClientY(e.clientY);
+    return;
+  }
+  if (dist < REORDER_MOVE_PX) return;
+  if (_reorder.pointerType === 'mouse') {
+    beginReorder();
+    reorderByClientY(e.clientY);
+    return;
+  }
+  endReorder(false);
+}
+
+function onReorderPointerUp(e) {
+  if (!_reorder || e.pointerId !== _reorder.pointerId) return;
+  endReorder(_reorder.dragging);
+}
+
+function beginReorder() {
+  if (!_reorder || _reorder.dragging) return;
+  clearReorderTimer();
+  _reorder.dragging = true;
+  _reorder.row.classList.add('dragging');
+  try { _reorder.row.setPointerCapture(_reorder.pointerId); } catch (err) { /* older WebKit */ }
+  if (_reorder.pointerType !== 'mouse' && navigator.vibrate) {
+    try { navigator.vibrate(12); } catch (err) { /* ignore */ }
+  }
+}
+
+function reorderByClientY(clientY) {
+  const row = _reorder && _reorder.row;
+  if (!row || !row.parentNode) return;
+  const rows = roomOrderRows();
+  let next = null;
+  for (const other of rows) {
+    if (other === row) continue;
+    const box = other.getBoundingClientRect();
+    if (clientY < box.top + box.height / 2) {
+      next = other;
+      break;
+    }
+  }
+  if (next) row.parentNode.insertBefore(row, next);
+  else row.parentNode.appendChild(row);
+}
+
+function endReorder(persist) {
+  if (!_reorder) return;
+  clearReorderTimer();
+  unbindReorderWindow();
+  const row = _reorder.row;
+  try { row.releasePointerCapture(_reorder.pointerId); } catch (err) { /* not captured */ }
+  row.classList.remove('dragging');
+  _reorder = null;
+  if (persist) persistRoomOrder();
+}
+
+function roomOrderRows() {
+  return [...document.querySelectorAll('#rooms-list .rooms-row')];
+}
+
+async function persistRoomOrder() {
+  const order = roomOrderRows().map((r) => r.dataset.roomId).filter(Boolean);
+  const current = Object.keys(catalogRooms());
+  if (order.length !== current.length || order.every((key, i) => key === current[i])) return;
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/rooms/order', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ order }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) throw new Error(data.error || 'order');
+    const rooms = data.rooms && typeof data.rooms === 'object' ? data.rooms : {};
+    const all = window._ROOM_DATA && window._ROOM_DATA.all;
+    window._ROOM_DATA = all ? { all } : {};
+    ROOM_NAMES = { all: I18N.t('broadcastAll') };
+    for (const [key, room] of Object.entries(rooms)) {
+      window._ROOM_DATA[key] = room;
+      ROOM_NAMES[key] = room.name;
+    }
+    const cards = [...GRID.querySelectorAll('.room-card:not(.broadcast-card)')];
+    const byId = Object.fromEntries(cards.map((c) => [c.id.replace(/^card-/, ''), c]));
+    const keys = Object.keys(rooms);
+    if (keys.length === cards.length && keys.every((k) => byId[k])) {
+      for (const key of keys) GRID.appendChild(byId[key]);
+    } else {
+      rebuildRoomGrid(rooms);
+    }
+    if (typeof window.renderDevices === 'function' && window._DEVICES) window.renderDevices();
+  } catch (err) {
+    console.error('persistRoomOrder:', err);
+    setRoomsMsg(I18N.t('roomsSaveFail'));
+    await loadRooms();
+  }
+}
+
 window.renderRoomsSettings = function () {
   const list = document.getElementById('rooms-list');
   const empty = document.getElementById('rooms-empty');
@@ -980,8 +1164,14 @@ window.renderRoomsSettings = function () {
     const entityId = roomEntity(room);
     const player = playerById(entityId);
     const row = el('div', 'rooms-row');
+    row.dataset.roomId = key;
     const info = el('div', 'rooms-row-info');
-    info.appendChild(el('div', 'rooms-row-name', room.name || key));
+    const nameWrap = el('div', 'rooms-row-name');
+    const glyph = el('span', 'rooms-row-icon', roomIcon(key, room));
+    glyph.setAttribute('aria-hidden', 'true');
+    nameWrap.appendChild(glyph);
+    nameWrap.appendChild(el('span', 'rooms-row-name-text', room.name || key));
+    info.appendChild(nameWrap);
     const entityClass = player || !entityId ? 'rooms-row-entity' : 'rooms-row-entity rooms-row-entity-missing';
     info.appendChild(el('div', entityClass, player ? playerLabel(player) : (entityId ? playerMissingLabel(entityId) : '')));
     const actions = el('div', 'rooms-row-actions');
@@ -989,9 +1179,40 @@ window.renderRoomsSettings = function () {
     actions.appendChild(deviceActionButton(I18N.t('roomsDelete'), 'danger', () => deleteRoom(key)));
     row.appendChild(info);
     row.appendChild(actions);
+    if (keys.length > 1) bindRoomReorder(row);
     list.appendChild(row);
   }
 };
+
+function fillIconPicker(selected) {
+  const picker = document.getElementById('room-icon-picker');
+  const input = document.getElementById('room-icon');
+  if (!picker || !input) return;
+  const icon = ROOM_ICON_PRESETS.includes(selected) ? selected : ROOM_ICON_DEFAULT;
+  input.value = icon;
+  picker.setAttribute('aria-label', I18N.t('roomsIcon'));
+  picker.replaceChildren();
+  for (const glyph of ROOM_ICON_PRESETS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rooms-icon-opt' + (glyph === icon ? ' selected' : '');
+    btn.dataset.icon = glyph;
+    btn.textContent = glyph;
+    btn.draggable = false;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-checked', glyph === icon ? 'true' : 'false');
+    btn.setAttribute('aria-label', glyph);
+    btn.addEventListener('click', () => {
+      input.value = glyph;
+      picker.querySelectorAll('.rooms-icon-opt').forEach((el) => {
+        const on = el.dataset.icon === glyph;
+        el.classList.toggle('selected', on);
+        el.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+    });
+    picker.appendChild(btn);
+  }
+}
 
 function resetRoomFormState() {
   const form = document.getElementById('rooms-form');
@@ -1009,6 +1230,7 @@ function resetRoomFormState() {
   if (volumeEl) volumeEl.value = '';
   if (pauseEl) pauseEl.value = '';
   if (playerEl) playerEl.classList.remove('rooms-player-missing');
+  fillIconPicker(ROOM_ICON_DEFAULT);
 }
 
 function closeRoomForm() {
@@ -1034,6 +1256,7 @@ function openRoomForm(roomId) {
   volumeEl.value = room && room.announce_volume ? String(room.announce_volume) : '';
   pauseEl.value = room && room.pause_buffer ? String(room.pause_buffer) : '';
   fillPlayerSelect(room ? roomEntity(room) : '');
+  fillIconPicker(roomId ? roomIcon(roomId, room) : ROOM_ICON_DEFAULT);
   if (!roomId) {
     const select = document.getElementById('room-player');
     const first = select && !select.disabled ? select.value : '';
@@ -1070,6 +1293,7 @@ async function saveRoom(e) {
   const body = {
     name,
     entity_id: entityId,
+    icon: document.getElementById('room-icon').value.trim() || ROOM_ICON_DEFAULT,
     announce_volume: optionalNumber(document.getElementById('room-volume'), { integer: true }),
     pause_buffer: optionalNumber(document.getElementById('room-pause')),
   };
@@ -1452,6 +1676,77 @@ async function resetChime() {
   }
 }
 
+function setFirmwareMsg(text) {
+  const el = document.getElementById('firmware-msg');
+  if (el) el.textContent = text || '';
+}
+
+let firmwareCachedVersion = '';
+
+function firmwareStatusLabel(version) {
+  if (!version) return I18N.t('firmwareNone');
+  return I18N.t('firmwareCached').replace('%s', version);
+}
+
+window.renderFirmwareStatus = function () {
+  const el = document.getElementById('firmware-status');
+  if (el) el.textContent = firmwareStatusLabel(firmwareCachedVersion);
+};
+
+async function refreshFirmwareStatus() {
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/firmware/status', {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders(),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json().catch(() => ({}));
+    firmwareCachedVersion = (data && data.version) || '';
+    window.renderFirmwareStatus();
+  } catch (e) { /* ignore */ }
+}
+
+async function syncFirmwareCache() {
+  const btn = document.getElementById('firmware-sync');
+  setFirmwareMsg(I18N.t('firmwareSyncing'));
+  if (btn) btn.disabled = true;
+  try {
+    const resp = await fetch((window.API_BASE || '') + '/firmware/sync', {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: authHeaders(),
+    });
+    if (resp.status === 401 && !sessionStorage.getItem(RELOAD_ONCE_KEY)) {
+      sessionStorage.setItem(RELOAD_ONCE_KEY, '1');
+      location.reload();
+      return;
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      setFirmwareMsg(I18N.t('firmwareSyncFail'));
+      return;
+    }
+    firmwareCachedVersion = data.version || '';
+    window.renderFirmwareStatus();
+    setFirmwareMsg(I18N.t(data.updated ? 'firmwareUpdated' : 'firmwareLatest').replace('%s', firmwareCachedVersion));
+    if (typeof loadDevices === 'function') loadDevices();
+  } catch (e) {
+    setFirmwareMsg(I18N.t('firmwareSyncFail'));
+    console.error('syncFirmwareCache:', e);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function initFirmwareSettings() {
+  const btn = document.getElementById('firmware-sync');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', syncFirmwareCache);
+}
+
 function openSettingsPanel() {
   const overlay = document.getElementById('settings-overlay');
   const toggle = document.getElementById('settings-toggle');
@@ -1462,7 +1757,9 @@ function openSettingsPanel() {
   toggle.setAttribute('aria-expanded', 'true');
   setChimeMsg('');
   setRoomsMsg('');
+  setFirmwareMsg('');
   refreshChimeStatus();
+  refreshFirmwareStatus();
   loadMediaPlayers().then(() => {
     if (typeof window.renderRoomsSettings === 'function') window.renderRoomsSettings();
   });
@@ -1557,6 +1854,7 @@ document.addEventListener('visibilitychange', () => {
 initDevicesToggle();
 initRoomsSettings();
 initChimeSettings();
+initFirmwareSettings();
 
 // Show version number
 fetch((window.API_BASE || '') + '/version', { credentials: 'same-origin' }).then(r => r.json()).then(d => {

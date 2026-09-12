@@ -14,9 +14,11 @@ from firmware import (
     CachedFirmware,
     FirmwareError,
     ensure_latest_firmware,
+    firmware_cache_status,
     load_cached_firmware,
     refresh_cached_firmware,
     start_firmware_poller,
+    sync_firmware_cache,
 )
 from shared import devices_payload, firmware_update_available, normalize_firmware_version
 
@@ -116,6 +118,44 @@ def test_devices_payload_marks_outdated_and_current():
 def test_load_cached_firmware_empty(tmp_path):
     assert load_cached_firmware(str(tmp_path)) is None
     assert load_cached_firmware("") is None
+
+
+def test_firmware_cache_status_empty_and_cached(tmp_path):
+    cache = tmp_path / "firmware"
+    assert firmware_cache_status(str(cache)) == {"version": ""}
+    mapping = {API_URL: _latest_json(), BIN_URL: BLOB}
+    with patch("firmware.urllib.request.urlopen", side_effect=_urlopen_map(mapping)):
+        ensure_latest_firmware(str(cache))
+    assert firmware_cache_status(str(cache)) == {"version": "0.2.0"}
+
+
+def test_sync_firmware_cache_updated_then_fresh(tmp_path):
+    cache = tmp_path / "firmware"
+    mapping = {API_URL: _latest_json(), BIN_URL: BLOB}
+    with patch("firmware.urllib.request.urlopen", side_effect=_urlopen_map(mapping)):
+        cached, updated = sync_firmware_cache(str(cache))
+    assert updated is True
+    assert cached.version == "0.2.0"
+    with patch("firmware.urllib.request.urlopen", side_effect=_urlopen_map(mapping)):
+        _, again = sync_firmware_cache(str(cache))
+    assert again is False
+
+
+def test_sync_firmware_cache_raises_without_stale_fallback(tmp_path):
+    cache = tmp_path / "firmware"
+    mapping = {API_URL: _latest_json(), BIN_URL: BLOB}
+    with patch("firmware.urllib.request.urlopen", side_effect=_urlopen_map(mapping)):
+        sync_firmware_cache(str(cache))
+
+    def _fail(req, timeout=None):
+        raise urllib.error.URLError("github down")
+
+    with (
+        patch("firmware.urllib.request.urlopen", side_effect=_fail),
+        pytest.raises(FirmwareError),
+    ):
+        sync_firmware_cache(str(cache))
+    assert load_cached_firmware(str(cache)).version == "0.2.0"
 
 
 def test_ensure_latest_downloads_and_caches(tmp_path):

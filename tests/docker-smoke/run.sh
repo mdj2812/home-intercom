@@ -174,6 +174,15 @@ print(f'ok: version={d[\"version\"]}')
 # 1c. GET /api/home_intercom/firmware — empty cache is 404
 assert_http "GET /api/home_intercom/firmware — empty cache → 404" \
     "$(fetch_code "${URL}/api/home_intercom/firmware")" "404"
+FW_STATUS=$(fetch "${URL}/firmware/status" || echo "")
+assert_json "GET /firmware/status — empty cache" "${FW_STATUS}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('version') == '', f'expected empty version, got: {d}'
+print('ok: no cached firmware')
+"
+assert_ha_alias "GET /api/home_intercom/firmware/status — matches /firmware/status" \
+    "${FW_STATUS}" "/api/home_intercom/firmware/status"
 
 # 1b. /config — global audio settings (issue #39)
 CFG=$(fetch "${URL}/config" || echo "")
@@ -219,13 +228,14 @@ print('ok: test room created')
 
 # 2b. PUT/PATCH/DELETE /rooms/<id> — writable catalog (issue #72)
 PUT=$(fetch -X PUT -H "Content-Type: application/json" \
-    -d '{"name":"Office","entity":"media_player.office","announce_volume":40}' \
+    -d '{"name":"Office","entity":"media_player.office","announce_volume":40,"icon":"📺"}' \
     "${URL}/rooms/office" || echo "")
 assert_json "PUT /rooms/office" "${PUT}" "
 import sys, json
 d = json.load(sys.stdin)
 assert d.get('ok') is True, f'not ok: {d}'
 assert d['rooms']['office']['entity'] == 'media_player.office'
+assert d['rooms']['office']['icon'] == '📺', d
 print('ok: office created')
 "
 PATCH=$(fetch -X PATCH -H "Content-Type: application/json" \
@@ -238,6 +248,18 @@ print('ok: renamed')
 "
 assert_ha_alias "PUT /api/home_intercom/rooms/office — matches /rooms after write" \
     "$(fetch "${URL}/rooms" || echo "")" "/api/home_intercom/rooms"
+ORDER=$(fetch -X PUT -H "Content-Type: application/json" \
+    -d '{"order":["office","test"]}' "${URL}/rooms/order" || echo "")
+assert_json "PUT /rooms/order" "${ORDER}" "
+import sys, json
+d = json.load(sys.stdin)
+assert d.get('ok') is True, f'not ok: {d}'
+assert list(d['rooms']) == ['office', 'test'], d
+print('ok: reordered')
+"
+assert_eq "GET /rooms key order" \
+    "$(fetch "${URL}/rooms" | python3 -c 'import sys,json; print(list(json.load(sys.stdin)))')" \
+    "['office', 'test']"
 DEL=$(fetch -X DELETE "${URL}/rooms/office" || echo "")
 assert_json "DELETE /rooms/office" "${DEL}" "
 import sys, json

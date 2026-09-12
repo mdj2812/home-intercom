@@ -102,6 +102,20 @@ class TestRoomsWrite:
         got = rooms_client.get("/rooms").json
         assert got["office"]["name"] == "Office"
 
+    def test_put_stores_icon(self, rooms_client):
+        resp = rooms_client.put(
+            "/rooms/office",
+            json={"name": "Office", "entity": "media_player.office", "icon": "💻"},
+        )
+        assert resp.status_code == 200
+        assert resp.json["rooms"]["office"]["icon"] == "💻"
+        assert rooms_client.get("/rooms").json["office"]["icon"] == "💻"
+        bad = rooms_client.put(
+            "/rooms/office",
+            json={"name": "Office", "entity": "media_player.office", "icon": "🚀"},
+        )
+        assert bad.status_code == 400
+
     def test_put_ha_alias(self, rooms_client):
         resp = rooms_client.put(
             "/api/home_intercom/rooms/office",
@@ -153,6 +167,27 @@ class TestRoomsWrite:
         )
         assert resp.status_code == 500
         assert resp.json["error"] == "cannot persist rooms"
+
+    def test_put_order(self, rooms_client, monkeypatch):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "ROOM_MAP", {})
+        rooms_client.put("/rooms/office", json={"name": "Office", "entity": "media_player.office"})
+        rooms_client.put("/rooms/den", json={"name": "Den", "entity": "media_player.den"})
+        resp = rooms_client.put("/rooms/order", json={"order": ["den", "office"]})
+        assert resp.status_code == 200
+        assert list(resp.json["rooms"]) == ["den", "office"]
+        assert list(rooms_client.get("/rooms").json) == ["den", "office"]
+        alias = rooms_client.put(
+            "/api/home_intercom/rooms/order",
+            json={"order": ["office", "den"]},
+        )
+        assert alias.status_code == 200
+        assert list(alias.json["rooms"]) == ["office", "den"]
+
+    def test_put_order_rejects_unknown(self, rooms_client):
+        resp = rooms_client.put("/rooms/order", json={"order": ["mars"]})
+        assert resp.status_code == 400
 
 
 class TestDevicesRoute:
@@ -541,6 +576,71 @@ class TestFirmwareRoute:
         resp = client.get("/api/home_intercom/firmware.sig")
         assert resp.status_code == 200
         assert resp.data == sig
+
+
+class TestFirmwareCacheRoutes:
+    def test_status_empty(self, client, monkeypatch, tmp_path):
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(tmp_path / "firmware"))
+        resp = client.get("/firmware/status")
+        assert resp.status_code == 200
+        assert resp.json == {"version": ""}
+        alias = client.get("/api/home_intercom/firmware/status")
+        assert alias.status_code == 200
+        assert alias.json == {"version": ""}
+
+    def test_status_cached(self, client, monkeypatch, tmp_path):
+        import hashlib
+        import json
+
+        import intercom_server
+
+        cache = tmp_path / "firmware"
+        cache.mkdir()
+        blob = b"esp32-bin"
+        sha = hashlib.sha256(blob).hexdigest()
+        (cache / "firmware.bin").write_bytes(blob)
+        (cache / "firmware.json").write_text(json.dumps({"version": "0.2.0", "sha256": sha}))
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(cache))
+        resp = client.get("/firmware/status")
+        assert resp.json == {"version": "0.2.0"}
+
+    def test_sync_ok(self, client, monkeypatch, tmp_path):
+        from firmware import CachedFirmware
+
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(tmp_path / "firmware"))
+        monkeypatch.setattr(
+            intercom_server,
+            "sync_firmware_cache",
+            lambda _dir: (
+                CachedFirmware(version="0.2.1", sha256="ab", bin_path="x"),
+                True,
+            ),
+        )
+        resp = client.post("/firmware/sync")
+        assert resp.status_code == 200
+        assert resp.json == {"ok": True, "version": "0.2.1", "updated": True}
+        alias = client.post("/api/home_intercom/firmware/sync")
+        assert alias.status_code == 200
+        assert alias.json["updated"] is True
+
+    def test_sync_unavailable(self, client, monkeypatch, tmp_path):
+        from firmware import FirmwareError
+
+        import intercom_server
+
+        monkeypatch.setattr(intercom_server, "FIRMWARE_DIR", str(tmp_path / "firmware"))
+
+        def _fail(_dir):
+            raise FirmwareError("github down")
+
+        monkeypatch.setattr(intercom_server, "sync_firmware_cache", _fail)
+        resp = client.post("/firmware/sync")
+        assert resp.status_code == 502
+        assert resp.json["error"] == "firmware unavailable"
 
 
 class TestVersionRoute:

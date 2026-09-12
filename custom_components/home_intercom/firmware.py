@@ -114,6 +114,28 @@ def load_cached_firmware(cache_dir: str) -> CachedFirmware | None:
     )
 
 
+def firmware_cache_status(cache_dir: str) -> dict[str, str]:
+    """JSON for GET ``/firmware/status`` — empty version when nothing is cached."""
+    cached = load_cached_firmware(cache_dir)
+    return {"version": cached.version if cached is not None else ""}
+
+
+def sync_firmware_cache(cache_dir: str) -> tuple[CachedFirmware, bool]:
+    """Fetch the latest GitHub release into the cache (PWA Sync).
+
+    Unlike ``ensure_latest_firmware``, GitHub failures are not swallowed by a
+    stale cache — the settings button should report that the sync failed.
+    Returns ``(cached, updated)`` where ``updated`` is True when the on-disk
+    image is new or changed.
+    """
+    previous = load_cached_firmware(cache_dir)
+    cached = _fetch_and_cache(cache_dir)
+    updated = (
+        previous is None or previous.version != cached.version or previous.sha256 != cached.sha256
+    )
+    return cached, updated
+
+
 def ensure_latest_firmware(cache_dir: str) -> CachedFirmware:
     """Download the latest GitHub ``.bin`` if the cache is missing or stale.
 

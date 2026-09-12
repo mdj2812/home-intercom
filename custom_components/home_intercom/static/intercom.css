@@ -318,6 +318,20 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
+  user-select: none;
+}
+
+.rooms-row-sortable {
+  cursor: grab;
+  touch-action: pan-y;
+  /* stylelint-disable-next-line property-no-vendor-prefix */
+  -webkit-touch-callout: none;
+}
+
+.rooms-row.dragging {
+  cursor: grabbing;
+  opacity: 0.65;
+  touch-action: none;
 }
 
 .rooms-row-info {
@@ -326,10 +340,24 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
 }
 
 .rooms-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 0.78rem;
   line-height: 1.2;
   font-weight: 500;
   color: var(--text-heading);
+}
+
+.rooms-row-icon {
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.rooms-row-name-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -381,6 +409,38 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   user-select: text;
   /* stylelint-disable-next-line property-no-vendor-prefix */
   -webkit-user-select: text;
+}
+
+.rooms-icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rooms-icon-opt {
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  line-height: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.rooms-icon-opt:hover {
+  background: var(--surface-hover);
+}
+
+.rooms-icon-opt.selected {
+  border-color: var(--accent);
+  background: var(--surface-3);
 }
 
 .rooms-form-actions {
@@ -633,6 +693,23 @@ html[data-theme-pref="dark"] #theme-toggle-icon {
   color: var(--danger-btn-disabled);
   border-color: var(--danger-btn-border-disabled);
   background: var(--danger-btn-bg-disabled);
+}
+
+.firmware-section {
+  margin-top: 18px;
+}
+
+.firmware-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.firmware-status {
+  min-width: 0;
+  font-size: 0.78rem;
+  color: var(--text-heading);
 }
 
 .chime-upload-label {
