@@ -464,7 +464,7 @@ class HAClient:
             _logger.info(
                 f"[intercom] {entity_id} MA player — using play_announcement (url={audio_url})"
             )
-        ok = self.call("music_assistant/play_announcement", data)
+        ok = self.call("mass/play_announcement", data)
         if ok:
             _logger.info(f"[intercom] {entity_id} MA announcement (self-stopping)")
             return {"ok": True}
