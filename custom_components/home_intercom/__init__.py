@@ -112,7 +112,7 @@ def _move_room_devices(hass: HomeAssistant, from_entry_id: str, to_entry_id: str
         return
     mac_re = re.compile(MAC_PATTERN)
     registry = dr.async_get(hass)
-    for device in list(registry.devices.get_devices_for_config_entry_id(from_entry_id)):
+    for device in list(dr.async_entries_for_config_entry(registry, from_entry_id)):
         room_ids = [
             ident
             for domain, ident in device.identifiers
@@ -579,7 +579,7 @@ def _reconcile_room_devices(
     from homeassistant.helpers import device_registry as dr
 
     registry = dr.async_get(hass)
-    for device in list(registry.devices.get_devices_for_config_entry_id(entry_id)):
+    for device in list(dr.async_entries_for_config_entry(registry, entry_id)):
         for domain, identifier in device.identifiers:
             if domain == DOMAIN and identifier not in current_rooms:
                 _LOGGER.info(
@@ -677,7 +677,7 @@ def _reconcile_button_devices(
     known = set(device_store.devices)
     mac_re = re.compile(MAC_PATTERN)
 
-    for device in list(registry.devices.get_devices_for_config_entry_id(entry_id)):
+    for device in list(dr.async_entries_for_config_entry(registry, entry_id)):
         for domain, ident in device.identifiers:
             if domain != DOMAIN:
                 continue
