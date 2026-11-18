@@ -25,9 +25,7 @@ MAC2 = "11:22:33:44:55:66"
 def _wire_entries_lookup():
     """Make the mocked dr.async_entries_for_config_entry delegate to the fake registry."""
     dr.async_entries_for_config_entry = MagicMock(
-        side_effect=lambda registry, entry_id: registry.async_entries_for_config_entry(
-            entry_id
-        )
+        side_effect=lambda registry, entry_id: registry.async_entries_for_config_entry(entry_id)
     )
 
 
