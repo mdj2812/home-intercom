@@ -31,22 +31,36 @@ class FakeDevice:
 
 
 class FakeDeviceRegistry:
-    """Fake device registry that tracks get_devices_for_config_entry_id + remove_device."""
+    """Fake device registry that tracks config-entry devices + remove_device."""
 
     def __init__(self, devices: list[FakeDevice]):
-        self.devices = MagicMock()
-        self.devices.get_devices_for_config_entry_id = MagicMock(return_value=list(devices))
+        # Stand-in for the config-entry device list that the real registry exposes
+        # via dr.async_entries_for_config_entry(registry, entry_id).
+        self._entries = list(devices)
         self._by_ident = {next(iter(d.identifiers)): d for d in devices if d.identifiers}
         self._removed: list[str] = []
         self.async_remove_device = MagicMock(
             side_effect=lambda device_id: self._removed.append(device_id)
         )
 
+    def async_entries_for_config_entry(self, entry_id=None):
+        return list(self._entries)
+
     def async_get_device(self, identifiers=None, connections=None):
         if not identifiers:
             return None
         key = next(iter(identifiers))
         return self._by_ident.get(key)
+
+
+def _wire_entries_lookup():
+    """Make the mocked dr.async_entries_for_config_entry delegate to the fake registry."""
+    dr.async_entries_for_config_entry = MagicMock(
+        side_effect=lambda registry, entry_id: registry.async_entries_for_config_entry(entry_id)
+    )
+
+
+_wire_entries_lookup()
 
 
 @pytest.fixture
