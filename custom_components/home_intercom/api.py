@@ -280,7 +280,7 @@ def _remove_room_ha_device(hass: HomeAssistant, room_id: str, entry_id: str) -> 
 
     registry = dr.async_get(hass)
     ident = (DOMAIN, room_id)
-    for device in list(registry.devices.get_devices_for_config_entry_id(entry_id)):
+    for device in list(dr.async_entries_for_config_entry(registry, entry_id)):
         if ident in device.identifiers:
             _LOGGER.info("Removing HA device for room %s", room_id)
             registry.async_remove_device(device.id)
