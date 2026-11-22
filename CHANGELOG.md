@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### ✨ Features
+
+- **Russian (ru)** — PWA language menu, Home Assistant config and entity strings, and `README.ru.md`. A browser language of `ru` is selected automatically.
+
 ## v2.2.1 (2026-09-12)
 
 > **PWA room order, icons, and firmware sync**

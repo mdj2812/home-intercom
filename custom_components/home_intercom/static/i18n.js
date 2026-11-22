@@ -1,5 +1,5 @@
 // I18N — lightweight translation module for Home Intercom PWA
-// Supports zh-CN and en, defaults to browser language, persists choice
+// Supports zh-CN, en, and ru; defaults to browser language, persists choice
 
 const I18N = (() => {
   const STORAGE_KEY = "intercom-lang";
@@ -8,6 +8,7 @@ const I18N = (() => {
   const LANG_OPTIONS = [
     { code: "zh-CN", label: "中文" },
     { code: "en", label: "EN" },
+    { code: "ru", label: "RU" },
   ];
 
   const DATA = {
@@ -199,13 +200,111 @@ const I18N = (() => {
       firmwareSyncFail: "Sync failed",
       firmwareSyncing: "Syncing…",
     },
+    ru: {
+      appTitle: "Домашний интерком",
+      appHint: "Удерживайте для записи · Отпустите для отправки",
+      broadcastAll: "Все",
+      statusReady: "Готово",
+      statusRecording: "Запись…",
+      statusSending: "Отправка…",
+      statusSent: "Отправлено",
+      statusFailed: "Ошибка",
+      statusSkipped: "Нет play_media",
+      statusUnavailable: "Не в сети",
+      statusPlayFailed: "Ошибка воспроизведения",
+      statusMAFailed: "Ошибка MA",
+      statusNetworkError: "Ошибка сети",
+      statusLoadFailed: "Не удалось загрузить",
+      micError: "Микрофон: ",
+      devicesTitle: "Кнопки интеркома",
+      secInsecureTitle: "Микрофон недоступен",
+      secInsecureHint: "Браузер разрешает микрофон только по HTTPS. Откройте Home Assistant по внешнему HTTPS-адресу.",
+      settingsTitle: "Настройки",
+      settingsClose: "Закрыть",
+      chimeTitle: "Свой сигнал",
+      chimeDesc: "Воспроизводится перед каждым объявлением",
+      chimeDefault: "Сигнал по умолчанию",
+      chimeReplace: "Заменить сигнал",
+      chimeReplaceHint: "WAV / MP3 · до 10 секунд",
+      chimeMono: "моно",
+      chimeReset: "Вернуть по умолчанию",
+      chimePreview: "Прослушать",
+      chimeUploadOk: "Сигнал сохранён",
+      chimeUploadFail: "Не удалось загрузить",
+      chimeUploadTooLong: "Аудио слишком длинное (максимум 10 с)",
+      chimePreviewFail: "Не удаётся воспроизвести",
+      chimeResetOk: "Восстановлен сигнал по умолчанию",
+      themeTitle: "Тема",
+      themeAuto: "Авто",
+      themeLight: "Светлая",
+      themeDark: "Тёмная",
+      devicePending: "Ожидает",
+      deviceApprove: "Одобрить",
+      deviceDeapprove: "Снять одобрение",
+      deviceRevoke: "Отозвать",
+      deviceUnrevoke: "Вернуть",
+      deviceDelete: "Удалить",
+      deviceDeleteConfirm: "Удалить эту кнопку интеркома? После повторного подключения её нужно будет одобрить снова.",
+      deviceUpdate: "Обновить",
+      deviceUpdateConfirm: "Обновить эту кнопку до последней прошивки с сервера?",
+      deviceUpdateAvailable: "Доступно обновление",
+      deviceUpToDate: "Прошивка актуальна",
+      deviceRevoked: "Отозвана",
+      deviceOnline: "В сети",
+      deviceOffline: "Не в сети",
+      deviceJustNow: "Только что",
+      deviceMinutesAgo: "%s мин назад",
+      deviceHoursAgo: "%s ч назад",
+      deviceNeverSeen: "Не было на связи",
+      devicePinsTitle: "Комнаты кнопок",
+      devicePinsPending: "Кнопки появятся после hello устройства",
+      devicePinUnassigned: "Не назначено",
+      devicePinGpio: "GPIO %s",
+      roomsTitle: "Комнаты",
+      roomsDesc: "Колонки на сетке интеркома",
+      roomsEmpty: "Комнат пока нет. Добавьте колонку, чтобы начать.",
+      roomsAdd: "Добавить комнату",
+      roomsName: "Название",
+      roomsIcon: "Значок",
+      roomsPlayer: "Колонка",
+      roomsVolume: "Громкость объявления",
+      roomsPause: "Буфер паузы (с)",
+      roomsVolumeHint: "1–100, пусто = по умолчанию",
+      roomsPauseHint: "0–10, пусто = по умолчанию",
+      roomsSave: "Сохранить",
+      roomsCancel: "Отмена",
+      roomsEdit: "Изменить",
+      roomsDelete: "Удалить",
+      roomsDeleteConfirm: "Удалить эту комнату?",
+      roomsSaved: "Комната сохранена",
+      roomsDeleted: "Комната удалена",
+      roomsSaveFail: "Не удалось сохранить",
+      roomsNoPlayers: "Нет доступных колонок",
+      roomsPlayerRemoved: "%s (удалена)",
+      roomsErrorNoEntry: "Нет доступной записи конфигурации",
+      roomsErrorUnknown: "Комната не найдена",
+      roomsDrag: "Удерживайте и перетащите, чтобы изменить порядок",
+      firmwareTitle: "Прошивка кнопки",
+      firmwareDesc: "Кэшировать последнюю прошивку с GitHub для обновления кнопок",
+      firmwareSync: "Синхронизировать",
+      firmwareNone: "Нет в кэше",
+      firmwareCached: "В кэше %s",
+      firmwareUpdated: "Закэширована новая версия %s",
+      firmwareLatest: "Уже последняя %s",
+      firmwareSyncFail: "Синхронизация не удалась",
+      firmwareSyncing: "Синхронизация…",
+    },
   };
 
-  // Detect from localStorage, then navigator, fallback zh-CN
+  // Detect from localStorage, then navigator. Chinese and Russian follow the
+  // browser; every other language, including a missing one, stays English
+  // except the historical zh-CN default when navigator.language is absent.
   let lang = localStorage.getItem(STORAGE_KEY) || "";
   if (!lang || !DATA[lang]) {
-    const nav = (navigator.language || "zh-CN").split("-")[0];
-    lang = nav === "zh" ? "zh-CN" : "en";
+    const nav = (navigator.language || "zh-CN").split("-")[0].toLowerCase();
+    if (nav === "zh") lang = "zh-CN";
+    else if (nav === "ru") lang = "ru";
+    else lang = "en";
   }
 
   function t(key) {
@@ -278,7 +377,9 @@ const I18N = (() => {
   }
 
   function toggleLang() {
-    setLang(lang === "zh-CN" ? "en" : "zh-CN");
+    const codes = LANG_OPTIONS.map((o) => o.code);
+    const i = codes.indexOf(lang);
+    setLang(codes[(i + 1) % codes.length]);
   }
 
   function applyToDOM() {
@@ -320,11 +421,14 @@ const I18N = (() => {
 
       const val = el.textContent;
       let key = null;
-      for (const k of Object.keys(DATA["zh-CN"])) {
-        if (DATA["zh-CN"][k] === val || DATA["en"][k] === val) {
-          key = k;
-          break;
+      for (const pack of Object.keys(DATA)) {
+        for (const k of Object.keys(DATA[pack])) {
+          if (DATA[pack][k] === val) {
+            key = k;
+            break;
+          }
         }
+        if (key) break;
       }
       if (key) el.textContent = t(key);
     });

@@ -16,7 +16,7 @@ I18N_PATH = os.path.join(
     os.path.dirname(__file__), "..", "custom_components", "home_intercom", "static", "i18n.js"
 )
 
-# All translation keys required in both zh-CN and en — single source of truth
+# All translation keys required in zh-CN, en, and ru — single source of truth
 I18N_REQUIRED_KEYS = [
     "appTitle",
     "appHint",
@@ -213,6 +213,7 @@ class TestHtmlStructure:
         assert 'id="settings-toggle"' in html_content
         assert 'data-lang="zh-CN"' in html_content
         assert 'data-lang="en"' in html_content
+        assert 'data-lang="ru"' in html_content
 
     def test_has_theme_toggle(self, html_content):
         """Theme switcher: auto / light / dark, persisted and FOUC-safe."""
@@ -464,18 +465,44 @@ class TestI18N:
                 f"Key '{key}' not found in i18n.js (expected '{key}:' pattern)"
             )
 
-    def test_both_languages_have_all_keys(self):
-        """Each required key must appear at least twice (once in zh-CN, once in en)."""
-        with open(I18N_PATH) as f:
+    def test_all_languages_have_all_keys(self):
+        """Each required key must appear in zh-CN, en, and ru."""
+        with open(I18N_PATH, encoding="utf-8") as f:
             i18n = f.read()
 
         for key in I18N_REQUIRED_KEYS:
-            # Each key should appear in both language blocks → at least 2 occurrences
             count = i18n.count(f"{key}:")
-            assert count >= 2, (
+            assert count >= 3, (
                 f"Key '{key}' appears only {count} time(s) in i18n.js — "
-                f"expected at least 2 (zh-CN + en)"
+                f"expected at least 3 (zh-CN + en + ru)"
             )
+
+    def test_ha_translation_files_match(self):
+        """Home Assistant ru and zh-Hans catalogs must cover every English key."""
+        root = os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "custom_components",
+            "home_intercom",
+            "translations",
+        )
+
+        def leaf_paths(obj, prefix=""):
+            found = set()
+            for key, value in obj.items():
+                path = f"{prefix}.{key}" if prefix else key
+                if isinstance(value, dict):
+                    found |= leaf_paths(value, path)
+                else:
+                    found.add(path)
+            return found
+
+        with open(os.path.join(root, "en.json"), encoding="utf-8") as f:
+            english = leaf_paths(json.load(f))
+        for name in ("zh-Hans.json", "ru.json"):
+            with open(os.path.join(root, name), encoding="utf-8") as f:
+                other = leaf_paths(json.load(f))
+            assert other == english, f"{name} keys differ from en.json"
 
     def test_theme_icons_not_inlined(self):
         """Theme glyphs live as static SVG files, not markup inside i18n.js."""
