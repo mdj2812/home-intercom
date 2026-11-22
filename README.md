@@ -1,5 +1,7 @@
 # Home Intercom
 
+English · [中文](README.zh-CN.md) · [Русский](README.ru.md)
+
 [![Docker](https://img.shields.io/badge/ghcr.io-mdj2812%2Fhome--intercom-blue)](https://github.com/mdj2812/home-intercom/pkgs/container/home-intercom)
 
 Push-to-talk PWA → Home Assistant → smart speakers. Hold a button, say something, it plays on your speakers.

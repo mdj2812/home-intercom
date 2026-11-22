@@ -29,8 +29,10 @@
   var lang = localStorage.getItem("intercom-lang") || "";
   // Read HA user language from localStorage (same origin)
   var haLang = localStorage.getItem("selectedLanguage") || "";
-  var isEn = lang === "en" || (!lang && (haLang.includes("en") || haLang.includes("en-")));
-  document.title = isEn ? "Home Intercom" : "家庭广播";
+  var nav = (navigator.language || "").toLowerCase();
+  var isRu = lang === "ru" || (!lang && nav.indexOf("ru") === 0);
+  var isEn = !isRu && (lang === "en" || (!lang && (haLang.includes("en") || haLang.includes("en-"))));
+  document.title = isRu ? "Домашний интерком" : (isEn ? "Home Intercom" : "家庭广播");
 
   var pref = localStorage.getItem("intercom-theme") || "auto";
   if (pref !== "light" && pref !== "dark") pref = "auto";
@@ -90,6 +92,7 @@
       <div class="lang-dropdown-menu" role="listbox" hidden>
         <button type="button" role="option" class="lang-option" data-lang="zh-CN">中文</button>
         <button type="button" role="option" class="lang-option" data-lang="en">EN</button>
+        <button type="button" role="option" class="lang-option" data-lang="ru">RU</button>
       </div>
       </div>
     </div>

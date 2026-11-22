@@ -1,5 +1,7 @@
 # 家庭广播（Home Intercom）
 
+[English](README.md) · 中文 · [Русский](README.ru.md)
+
 [![Docker](https://img.shields.io/badge/ghcr.io-mdj2812%2Fhome--intercom-blue)](https://github.com/mdj2812/home-intercom/pkgs/container/home-intercom)
 
 手机 PWA 界面，按住说话 → 松开后通过 Home Assistant 在音箱播放。
